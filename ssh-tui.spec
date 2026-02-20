@@ -48,5 +48,5 @@ install -Dpm 0755 %{name} %{buildroot}%{_bindir}/%{name}
 %{_bindir}/%{name}
 
 %changelog
-* Thu Feb 20 2026 Pavel Aksenov <41126916+al-bashkir@users.noreply.github.com> - 0.3.0-1
+* Thu Feb 20 2026 Pavel Aksenov <41126916+al-bashkir@users.noreply.github.com> - 1.0.0-1
 - Initial package
