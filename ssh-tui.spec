@@ -8,7 +8,7 @@ Summary:        Terminal UI for managing SSH connections
 
 # No LICENSE file exists yet; update this field when one is added.
 License:        MIT
-URL:            https://github.com/bashkir/ssh-tui
+URL:            https://github.com/al-bashkir/ssh-tui
 
 # Source tarball is prepared by .copr/Makefile, which runs go mod vendor
 # before creating the archive, so the vendor/ directory is already present.

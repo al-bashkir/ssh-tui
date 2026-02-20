@@ -6,9 +6,9 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/bashkir/ssh-tui/internal/config"
-	"github.com/bashkir/ssh-tui/internal/sshcmd"
-	tmx "github.com/bashkir/ssh-tui/internal/tmux"
+	"github.com/al-bashkir/ssh-tui/internal/config"
+	"github.com/al-bashkir/ssh-tui/internal/sshcmd"
+	tmx "github.com/al-bashkir/ssh-tui/internal/tmux"
 )
 
 func runConnect(args []string, cfg config.Config, noTmux bool) {

@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bashkir/ssh-tui/internal/config"
+	"github.com/al-bashkir/ssh-tui/internal/config"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -23,9 +23,10 @@ const (
 )
 
 type hostFormModel struct {
-	index int
-	host  config.Host
-	defs  config.Defaults
+	index       int
+	host        config.Host
+	defs        config.Defaults
+	parentCrumb string
 
 	width  int
 	height int
@@ -39,7 +40,7 @@ type hostFormModel struct {
 	inIdentity textinput.Model
 	inExtra    textinput.Model
 
-	toast string
+	toast toast
 
 	keymap keyMap
 
@@ -150,7 +151,7 @@ func (m *hostFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			case "n", "N", "esc":
 				m.confirmQuit = false
-				m.toast = ""
+				m.toast = toast{}
 				return m, nil
 			default:
 				return m, nil
@@ -162,9 +163,9 @@ func (m *hostFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.editing {
 				m.exitEdit()
 			}
-			m.toast = ""
+			m.toast = toast{}
 			if err := m.apply(); err != nil {
-				m.toast = err.Error()
+				m.toast = toast{text: err.Error(), level: toastErr}
 				return m, nil
 			}
 			return m, func() tea.Msg { return hostFormSaveMsg{index: m.index, host: m.host} }
@@ -175,7 +176,7 @@ func (m *hostFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 			m.confirmQuit = true
-			m.toast = "quit? (y/n)"
+			m.toast = toast{text: "quit? (y/n)", level: toastWarn}
 			return m, nil
 		}
 
@@ -265,9 +266,9 @@ func (m *hostFormModel) setFocus(f hostField) {
 		v := strings.TrimSpace(m.inPort.Value())
 		if v != "" {
 			if _, err := strconv.Atoi(v); err != nil {
-				m.toast = "port must be a number"
+				m.toast = toast{text: "port must be a number", level: toastWarn}
 			} else {
-				m.toast = ""
+				m.toast = toast{}
 			}
 		}
 	}
@@ -386,16 +387,26 @@ func (m *hostFormModel) View() string {
 	focusLine := 0
 
 	lines = append(lines, formSection("Connection", innerW))
-	if m.focus == hostFieldHost { focusLine = len(lines) }
+	if m.focus == hostFieldHost {
+		focusLine = len(lines)
+	}
 	lines = append(lines, label("Host:", m.focus == hostFieldHost)+" "+inputLine(m.inHost, m.focus == hostFieldHost, fieldW))
-	if m.focus == hostFieldUser { focusLine = len(lines) }
+	if m.focus == hostFieldUser {
+		focusLine = len(lines)
+	}
 	lines = append(lines, label("User:", m.focus == hostFieldUser)+" "+inputLine(m.inUser, m.focus == hostFieldUser, fieldW))
-	if m.focus == hostFieldPort { focusLine = len(lines) }
+	if m.focus == hostFieldPort {
+		focusLine = len(lines)
+	}
 	lines = append(lines, label("Port:", m.focus == hostFieldPort)+" "+inputLine(m.inPort, m.focus == hostFieldPort, min(12, fieldW)))
 	lines = append(lines, formSection("Authentication", innerW))
-	if m.focus == hostFieldIdentity { focusLine = len(lines) }
+	if m.focus == hostFieldIdentity {
+		focusLine = len(lines)
+	}
 	lines = append(lines, label("Identity file:", m.focus == hostFieldIdentity)+" "+inputLine(m.inIdentity, m.focus == hostFieldIdentity, fieldW))
-	if m.focus == hostFieldExtraArgs { focusLine = len(lines) }
+	if m.focus == hostFieldExtraArgs {
+		focusLine = len(lines)
+	}
 	lines = append(lines, label("Extra args:", m.focus == hostFieldExtraArgs)+" "+inputLine(m.inExtra, m.focus == hostFieldExtraArgs, fieldW))
 
 	fieldPos := fmt.Sprintf("%d/%d", int(m.focus)+1, int(hostFieldExtraArgs)+1)
@@ -406,7 +417,7 @@ func (m *hostFormModel) View() string {
 
 	innerH := max(0, m.height-2)
 	reserved := 2 // sep + footer
-	if strings.TrimSpace(m.toast) != "" {
+	if !m.toast.empty() {
 		reserved++
 	}
 	visibleH := innerH - reserved
@@ -425,10 +436,12 @@ func (m *hostFormModel) View() string {
 			name = strings.TrimSpace(m.inHost.Value())
 		}
 		if name != "" {
-			title = "Hosts > " + name
+			title = breadcrumbTitle(m.parentCrumb, name)
 		} else {
-			title = "Edit Host"
+			title = breadcrumbTitle(m.parentCrumb, "Edit Host")
 		}
+	} else {
+		title = breadcrumbTitle(m.parentCrumb, "Create Host")
 	}
 	out = append(out, boxTitleTop(m.width, title))
 	for _, ln := range visible {
@@ -438,8 +451,8 @@ func (m *hostFormModel) View() string {
 	for i := 0; i < fill; i++ {
 		out = append(out, boxLine(m.width, strings.Repeat(" ", innerW)))
 	}
-	if strings.TrimSpace(m.toast) != "" {
-		out = append(out, boxLine(m.width, padVisible(statusWarn.Render(m.toast), innerW)))
+	if !m.toast.empty() {
+		out = append(out, boxLine(m.width, padVisible(renderToast(m.toast), innerW)))
 	}
 	out = append(out, boxSep(m.width))
 	out = append(out, boxLine(m.width, padVisible(footerStyle.Render(footer), innerW)))

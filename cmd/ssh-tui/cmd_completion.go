@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/bashkir/ssh-tui/internal/config"
+	"github.com/al-bashkir/ssh-tui/internal/config"
 )
 
 func runCompletion(args []string) {

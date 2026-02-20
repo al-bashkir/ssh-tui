@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bashkir/ssh-tui/internal/config"
+	"github.com/al-bashkir/ssh-tui/internal/config"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -38,9 +38,10 @@ const (
 )
 
 type groupFormModel struct {
-	index int
-	group config.Group
-	defs  config.Defaults
+	index       int
+	group       config.Group
+	defs        config.Defaults
+	parentCrumb string
 
 	width  int
 	height int
@@ -57,7 +58,7 @@ type groupFormModel struct {
 
 	borderPicker *paneBorderFormatsModel
 
-	toast string
+	toast toast
 
 	keymap keyMap
 
@@ -206,7 +207,7 @@ func (m *groupFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			case "n", "N", "esc":
 				m.confirmQuit = false
-				m.toast = ""
+				m.toast = toast{}
 				return m, nil
 			default:
 				return m, nil
@@ -218,9 +219,9 @@ func (m *groupFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.editing {
 				m.exitEdit()
 			}
-			m.toast = ""
+			m.toast = toast{}
 			if err := m.apply(); err != nil {
-				m.toast = err.Error()
+				m.toast = toast{text: err.Error(), level: toastErr}
 				return m, nil
 			}
 			return m, func() tea.Msg { return groupFormSaveMsg{index: m.index, group: m.group} }
@@ -231,7 +232,7 @@ func (m *groupFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 			m.confirmQuit = true
-			m.toast = "quit? (y/n)"
+			m.toast = toast{text: "quit? (y/n)", level: toastWarn}
 			return m, nil
 		}
 
@@ -259,6 +260,7 @@ func (m *groupFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if (s == "enter" || s == " " || s == "l") && m.focus == groupFieldPaneBorderFormat {
 			mw, mh := pickerModalSize(m.width, m.height)
 			m.borderPicker = newPaneBorderFormatsModel(m.defs, m.group.PaneBorderFmt, true, false)
+			m.borderPicker.parentCrumb = m.parentCrumb
 			if mw > 0 && mh > 0 {
 				_, _ = m.borderPicker.Update(tea.WindowSizeMsg{Width: mw, Height: mh})
 			}
@@ -582,34 +584,58 @@ func (m *groupFormModel) View() string {
 	lines := []string{}
 	focusLine := 0
 
-	if m.focus == groupFieldName { focusLine = len(lines) }
+	if m.focus == groupFieldName {
+		focusLine = len(lines)
+	}
 	lines = append(lines, label("Name:", m.focus == groupFieldName)+" "+inputLine(m.inName, m.focus == groupFieldName, fieldW))
 	lines = append(lines, formSection("SSH", innerW))
-	if m.focus == groupFieldUser { focusLine = len(lines) }
+	if m.focus == groupFieldUser {
+		focusLine = len(lines)
+	}
 	lines = append(lines, label("User:", m.focus == groupFieldUser)+" "+inputLine(m.inUser, m.focus == groupFieldUser, fieldW))
-	if m.focus == groupFieldPort { focusLine = len(lines) }
+	if m.focus == groupFieldPort {
+		focusLine = len(lines)
+	}
 	lines = append(lines, label("Port:", m.focus == groupFieldPort)+" "+inputLine(m.inPort, m.focus == groupFieldPort, min(12, fieldW)))
-	if m.focus == groupFieldIdentity { focusLine = len(lines) }
+	if m.focus == groupFieldIdentity {
+		focusLine = len(lines)
+	}
 	lines = append(lines, label("Identity file:", m.focus == groupFieldIdentity)+" "+inputLine(m.inIdentity, m.focus == groupFieldIdentity, fieldW))
-	if m.focus == groupFieldExtraArgs { focusLine = len(lines) }
+	if m.focus == groupFieldExtraArgs {
+		focusLine = len(lines)
+	}
 	lines = append(lines, label("Extra args:", m.focus == groupFieldExtraArgs)+" "+inputLine(m.inExtra, m.focus == groupFieldExtraArgs, fieldW))
-	if m.focus == groupFieldRemoteCommand { focusLine = len(lines) }
+	if m.focus == groupFieldRemoteCommand {
+		focusLine = len(lines)
+	}
 	lines = append(lines, label("Remote cmd:", m.focus == groupFieldRemoteCommand)+" "+inputLine(m.inRemote, m.focus == groupFieldRemoteCommand, fieldW))
 	lines = append(lines, formSection("Tmux", innerW))
-	if openFocused { focusLine = len(lines) }
+	if openFocused {
+		focusLine = len(lines)
+	}
 	lines = append(lines, label("Open mode:", openFocused)+" "+open1)
 	lines = append(lines, "  "+open2)
-	if tmuxFocused { focusLine = len(lines) }
+	if tmuxFocused {
+		focusLine = len(lines)
+	}
 	lines = append(lines, label("Tmux:", tmuxFocused)+" "+tmuxLine)
 	lines = append(lines, formSection("Panes", innerW))
-	if splitFocused { focusLine = len(lines) }
+	if splitFocused {
+		focusLine = len(lines)
+	}
 	lines = append(lines, label("Pane split:", splitFocused)+" "+splitLine)
-	if layoutFocused { focusLine = len(lines) }
+	if layoutFocused {
+		focusLine = len(lines)
+	}
 	lines = append(lines, label("Pane layout:", layoutFocused)+" "+layout1)
 	lines = append(lines, "  "+layout2)
-	if syncFocused { focusLine = len(lines) }
+	if syncFocused {
+		focusLine = len(lines)
+	}
 	lines = append(lines, label("Pane sync:", syncFocused)+" "+syncLine)
-	if borderPosFocused { focusLine = len(lines) }
+	if borderPosFocused {
+		focusLine = len(lines)
+	}
 	lines = append(lines, label("Pane border:", borderPosFocused)+" "+borderPosLine)
 	fmtVal := strings.TrimSpace(m.group.PaneBorderFmt)
 	showFmt := fmtVal
@@ -636,7 +662,7 @@ func (m *groupFormModel) View() string {
 	// Build full-height box with scroll.
 	innerH := max(0, m.height-2)
 	reserved := 2 // sep + footer
-	if strings.TrimSpace(m.toast) != "" {
+	if !m.toast.empty() {
 		reserved++
 	}
 	visibleH := innerH - reserved
@@ -655,10 +681,12 @@ func (m *groupFormModel) View() string {
 			name = strings.TrimSpace(m.inName.Value())
 		}
 		if name != "" {
-			title = "Groups > " + name
+			title = breadcrumbTitle(m.parentCrumb, name)
 		} else {
-			title = "Edit Group"
+			title = breadcrumbTitle(m.parentCrumb, "Edit Group")
 		}
+	} else {
+		title = breadcrumbTitle(m.parentCrumb, "Create Group")
 	}
 	out = append(out, boxTitleTop(m.width, title))
 	for _, ln := range visible {
@@ -668,8 +696,8 @@ func (m *groupFormModel) View() string {
 	for i := 0; i < fill; i++ {
 		out = append(out, boxLine(m.width, strings.Repeat(" ", innerW)))
 	}
-	if strings.TrimSpace(m.toast) != "" {
-		out = append(out, boxLine(m.width, padVisible(statusWarn.Render(m.toast), innerW)))
+	if !m.toast.empty() {
+		out = append(out, boxLine(m.width, padVisible(renderToast(m.toast), innerW)))
 	}
 	out = append(out, boxSep(m.width))
 	out = append(out, boxLine(m.width, padVisible(footerStyle.Render(footer), innerW)))

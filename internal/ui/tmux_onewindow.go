@@ -1,6 +1,6 @@
 package ui
 
-import tmx "github.com/bashkir/ssh-tui/internal/tmux"
+import tmx "github.com/al-bashkir/ssh-tui/internal/tmux"
 
 // tmuxOneWindowOpts is an alias so existing callers in this package compile unchanged.
 type tmuxOneWindowOpts = tmx.OneWindowOpts

@@ -6,9 +6,9 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/bashkir/ssh-tui/internal/config"
-	"github.com/bashkir/ssh-tui/internal/sshcmd"
-	tmx "github.com/bashkir/ssh-tui/internal/tmux"
+	"github.com/al-bashkir/ssh-tui/internal/config"
+	"github.com/al-bashkir/ssh-tui/internal/sshcmd"
+	tmx "github.com/al-bashkir/ssh-tui/internal/tmux"
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
@@ -66,7 +66,7 @@ type groupsModel struct {
 	helpVP    viewport.Model
 	cmdPrompt bool
 	cmdInput  textinput.Model
-	toast     string
+	toast     toast
 
 	confirmQuit         bool
 	confirmDelete       bool
@@ -199,7 +199,7 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if cmd == "" {
 					return m, nil
 				}
-				m.toast = ""
+				m.toast = toast{}
 				return m, m.connectAllCmd(false, cmd)
 			default:
 				var cmdTea tea.Cmd
@@ -216,7 +216,7 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			case "n", "N", "esc":
 				m.confirmQuit = false
-				m.toast = ""
+				m.toast = toast{}
 				return m, nil
 			default:
 				return m, nil
@@ -231,7 +231,7 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, func() tea.Msg { return deleteGroupMsg{index: idx} }
 			case "n", "N", "esc":
 				m.confirmDelete = false
-				m.toast = ""
+				m.toast = toast{}
 				return m, nil
 			default:
 				return m, nil
@@ -251,7 +251,7 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "n", "N", "esc":
 				m.confirmConnect = false
 				m.pendingConnectFn = nil
-				m.toast = ""
+				m.toast = toast{}
 				return m, nil
 			default:
 				return m, nil
@@ -264,7 +264,7 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 			m.confirmQuit = true
-			m.toast = "quit? (y/n)"
+			m.toast = toast{text: "quit? (y/n)", level: toastWarn}
 			return m, nil
 		}
 		if key.Matches(msg, m.keymap.Help) {
@@ -344,7 +344,7 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.confirmDelete = true
 			m.deleteIndex = row.index
-			m.toast = "delete? (y/n)"
+			m.toast = toast{text: "delete? (y/n)", level: toastWarn}
 			return m, nil
 		}
 		if key.Matches(msg, m.keymap.Connect) {
@@ -385,13 +385,13 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if key.Matches(msg, m.keymap.ConnectAll) && m.focus == focusList {
-			m.toast = ""
+			m.toast = toast{}
 			return m, m.connectAllCmd(false, "")
 		}
 		if key.Matches(msg, m.keymap.Copy) && m.focus == focusList {
 			row, ok := m.list.SelectedItem().(groupRow)
 			if !ok || row.index < 0 || row.index >= len(m.opts.Config.Groups) {
-				m.toast = "no group selected"
+				m.toast = toast{text: "no group selected", level: toastWarn}
 				return m, nil
 			}
 			g := m.opts.Config.Groups[row.index]
@@ -399,11 +399,11 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return openGroupFormPrefillMsg{group: g} }
 		}
 		if key.Matches(msg, m.keymap.OneWindow) && m.focus == focusList {
-			m.toast = ""
+			m.toast = toast{}
 			return m, m.connectAllCmd(true, "")
 		}
 	case toastMsg:
-		m.toast = string(msg)
+		m.toast = toast(msg)
 		return m, nil
 	}
 
@@ -433,7 +433,7 @@ func (m *groupsModel) View() string {
 		b.WriteString(m.cmdInput.View())
 		b.WriteString("\n")
 		b.WriteString(footerStyle.Render("Enter connect  Esc cancel"))
-		box := renderFrame(mw, mh, "Command", "", strings.TrimRight(b.String(), "\n"), "")
+		box := renderFrame(mw, mh, breadcrumbTitle("Groups", "Command"), "", strings.TrimRight(b.String(), "\n"), "")
 		return placeCentered(m.width, m.height, box)
 	}
 	if m.confirmQuit {
@@ -460,8 +460,8 @@ func (m *groupsModel) View() string {
 	}
 
 	right := ""
-	if strings.TrimSpace(m.toast) != "" {
-		right = statusWarn.Render(m.toast)
+	if !m.toast.empty() {
+		right = renderToast(m.toast)
 	} else {
 		right = statusDot(true, false) + "   " + dim.Render(fmt.Sprintf("%d groups", len(m.allRows)))
 	}
@@ -579,8 +579,8 @@ func (m *groupsModel) statusLine() string {
 	if pg != "" {
 		left += "  " + dim.Render(pg)
 	}
-	if m.toast != "" {
-		left += "  " + statusWarn.Render(m.toast)
+	if !m.toast.empty() {
+		left += "  " + renderToast(m.toast)
 	}
 	return left + "  " + statusOK.Render(searchInfo)
 }
@@ -607,20 +607,20 @@ func (m *groupsModel) applyFilter(query string) {
 func (m *groupsModel) connectAllCmd(oneWindow bool, remoteCmd string) tea.Cmd {
 	row, ok := m.list.SelectedItem().(groupRow)
 	if !ok {
-		m.toast = "no group selected"
+		m.toast = toast{text: "no group selected", level: toastWarn}
 		return nil
 	}
 	if row.index < 0 || row.index >= len(m.opts.Config.Groups) {
-		m.toast = "invalid group"
+		m.toast = toast{text: "invalid group", level: toastErr}
 		return nil
 	}
 	g := m.opts.Config.Groups[row.index]
 	if len(g.Hosts) == 0 {
-		m.toast = "group has no hosts"
+		m.toast = toast{text: "group has no hosts", level: toastWarn}
 		return nil
 	}
 	if oneWindow && !tmx.InTmux() {
-		m.toast = "requires an active tmux session"
+		m.toast = toast{text: "requires an active tmux session", level: toastWarn}
 		return nil
 	}
 
@@ -685,15 +685,15 @@ func (m *groupsModel) doConnectAll(g config.Group, oneWindow bool, remoteCmd str
 				PaneBorderStatus: psOne.BorderStatus,
 			})
 			if err != nil {
-				return toastMsg(err.Error())
+				return toastMsg{text: err.Error(), level: toastErr}
 			}
-			return toastMsg(fmt.Sprintf("opened %d in one window", len(sshCmds)))
+			return toastMsg{text: fmt.Sprintf("opened %d in one window", len(sshCmds)), level: toastInfo}
 		}
 	}
 
 	if mode == tmx.OpenCurrent {
 		if len(sshCmds) > 1 {
-			m.toast = "multi-host requires tmux (window or pane mode)"
+			m.toast = toast{text: "multi-host requires tmux (window or pane mode)", level: toastWarn}
 			return nil
 		}
 		m.execCmd = sshCmds[0]
@@ -701,7 +701,7 @@ func (m *groupsModel) doConnectAll(g config.Group, oneWindow bool, remoteCmd str
 	}
 	if !inTmux {
 		if len(sshCmds) > 1 {
-			m.toast = "multi-host requires an active tmux session"
+			m.toast = toast{text: "multi-host requires an active tmux session", level: toastWarn}
 			return nil
 		}
 		m.execCmd = tmx.NewSessionCmd(defaults.TmuxSession, sshCmds[0])
@@ -725,9 +725,9 @@ func (m *groupsModel) doConnectAll(g config.Group, oneWindow bool, remoteCmd str
 				PaneBorderStatus: ps.BorderStatus,
 			})
 			if err != nil {
-				return toastMsg(err.Error())
+				return toastMsg{text: err.Error(), level: toastErr}
 			}
-			return toastMsg(fmt.Sprintf("opened %d in one window", len(sshCmds)))
+			return toastMsg{text: fmt.Sprintf("opened %d in one window", len(sshCmds)), level: toastInfo}
 		}
 		if mode == tmx.OpenWindow && len(sshCmds) > 1 {
 			name := strings.TrimSpace(g.Name)
@@ -745,9 +745,9 @@ func (m *groupsModel) doConnectAll(g config.Group, oneWindow bool, remoteCmd str
 				PaneBorderStatus: ps.BorderStatus,
 			})
 			if err != nil {
-				return toastMsg(err.Error())
+				return toastMsg{text: err.Error(), level: toastErr}
 			}
-			return toastMsg(fmt.Sprintf("opened %d in one window", len(sshCmds)))
+			return toastMsg{text: fmt.Sprintf("opened %d in one window", len(sshCmds)), level: toastInfo}
 		}
 
 		for i, sshCmd := range sshCmds {
@@ -758,10 +758,10 @@ func (m *groupsModel) doConnectAll(g config.Group, oneWindow bool, remoteCmd str
 			tmuxCmd := tmx.NewWindowCmd(name, sshCmd)
 			// #nosec G204 -- tmux argv is constructed (no shell) from known host/group settings.
 			if err := exec.Command(tmuxCmd[0], tmuxCmd[1:]...).Run(); err != nil {
-				return toastMsg("tmux error: " + err.Error())
+				return toastMsg{text: "tmux error: " + err.Error(), level: toastErr}
 			}
 		}
-		return toastMsg(fmt.Sprintf("opened %d", len(sshCmds)))
+		return toastMsg{text: fmt.Sprintf("opened %d", len(sshCmds)), level: toastInfo}
 	}
 }
 

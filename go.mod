@@ -1,4 +1,4 @@
-module github.com/bashkir/ssh-tui
+module github.com/al-bashkir/ssh-tui
 
 go 1.25.6
 

@@ -3,8 +3,8 @@ package ui
 import (
 	"strings"
 
-	"github.com/bashkir/ssh-tui/internal/config"
-	"github.com/bashkir/ssh-tui/internal/sshcmd"
+	"github.com/al-bashkir/ssh-tui/internal/config"
+	"github.com/al-bashkir/ssh-tui/internal/sshcmd"
 )
 
 func hostConfigFor(cfg config.Config, host string) (config.Host, bool) {

@@ -5,7 +5,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/bashkir/ssh-tui/internal/config"
+	"github.com/al-bashkir/ssh-tui/internal/config"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
@@ -51,6 +51,8 @@ func (d paneBorderFormatsDelegate) Render(w io.Writer, m list.Model, index int, 
 }
 
 type paneBorderFormatsModel struct {
+	parentCrumb string
+
 	width  int
 	height int
 
@@ -64,7 +66,7 @@ type paneBorderFormatsModel struct {
 
 	adding     bool
 	addInput   textinput.Model
-	addToast   string
+	addToast   toast
 	confirmDel bool
 	delValue   string
 
@@ -183,29 +185,29 @@ func (m *paneBorderFormatsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.adding = false
 				m.addInput.Blur()
 				m.addInput.SetValue("")
-				m.addToast = ""
+				m.addToast = toast{}
 				return m, nil
 			case "enter":
 				v := strings.TrimSpace(m.addInput.Value())
 				m.addInput.SetValue("")
 				if v == "" {
-					m.addToast = "format required"
+					m.addToast = toast{text: "format required", level: toastWarn}
 					return m, nil
 				}
 				if !m.allowEdit {
-					m.addToast = "read-only"
+					m.addToast = toast{text: "read-only", level: toastWarn}
 					return m, nil
 				}
 				defs := config.Defaults{PaneBorderFmt: config.DefaultPaneBorderFormat, PaneBorderFmts: m.custom}
 				if !addPaneBorderFormat(&defs, v) {
-					m.addToast = "already exists"
+					m.addToast = toast{text: "already exists", level: toastWarn}
 					return m, nil
 				}
 				m.custom = defs.PaneBorderFmts
 				m.selected = v
 				m.adding = false
 				m.addInput.Blur()
-				m.addToast = "added"
+				m.addToast = toast{text: "added", level: toastOK}
 				m.rebuildList()
 				return m, nil
 			default:
@@ -239,7 +241,7 @@ func (m *paneBorderFormatsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch s {
 			case "a":
 				m.adding = true
-				m.addToast = ""
+				m.addToast = toast{}
 				m.addInput.Focus()
 				setSearchFocused(&m.addInput, true)
 				// resize list for add mode
@@ -253,7 +255,7 @@ func (m *paneBorderFormatsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				if !row.deletable {
-					m.addToast = "can't delete default"
+					m.addToast = toast{text: "can't delete default", level: toastWarn}
 					return m, nil
 				}
 				m.confirmDel = true
@@ -274,7 +276,7 @@ func (m *paneBorderFormatsModel) deleteValue(v string) {
 		return
 	}
 	if strings.TrimSpace(config.DefaultPaneBorderFormat) == v {
-		m.addToast = "can't delete default"
+		m.addToast = toast{text: "can't delete default", level: toastWarn}
 		return
 	}
 
@@ -284,7 +286,7 @@ func (m *paneBorderFormatsModel) deleteValue(v string) {
 	if strings.TrimSpace(m.selected) == v {
 		m.selected = config.DefaultPaneBorderFormat
 	}
-	m.addToast = "deleted"
+	m.addToast = toast{text: "deleted", level: toastOK}
 	m.rebuildList()
 }
 
@@ -318,8 +320,8 @@ func (m *paneBorderFormatsModel) View() string {
 	body.WriteString(strings.TrimRight(m.list.View(), "\n"))
 
 	headerRight := ""
-	if strings.TrimSpace(m.addToast) != "" {
-		headerRight = statusWarn.Render(truncateTail(m.addToast, 28))
+	if !m.addToast.empty() {
+		headerRight = renderToast(toast{text: truncateTail(m.addToast.text, 28), level: m.addToast.level})
 	}
 
 	footer := "Enter select  Esc back"
@@ -331,5 +333,5 @@ func (m *paneBorderFormatsModel) View() string {
 		footer = "Enter select  a add  d delete  Esc back"
 	}
 
-	return renderFrame(m.width, m.height, "Pane border formats", headerRight, strings.TrimRight(body.String(), "\n"), footerStyle.Render(footer))
+	return renderFrame(m.width, m.height, breadcrumbTitle(m.parentCrumb, "Border formats"), headerRight, strings.TrimRight(body.String(), "\n"), footerStyle.Render(footer))
 }

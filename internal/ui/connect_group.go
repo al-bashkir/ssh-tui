@@ -5,13 +5,13 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/bashkir/ssh-tui/internal/sshcmd"
-	tmx "github.com/bashkir/ssh-tui/internal/tmux"
+	"github.com/al-bashkir/ssh-tui/internal/sshcmd"
+	tmx "github.com/al-bashkir/ssh-tui/internal/tmux"
 )
 
-func (m *appModel) connectHostsWithDefaults(hostsToOpen []string) (execCmd []string, toast string, err error) {
+func (m *appModel) connectHostsWithDefaults(hostsToOpen []string) (execCmd []string, toastResult toast, err error) {
 	if len(hostsToOpen) == 0 {
-		return nil, "", fmt.Errorf("no host selected")
+		return nil, toast{}, fmt.Errorf("no host selected")
 	}
 
 	defaults := m.opts.Config.Defaults
@@ -31,16 +31,16 @@ func (m *appModel) connectHostsWithDefaults(hostsToOpen []string) (execCmd []str
 
 	if mode == tmx.OpenCurrent {
 		if len(sshCmds) > 1 {
-			return nil, "", fmt.Errorf("multi-host requires tmux (window or pane mode)")
+			return nil, toast{}, fmt.Errorf("multi-host requires tmux (window or pane mode)")
 		}
-		return sshCmds[0], "", nil
+		return sshCmds[0], toast{}, nil
 	}
 
 	if !inTmux {
 		if len(sshCmds) > 1 {
-			return nil, "", fmt.Errorf("multi-host requires an active tmux session")
+			return nil, toast{}, fmt.Errorf("multi-host requires an active tmux session")
 		}
-		return tmx.NewSessionCmd(defaults.TmuxSession, sshCmds[0]), "", nil
+		return tmx.NewSessionCmd(defaults.TmuxSession, sshCmds[0]), toast{}, nil
 	}
 
 	window := windowName(hostsToOpen[0])
@@ -55,27 +55,27 @@ func (m *appModel) connectHostsWithDefaults(hostsToOpen []string) (execCmd []str
 			PaneBorderFormat: ps.BorderFormat,
 			PaneBorderStatus: ps.BorderStatus,
 		}); err != nil {
-			return nil, "", err
+			return nil, toast{}, err
 		}
-		return nil, fmt.Sprintf("opened %d in one window", len(sshCmds)), nil
+		return nil, toast{text: fmt.Sprintf("opened %d in one window", len(sshCmds)), level: toastInfo}, nil
 	}
 
 	for i, sshCmd := range sshCmds {
 		tmuxCmd := tmx.NewWindowCmd(windowName(hostsToOpen[i]), sshCmd)
 		// #nosec G204 -- tmux argv is constructed (no shell) from known host/group settings.
 		if err := exec.Command(tmuxCmd[0], tmuxCmd[1:]...).Run(); err != nil {
-			return nil, "", fmt.Errorf("tmux error: %s", err.Error())
+			return nil, toast{}, fmt.Errorf("tmux error: %s", err.Error())
 		}
 	}
-	return nil, fmt.Sprintf("opened %d", len(sshCmds)), nil
+	return nil, toast{text: fmt.Sprintf("opened %d", len(sshCmds)), level: toastInfo}, nil
 }
 
-func (m *appModel) connectHostsForGroup(groupIndex int, hostsToOpen []string, remoteCommandOverride string) (execCmd []string, toast string, err error) {
+func (m *appModel) connectHostsForGroup(groupIndex int, hostsToOpen []string, remoteCommandOverride string) (execCmd []string, toastResult toast, err error) {
 	if groupIndex < 0 || groupIndex >= len(m.opts.Config.Groups) {
-		return nil, "", fmt.Errorf("invalid group")
+		return nil, toast{}, fmt.Errorf("invalid group")
 	}
 	if len(hostsToOpen) == 0 {
-		return nil, "", fmt.Errorf("no host selected")
+		return nil, toast{}, fmt.Errorf("no host selected")
 	}
 
 	g := m.opts.Config.Groups[groupIndex]
@@ -111,16 +111,16 @@ func (m *appModel) connectHostsForGroup(groupIndex int, hostsToOpen []string, re
 
 	if mode == tmx.OpenCurrent {
 		if len(sshCmds) > 1 {
-			return nil, "", fmt.Errorf("multi-host requires tmux (window or pane mode)")
+			return nil, toast{}, fmt.Errorf("multi-host requires tmux (window or pane mode)")
 		}
-		return sshCmds[0], "", nil
+		return sshCmds[0], toast{}, nil
 	}
 
 	if !inTmux {
 		if len(sshCmds) > 1 {
-			return nil, "", fmt.Errorf("multi-host requires an active tmux session")
+			return nil, toast{}, fmt.Errorf("multi-host requires an active tmux session")
 		}
-		return tmx.NewSessionCmd(defaults.TmuxSession, sshCmds[0]), "", nil
+		return tmx.NewSessionCmd(defaults.TmuxSession, sshCmds[0]), toast{}, nil
 	}
 
 	window := strings.TrimSpace(g.Name)
@@ -139,17 +139,17 @@ func (m *appModel) connectHostsForGroup(groupIndex int, hostsToOpen []string, re
 			PaneBorderFormat: ps.BorderFormat,
 			PaneBorderStatus: ps.BorderStatus,
 		}); err != nil {
-			return nil, "", err
+			return nil, toast{}, err
 		}
-		return nil, fmt.Sprintf("opened %d in one window", len(sshCmds)), nil
+		return nil, toast{text: fmt.Sprintf("opened %d in one window", len(sshCmds)), level: toastInfo}, nil
 	}
 
 	for _, sshCmd := range sshCmds {
 		tmuxCmd := tmx.NewWindowCmd(window, sshCmd)
 		// #nosec G204 -- tmux argv is constructed (no shell) from known host/group settings.
 		if err := exec.Command(tmuxCmd[0], tmuxCmd[1:]...).Run(); err != nil {
-			return nil, "", fmt.Errorf("tmux error: %s", err.Error())
+			return nil, toast{}, fmt.Errorf("tmux error: %s", err.Error())
 		}
 	}
-	return nil, fmt.Sprintf("opened %d", len(sshCmds)), nil
+	return nil, toast{text: fmt.Sprintf("opened %d", len(sshCmds)), level: toastInfo}, nil
 }

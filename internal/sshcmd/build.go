@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bashkir/ssh-tui/internal/config"
+	"github.com/al-bashkir/ssh-tui/internal/config"
 )
 
 func shellQuotePOSIX(s string) string {
