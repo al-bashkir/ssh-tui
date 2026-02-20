@@ -1,0 +1,1142 @@
+package ui
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/bashkir/ssh-tui/internal/config"
+	"github.com/bashkir/ssh-tui/internal/hosts"
+
+	tea "github.com/charmbracelet/bubbletea"
+)
+
+type screen int
+
+const (
+	screenHosts screen = iota
+	screenGroups
+	screenGroupForm
+	screenGroupHosts
+	screenHostPicker
+	screenGroupPicker
+	screenDefaultsForm
+	screenCustomHost
+	screenHostForm
+)
+
+type switchScreenMsg struct {
+	to screen
+}
+
+type openGroupFormMsg struct {
+	index int
+}
+
+type openGroupFormPrefillMsg struct {
+	group config.Group
+}
+
+type deleteGroupMsg struct {
+	index int
+}
+
+type openGroupHostsMsg struct {
+	index int
+}
+
+type openHostPickerMsg struct {
+	groupIndex int
+	returnTo   screen
+}
+
+type openGroupPickerMsg struct {
+	hosts []string
+}
+
+type openDefaultsFormMsg struct {
+	returnTo screen
+}
+
+type openCustomHostMsg struct {
+	returnTo   screen
+	groupIndex int // -1 means no group context; Ctrl+a will pick a group
+}
+
+type openHostFormMsg struct {
+	host     string
+	returnTo screen
+}
+
+type openHostFormPrefillMsg struct {
+	host     config.Host
+	returnTo screen
+}
+
+type customHostCancelMsg struct{}
+
+type customHostConnectMsg struct {
+	returnTo   screen
+	groupIndex int
+	hosts      []string
+}
+
+type customHostDoneMsg struct {
+	returnTo   screen
+	groupIndex int
+	hosts      []string
+}
+
+type customHostPickGroupMsg struct {
+	returnTo screen
+	hosts    []string
+}
+
+type groupPickerCancelMsg struct{}
+
+type groupPickerDoneMsg struct {
+	groupIndex int
+}
+
+type removeHostsMsg struct {
+	groupIndex int
+	hosts      []string
+}
+
+type hostFormCancelMsg struct{}
+
+type hostFormSaveMsg struct {
+	index int
+	host  config.Host
+}
+
+type toggleHiddenHostMsg struct {
+	host string
+	hide bool
+}
+
+type defaultsToastExpireMsg struct {
+	token int
+}
+
+type toastDismissMsg struct {
+	token int
+}
+
+type appModel struct {
+	opts Options
+
+	width  int
+	height int
+
+	screen             screen
+	hosts              *hostsModel
+	groups             *groupsModel
+	form               *groupFormModel
+	gh                 *groupHostsModel
+	picker             *hostPickerModel
+	gp                 *groupPickerModel
+	defaultsForm       *defaultsFormModel
+	customHost         *customHostModel
+	hostForm           *hostFormModel
+	gpHosts            []string
+	gpReturnTo         screen
+	gpConnectAfterAdd  bool
+	returnTo           screen
+	returnGroupIndex   int
+	defaultsReturnTo   screen
+	hostFormReturnTo   screen
+	defaultsToastToken int
+	toastToken         int
+
+	quitting bool
+	execCmd  []string
+}
+
+func newAppModel(opts Options) *appModel {
+	m := &appModel{
+		opts:   opts,
+		screen: screenHosts,
+		hosts:  newHostsModel(opts),
+		groups: newGroupsModel(opts),
+	}
+	return m
+}
+
+func (m *appModel) Init() tea.Cmd {
+	return m.hosts.Init()
+}
+
+func (m *appModel) applyWindowSize(ws tea.WindowSizeMsg) tea.Cmd {
+	m.width = ws.Width
+	m.height = ws.Height
+
+	var cmds []tea.Cmd
+	if m.hosts != nil {
+		model, cmd := m.hosts.Update(ws)
+		if hm, ok := model.(*hostsModel); ok {
+			m.hosts = hm
+		}
+		cmds = append(cmds, cmd)
+	}
+	if m.groups != nil {
+		model, cmd := m.groups.Update(ws)
+		if gm, ok := model.(*groupsModel); ok {
+			m.groups = gm
+		}
+		cmds = append(cmds, cmd)
+	}
+	if m.form != nil {
+		mw, mh := groupFormModalSize(ws.Width, ws.Height)
+		model, cmd := m.form.Update(tea.WindowSizeMsg{Width: mw, Height: mh})
+		if fm, ok := model.(*groupFormModel); ok {
+			m.form = fm
+		}
+		cmds = append(cmds, cmd)
+	}
+	if m.gh != nil {
+		model, cmd := m.gh.Update(ws)
+		if gh, ok := model.(*groupHostsModel); ok {
+			m.gh = gh
+		}
+		cmds = append(cmds, cmd)
+	}
+	if m.picker != nil {
+		mw, mh := pickerModalSize(ws.Width, ws.Height)
+		model, cmd := m.picker.Update(tea.WindowSizeMsg{Width: mw, Height: mh})
+		if pm, ok := model.(*hostPickerModel); ok {
+			m.picker = pm
+		}
+		cmds = append(cmds, cmd)
+	}
+	if m.gp != nil {
+		mw, mh := pickerModalSize(ws.Width, ws.Height)
+		model, cmd := m.gp.Update(tea.WindowSizeMsg{Width: mw, Height: mh})
+		if gm, ok := model.(*groupPickerModel); ok {
+			m.gp = gm
+		}
+		cmds = append(cmds, cmd)
+	}
+	if m.defaultsForm != nil {
+		model, cmd := m.defaultsForm.Update(ws)
+		if dm, ok := model.(*defaultsFormModel); ok {
+			m.defaultsForm = dm
+		}
+		cmds = append(cmds, cmd)
+	}
+	if m.customHost != nil {
+		mw, mh := customHostModalSize(ws.Width, ws.Height)
+		model, cmd := m.customHost.Update(tea.WindowSizeMsg{Width: mw, Height: mh})
+		if cm, ok := model.(*customHostModel); ok {
+			m.customHost = cm
+		}
+		cmds = append(cmds, cmd)
+	}
+	if m.hostForm != nil {
+		mw, mh := hostFormModalSize(ws.Width, ws.Height)
+		model, cmd := m.hostForm.Update(tea.WindowSizeMsg{Width: mw, Height: mh})
+		if hm, ok := model.(*hostFormModel); ok {
+			m.hostForm = hm
+		}
+		cmds = append(cmds, cmd)
+	}
+	return tea.Batch(cmds...)
+}
+
+func (m *appModel) collectToastKey() string {
+	var b strings.Builder
+	if m.hosts != nil && m.hosts.toast != "" {
+		b.WriteString(m.hosts.toast)
+	}
+	if m.groups != nil && m.groups.toast != "" {
+		b.WriteByte('|')
+		b.WriteString(m.groups.toast)
+	}
+	if m.gh != nil && m.gh.toast != "" {
+		b.WriteByte('|')
+		b.WriteString(m.gh.toast)
+	}
+	return b.String()
+}
+
+func (m *appModel) clearToasts() {
+	if m.hosts != nil {
+		m.hosts.toast = ""
+	}
+	if m.groups != nil {
+		m.groups.toast = ""
+	}
+	if m.gh != nil {
+		m.gh.toast = ""
+	}
+}
+
+func (m *appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Spinner tick.
+	if _, ok := msg.(spinnerTickMsg); ok {
+		if spinnerActive {
+			spinnerIndex++
+			// Check if minimum duration has elapsed and work is done.
+			if !spinnerMinEnd.IsZero() && time.Now().After(spinnerMinEnd) && !m.hosts.reloading {
+				spinnerActive = false
+				return m, nil
+			}
+			return m, tea.Tick(spinnerTickInterval, func(time.Time) tea.Msg { return spinnerTickMsg{} })
+		}
+		return m, nil
+	}
+
+	// Auto-dismiss toasts.
+	if tdm, ok := msg.(toastDismissMsg); ok {
+		if tdm.token == m.toastToken {
+			m.clearToasts()
+		}
+		return m, nil
+	}
+
+	prev := m.collectToastKey()
+	result, cmd := m.doUpdate(msg)
+	cur := m.collectToastKey()
+
+	if cur != "" && cur != prev {
+		m.toastToken++
+		token := m.toastToken
+		dismiss := tea.Tick(4*time.Second, func(time.Time) tea.Msg {
+			return toastDismissMsg{token: token}
+		})
+		return result, tea.Batch(cmd, dismiss)
+	}
+	return result, cmd
+}
+
+func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		return m, m.applyWindowSize(msg)
+	case switchScreenMsg:
+		m.screen = msg.to
+		return m, nil
+	case openGroupFormMsg:
+		var g config.Group
+		if msg.index >= 0 && msg.index < len(m.opts.Config.Groups) {
+			g = m.opts.Config.Groups[msg.index]
+		}
+		m.form = newGroupFormModel(msg.index, g, m.opts.Config.Defaults, m.opts.Config.Defaults.ConfirmQuit)
+		if m.width > 0 && m.height > 0 {
+			mw, mh := groupFormModalSize(m.width, m.height)
+			_, _ = m.form.Update(tea.WindowSizeMsg{Width: mw, Height: mh})
+		}
+		m.screen = screenGroupForm
+		return m, nil
+	case openGroupFormPrefillMsg:
+		m.form = newGroupFormModel(-1, msg.group, m.opts.Config.Defaults, m.opts.Config.Defaults.ConfirmQuit)
+		if m.width > 0 && m.height > 0 {
+			mw, mh := groupFormModalSize(m.width, m.height)
+			_, _ = m.form.Update(tea.WindowSizeMsg{Width: mw, Height: mh})
+		}
+		m.screen = screenGroupForm
+		return m, nil
+	case groupFormCancelMsg:
+		m.form = nil
+		m.screen = screenGroups
+		return m, nil
+	case groupFormSaveMsg:
+		if err := m.saveGroup(msg.index, msg.group); err != nil {
+			// Keep form open on error.
+			m.form.toast = err.Error()
+			return m, nil
+		}
+		m.groups.toast = "saved"
+		m.form = nil
+		m.screen = screenGroups
+		return m, nil
+	case deleteGroupMsg:
+		if err := m.deleteGroup(msg.index); err != nil {
+			m.groups.toast = err.Error()
+			return m, nil
+		}
+		m.groups.toast = "deleted"
+		return m, nil
+	case openGroupHostsMsg:
+		if msg.index < 0 || msg.index >= len(m.opts.Config.Groups) {
+			m.groups.toast = "invalid group"
+			return m, nil
+		}
+		m.gh = newGroupHostsModel(m.opts, msg.index)
+		if m.width > 0 && m.height > 0 {
+			_, _ = m.gh.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+		}
+		m.screen = screenGroupHosts
+		return m, nil
+	case openHostPickerMsg:
+		m.picker = newHostPickerModel(m.opts, msg.groupIndex)
+		if m.width > 0 && m.height > 0 {
+			mw, mh := pickerModalSize(m.width, m.height)
+			_, _ = m.picker.Update(tea.WindowSizeMsg{Width: mw, Height: mh})
+		}
+		m.returnTo = msg.returnTo
+		m.returnGroupIndex = msg.groupIndex
+		m.screen = screenHostPicker
+		return m, nil
+	case openGroupPickerMsg:
+		m.gpHosts = append([]string(nil), msg.hosts...)
+		m.gp = newGroupPickerModel(m.opts)
+		m.gpReturnTo = screenHosts
+		m.gpConnectAfterAdd = false
+		if m.width > 0 && m.height > 0 {
+			mw, mh := pickerModalSize(m.width, m.height)
+			_, _ = m.gp.Update(tea.WindowSizeMsg{Width: mw, Height: mh})
+		}
+		m.screen = screenGroupPicker
+		return m, nil
+	case openDefaultsFormMsg:
+		m.defaultsForm = newDefaultsFormModel(m.opts.Config.Defaults, m.opts.Config.Defaults.ConfirmQuit)
+		m.defaultsReturnTo = msg.returnTo
+		if m.width > 0 && m.height > 0 {
+			_, _ = m.defaultsForm.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+		}
+		m.screen = screenDefaultsForm
+		return m, nil
+	case defaultsFormCancelMsg:
+		m.defaultsForm = nil
+		m.screen = m.defaultsReturnTo
+		return m, nil
+	case defaultsFormSaveMsg:
+		if err := m.saveDefaults(msg.defaults); err != nil {
+			m.defaultsForm.toast = err.Error()
+			return m, nil
+		}
+		m.screen = screenDefaultsForm
+		if m.defaultsForm != nil {
+			m.defaultsForm.defaults = m.opts.Config.Defaults
+			m.defaultsForm.toast = "saved"
+			m.defaultsToastToken++
+			token := m.defaultsToastToken
+			return m, tea.Tick(5*time.Second, func(time.Time) tea.Msg { return defaultsToastExpireMsg{token: token} })
+		}
+		return m, nil
+	case defaultsToastExpireMsg:
+		if msg.token != m.defaultsToastToken {
+			return m, nil
+		}
+		if m.defaultsForm != nil && strings.TrimSpace(m.defaultsForm.toast) == "saved" {
+			m.defaultsForm.toast = ""
+		}
+		return m, nil
+	case openCustomHostMsg:
+		m.customHost = newCustomHostModel(m.opts, msg.groupIndex, msg.returnTo)
+		if m.width > 0 && m.height > 0 {
+			mw, mh := customHostModalSize(m.width, m.height)
+			_, _ = m.customHost.Update(tea.WindowSizeMsg{Width: mw, Height: mh})
+		}
+		m.screen = screenCustomHost
+		return m, nil
+	case openHostFormMsg:
+		idx, hc := findHostConfig(m.opts.Config, msg.host)
+		m.hostForm = newHostFormModel(idx, hc, m.opts.Config.Defaults, m.opts.Config.Defaults.ConfirmQuit)
+		m.hostFormReturnTo = msg.returnTo
+		if m.width > 0 && m.height > 0 {
+			mw, mh := hostFormModalSize(m.width, m.height)
+			_, _ = m.hostForm.Update(tea.WindowSizeMsg{Width: mw, Height: mh})
+		}
+		m.screen = screenHostForm
+		return m, nil
+	case openHostFormPrefillMsg:
+		m.hostForm = newHostFormModel(-1, msg.host, m.opts.Config.Defaults, m.opts.Config.Defaults.ConfirmQuit)
+		m.hostFormReturnTo = msg.returnTo
+		if m.width > 0 && m.height > 0 {
+			mw, mh := hostFormModalSize(m.width, m.height)
+			_, _ = m.hostForm.Update(tea.WindowSizeMsg{Width: mw, Height: mh})
+		}
+		m.screen = screenHostForm
+		return m, nil
+	case customHostCancelMsg:
+		ret := screenHosts
+		if m.customHost != nil {
+			ret = m.customHost.returnTo
+		}
+		m.customHost = nil
+		m.screen = ret
+		return m, nil
+	case customHostPickGroupMsg:
+		m.gpHosts = append([]string(nil), msg.hosts...)
+		m.gp = newGroupPickerModel(m.opts)
+		m.gpReturnTo = msg.returnTo
+		m.gpConnectAfterAdd = false
+		if m.width > 0 && m.height > 0 {
+			mw, mh := pickerModalSize(m.width, m.height)
+			_, _ = m.gp.Update(tea.WindowSizeMsg{Width: mw, Height: mh})
+		}
+		m.customHost = nil
+		m.screen = screenGroupPicker
+		return m, nil
+	case customHostConnectMsg:
+		var execCmd []string
+		toast := ""
+		var err error
+		if msg.groupIndex >= 0 {
+			execCmd, toast, err = m.connectHostsForGroup(msg.groupIndex, msg.hosts, "")
+		} else {
+			execCmd, toast, err = m.connectHostsWithDefaults(msg.hosts)
+		}
+		if err != nil {
+			toast = err.Error()
+		}
+		if toast != "" {
+			switch msg.returnTo {
+			case screenGroups:
+				m.groups.toast = toast
+			case screenGroupHosts:
+				if m.gh != nil {
+					m.gh.toast = toast
+				}
+			default:
+				m.hosts.toast = toast
+			}
+		}
+		m.customHost = nil
+		m.screen = msg.returnTo
+		if len(execCmd) != 0 {
+			m.execCmd = execCmd
+			return m, tea.Quit
+		}
+		return m, nil
+	case customHostDoneMsg:
+		if err := m.addHostsToGroup(msg.groupIndex, msg.hosts); err != nil {
+			if m.customHost != nil {
+				m.customHost.toast = err.Error()
+			}
+			return m, nil
+		}
+		if msg.returnTo == screenGroupHosts {
+			m.gh = newGroupHostsModel(m.opts, msg.groupIndex)
+			if m.width > 0 && m.height > 0 {
+				_, _ = m.gh.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+			}
+		}
+		addedToast := fmt.Sprintf("added %d", len(msg.hosts))
+		switch msg.returnTo {
+		case screenGroups:
+			m.groups.toast = addedToast
+		case screenGroupHosts:
+			if m.gh != nil {
+				m.gh.toast = addedToast
+			}
+		default:
+			m.hosts.toast = addedToast
+		}
+		m.customHost = nil
+		m.screen = msg.returnTo
+		return m, nil
+	case groupPickerCancelMsg:
+		m.gp = nil
+		m.gpHosts = nil
+		m.gpConnectAfterAdd = false
+		m.screen = m.gpReturnTo
+		return m, nil
+	case groupPickerDoneMsg:
+		if err := m.addHostsToGroup(msg.groupIndex, m.gpHosts); err != nil {
+			m.gp.toast = err.Error()
+			return m, nil
+		}
+		if m.gpConnectAfterAdd {
+			execCmd, toast, err := m.connectHostsForGroup(msg.groupIndex, m.gpHosts, "")
+			if err != nil {
+				toast = err.Error()
+			}
+			if toast != "" {
+				switch m.gpReturnTo {
+				case screenGroups:
+					m.groups.toast = toast
+				default:
+					m.hosts.toast = toast
+				}
+			}
+			m.gp = nil
+			m.gpHosts = nil
+			m.gpConnectAfterAdd = false
+			m.screen = m.gpReturnTo
+			if len(execCmd) != 0 {
+				m.execCmd = execCmd
+				return m, tea.Quit
+			}
+			return m, nil
+		}
+		addedToast := fmt.Sprintf("added %d", len(m.gpHosts))
+		switch m.gpReturnTo {
+		case screenGroups:
+			m.groups.toast = addedToast
+		case screenGroupHosts:
+			if m.gh != nil {
+				m.gh.toast = addedToast
+			}
+		default:
+			m.hosts.toast = addedToast
+		}
+		m.gp = nil
+		m.gpHosts = nil
+		m.screen = m.gpReturnTo
+		return m, nil
+	case hostPickerCancelMsg:
+		m.picker = nil
+		m.screen = m.returnTo
+		return m, nil
+	case hostPickerDoneMsg:
+		if err := m.addHostsToGroup(m.returnGroupIndex, msg.hosts); err != nil {
+			m.picker.toast = err.Error()
+			return m, nil
+		}
+		m.groups.toast = fmt.Sprintf("added %d", len(msg.hosts))
+		m.picker = nil
+		m.screen = m.returnTo
+		if m.screen == screenGroupHosts {
+			m.gh = newGroupHostsModel(m.opts, m.returnGroupIndex)
+			if m.width > 0 && m.height > 0 {
+				_, _ = m.gh.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+			}
+		}
+		return m, nil
+	case removeHostsMsg:
+		if err := m.removeHostsFromGroup(msg.groupIndex, msg.hosts); err != nil {
+			if m.screen == screenGroupHosts && m.gh != nil {
+				m.gh.toast = err.Error()
+			}
+			return m, nil
+		}
+		if m.screen == screenGroupHosts && m.gh != nil {
+			m.gh.toast = fmt.Sprintf("removed %d", len(msg.hosts))
+		}
+		if m.screen == screenGroupHosts {
+			m.gh = newGroupHostsModel(m.opts, msg.groupIndex)
+			if m.width > 0 && m.height > 0 {
+				_, _ = m.gh.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+			}
+		}
+		return m, nil
+	case hostFormCancelMsg:
+		m.hostForm = nil
+		m.screen = m.hostFormReturnTo
+		return m, nil
+	case hostFormSaveMsg:
+		hadForm := m.hostForm != nil
+		if err := m.saveHostConfig(msg.index, msg.host); err != nil {
+			if m.hostForm != nil {
+				m.hostForm.toast = err.Error()
+			}
+			return m, nil
+		}
+		if m.hosts != nil {
+			m.hosts.refreshVisibleBadges()
+			m.hosts.reapplyFilter()
+		}
+		if m.gh != nil {
+			m.gh.refreshVisibleBadges()
+		}
+		if m.picker != nil {
+			m.picker.refreshVisibleBadges()
+		}
+		savedToast := "saved"
+		if hadForm {
+			switch m.hostFormReturnTo {
+			case screenGroups:
+				m.groups.toast = savedToast
+			case screenGroupHosts:
+				if m.gh != nil {
+					m.gh.toast = savedToast
+				}
+			default:
+				m.hosts.toast = savedToast
+			}
+			m.hostForm = nil
+			m.screen = m.hostFormReturnTo
+		} else {
+			m.hosts.toast = savedToast
+		}
+		return m, nil
+	case toggleHiddenHostMsg:
+		if err := m.saveToggleHidden(msg.host, msg.hide); err != nil {
+			if m.hosts != nil {
+				m.hosts.toast = err.Error()
+			}
+			return m, nil
+		}
+		if m.hosts != nil {
+			m.hosts.reapplyFilter()
+			m.hosts.toast = "saved"
+		}
+		return m, nil
+	}
+
+	switch m.screen {
+	case screenHosts:
+		model, cmd := m.hosts.Update(msg)
+		if hm, ok := model.(*hostsModel); ok {
+			m.hosts = hm
+			if len(hm.execCmd) != 0 {
+				m.execCmd = hm.execCmd
+				return m, tea.Quit
+			}
+			if hm.quitting {
+				m.quitting = true
+				return m, tea.Quit
+			}
+		}
+		return m, cmd
+	case screenGroups:
+		model, cmd := m.groups.Update(msg)
+		if gm, ok := model.(*groupsModel); ok {
+			m.groups = gm
+			if len(gm.execCmd) != 0 {
+				m.execCmd = gm.execCmd
+				return m, tea.Quit
+			}
+			if gm.quitting {
+				m.quitting = true
+				return m, tea.Quit
+			}
+		}
+		return m, cmd
+	case screenGroupForm:
+		model, cmd := m.form.Update(msg)
+		if fm, ok := model.(*groupFormModel); ok {
+			m.form = fm
+		}
+		return m, cmd
+	case screenGroupHosts:
+		model, cmd := m.gh.Update(msg)
+		if gh, ok := model.(*groupHostsModel); ok {
+			m.gh = gh
+			if len(gh.execCmd) != 0 {
+				m.execCmd = gh.execCmd
+				return m, tea.Quit
+			}
+			if gh.quitting {
+				m.quitting = true
+				return m, tea.Quit
+			}
+		}
+		return m, cmd
+	case screenHostPicker:
+		model, cmd := m.picker.Update(msg)
+		if pm, ok := model.(*hostPickerModel); ok {
+			m.picker = pm
+		}
+		return m, cmd
+	case screenGroupPicker:
+		model, cmd := m.gp.Update(msg)
+		if gm, ok := model.(*groupPickerModel); ok {
+			m.gp = gm
+		}
+		return m, cmd
+	case screenDefaultsForm:
+		model, cmd := m.defaultsForm.Update(msg)
+		if dm, ok := model.(*defaultsFormModel); ok {
+			m.defaultsForm = dm
+		}
+		return m, cmd
+	case screenCustomHost:
+		model, cmd := m.customHost.Update(msg)
+		if cm, ok := model.(*customHostModel); ok {
+			m.customHost = cm
+		}
+		return m, cmd
+	case screenHostForm:
+		model, cmd := m.hostForm.Update(msg)
+		if hm, ok := model.(*hostFormModel); ok {
+			m.hostForm = hm
+		}
+		return m, cmd
+	default:
+		return m, nil
+	}
+}
+
+func (m *appModel) View() string {
+	switch m.screen {
+	case screenGroups:
+		return m.groups.View()
+	case screenGroupForm:
+		return placeCentered(m.width, m.height, m.form.View())
+	case screenGroupHosts:
+		return m.gh.View()
+	case screenHostPicker:
+		return placeCentered(m.width, m.height, m.picker.View())
+	case screenGroupPicker:
+		return placeCentered(m.width, m.height, m.gp.View())
+	case screenDefaultsForm:
+		return m.defaultsForm.View()
+	case screenCustomHost:
+		return placeCentered(m.width, m.height, m.customHost.View())
+	case screenHostForm:
+		return placeCentered(m.width, m.height, m.hostForm.View())
+	default:
+		return m.hosts.View()
+	}
+}
+
+func (m *appModel) saveGroup(index int, g config.Group) error {
+	if strings.TrimSpace(g.Name) == "" {
+		return fmt.Errorf("group name required")
+	}
+	g.Name = strings.TrimSpace(g.Name)
+
+	// Unique name check.
+	for i := range m.opts.Config.Groups {
+		if i == index {
+			continue
+		}
+		if strings.TrimSpace(m.opts.Config.Groups[i].Name) == g.Name {
+			return fmt.Errorf("group name already exists")
+		}
+	}
+
+	newCfg := m.opts.Config
+	if index < 0 {
+		newCfg.Groups = append(newCfg.Groups, g)
+	} else {
+		if index >= len(newCfg.Groups) {
+			return fmt.Errorf("invalid group index")
+		}
+		newCfg.Groups[index] = g
+	}
+
+	if _, err := config.Save(m.opts.ConfigPath, newCfg); err != nil {
+		return err
+	}
+
+	m.opts.Config = newCfg
+	// Propagate to screens.
+	m.hosts.opts.Config = newCfg
+	m.groups.Refresh(newCfg)
+	return nil
+}
+
+func (m *appModel) saveDefaults(d config.Defaults) error {
+	oldLoadKnownHosts := m.opts.Config.Defaults.LoadKnownHosts
+	oldKnownPaths := append([]string(nil), m.opts.KnownHosts...)
+
+	newCfg := m.opts.Config
+	newCfg.Defaults = d
+	if _, err := config.Save(m.opts.ConfigPath, newCfg); err != nil {
+		return err
+	}
+
+	m.opts.Config = newCfg
+	SetAccentColor(newCfg.Defaults.AccentColor)
+	m.refreshAccentStyles()
+
+	// Update hosts source if load_known_hosts toggled.
+	if oldLoadKnownHosts != newCfg.Defaults.LoadKnownHosts {
+		if newCfg.Defaults.LoadKnownHosts {
+			if len(oldKnownPaths) != 0 {
+				m.opts.KnownHosts = oldKnownPaths
+			}
+			if len(m.opts.KnownHosts) == 0 {
+				m.opts.KnownHosts = hosts.DefaultKnownHostsPaths()
+			}
+			res, errs := hosts.LoadKnownHosts(m.opts.KnownHosts)
+			m.opts.Hosts = res.Hosts
+			m.opts.SkippedLines = res.SkippedLines
+			m.opts.LoadErrors = errs
+		} else {
+			m.opts.KnownHosts = nil
+			m.opts.Hosts = config.ConfigHosts(m.opts.Config)
+			m.opts.SkippedLines = 0
+			m.opts.LoadErrors = nil
+		}
+
+		if m.hosts != nil {
+			m.hosts.keymap.Reload.SetEnabled(newCfg.Defaults.LoadKnownHosts)
+			m.hosts.opts = m.opts
+			_, _ = m.hosts.Update(knownHostsReloadMsg{res: hosts.LoadResult{Hosts: m.opts.Hosts, SkippedLines: m.opts.SkippedLines}, errs: m.opts.LoadErrors})
+		}
+		if m.picker != nil {
+			// Recreate to refresh list source.
+			m.picker = newHostPickerModel(m.opts, m.returnGroupIndex)
+			if m.width > 0 && m.height > 0 {
+				mw, mh := pickerModalSize(m.width, m.height)
+				_, _ = m.picker.Update(tea.WindowSizeMsg{Width: mw, Height: mh})
+			}
+		}
+	}
+	if m.hosts != nil {
+		m.hosts.opts = m.opts
+		m.hosts.refreshVisibleBadges()
+	}
+	if m.groups != nil {
+		m.groups.opts = m.opts
+		m.groups.Refresh(newCfg)
+	}
+	if m.gh != nil {
+		m.gh.opts = m.opts
+		m.gh.refreshVisibleBadges()
+	}
+	if m.picker != nil {
+		m.picker.opts = m.opts
+		m.picker.refreshVisibleBadges()
+	}
+	if m.gp != nil {
+		m.gp.opts = m.opts
+	}
+	return nil
+}
+
+func (m *appModel) refreshAccentStyles() {
+	if m.hosts != nil {
+		setSearchBarFocused(&m.hosts.search, m.hosts.focus == focusSearch)
+		if m.hosts.cmdPrompt {
+			setSearchFocused(&m.hosts.cmdInput, true)
+		}
+	}
+	if m.groups != nil {
+		setSearchBarFocused(&m.groups.search, m.groups.focus == focusSearch)
+		if m.groups.cmdPrompt {
+			setSearchFocused(&m.groups.cmdInput, true)
+		}
+	}
+	if m.gh != nil {
+		setSearchBarFocused(&m.gh.search, m.gh.focus == focusSearch)
+		if m.gh.cmdPrompt {
+			setSearchFocused(&m.gh.cmdInput, true)
+		}
+	}
+	if m.picker != nil {
+		setSearchBarFocused(&m.picker.search, m.picker.focus == focusSearch)
+	}
+	if m.gp != nil {
+		setSearchBarFocused(&m.gp.search, m.gp.focus == focusSearch)
+	}
+	if m.customHost != nil {
+		setSearchFocused(&m.customHost.input, true)
+	}
+	if m.defaultsForm != nil {
+		m.defaultsForm.refreshAccentStyles()
+	}
+	if m.form != nil {
+		m.form.refreshAccentStyles()
+	}
+	if m.hostForm != nil {
+		m.hostForm.refreshAccentStyles()
+	}
+}
+
+func (m *appModel) saveHostConfig(index int, h config.Host) error {
+	if strings.TrimSpace(h.Host) == "" {
+		return fmt.Errorf("host required")
+	}
+	h.Host = strings.TrimSpace(h.Host)
+
+	// Unique host check.
+	for i := range m.opts.Config.Hosts {
+		if i == index {
+			continue
+		}
+		if strings.TrimSpace(m.opts.Config.Hosts[i].Host) == h.Host {
+			return fmt.Errorf("host config already exists")
+		}
+	}
+
+	newCfg := m.opts.Config
+	newCfg.Hosts = append([]config.Host(nil), newCfg.Hosts...)
+	if index < 0 {
+		newCfg.Hosts = append(newCfg.Hosts, h)
+	} else {
+		if index >= len(newCfg.Hosts) {
+			return fmt.Errorf("invalid host index")
+		}
+		newCfg.Hosts[index] = h
+	}
+
+	if _, err := config.Save(m.opts.ConfigPath, newCfg); err != nil {
+		return err
+	}
+
+	m.opts.Config = newCfg
+	if m.hosts != nil {
+		m.hosts.opts.Config = newCfg
+	}
+	if m.groups != nil {
+		m.groups.Refresh(newCfg)
+	}
+	if m.gh != nil {
+		m.gh.opts.Config = newCfg
+	}
+	if m.picker != nil {
+		m.picker.opts.Config = newCfg
+	}
+	if m.gp != nil {
+		m.gp.opts.Config = newCfg
+	}
+	if m.customHost != nil {
+		m.customHost.opts.Config = newCfg
+	}
+	return nil
+}
+
+func (m *appModel) deleteGroup(index int) error {
+	if index < 0 || index >= len(m.opts.Config.Groups) {
+		return fmt.Errorf("invalid group index")
+	}
+
+	newCfg := m.opts.Config
+	newCfg.Groups = append([]config.Group(nil), newCfg.Groups...)
+	newCfg.Groups = append(newCfg.Groups[:index], newCfg.Groups[index+1:]...)
+
+	if _, err := config.Save(m.opts.ConfigPath, newCfg); err != nil {
+		return err
+	}
+
+	m.opts.Config = newCfg
+	m.hosts.opts.Config = newCfg
+	m.groups.Refresh(newCfg)
+	return nil
+}
+
+func (m *appModel) addHostsToGroup(groupIndex int, hostsToAdd []string) error {
+	if groupIndex < 0 || groupIndex >= len(m.opts.Config.Groups) {
+		return fmt.Errorf("invalid group index")
+	}
+	if len(hostsToAdd) == 0 {
+		return nil
+	}
+
+	newCfg := m.opts.Config
+	newCfg.Groups = append([]config.Group(nil), newCfg.Groups...)
+	g := newCfg.Groups[groupIndex]
+
+	set := make(map[string]bool, len(g.Hosts))
+	for _, h := range g.Hosts {
+		set[h] = true
+	}
+	for _, h := range hostsToAdd {
+		if h == "" {
+			continue
+		}
+		if set[h] {
+			continue
+		}
+		g.Hosts = append(g.Hosts, h)
+		set[h] = true
+	}
+
+	newCfg.Groups[groupIndex] = g
+	if _, err := config.Save(m.opts.ConfigPath, newCfg); err != nil {
+		return err
+	}
+
+	m.opts.Config = newCfg
+	m.hosts.opts.Config = newCfg
+	m.groups.Refresh(newCfg)
+	return nil
+}
+
+func (m *appModel) removeHostsFromGroup(groupIndex int, hostsToRemove []string) error {
+	if groupIndex < 0 || groupIndex >= len(m.opts.Config.Groups) {
+		return fmt.Errorf("invalid group index")
+	}
+	if len(hostsToRemove) == 0 {
+		return nil
+	}
+
+	removeSet := make(map[string]bool, len(hostsToRemove))
+	for _, h := range hostsToRemove {
+		removeSet[h] = true
+	}
+
+	newCfg := m.opts.Config
+	newCfg.Groups = append([]config.Group(nil), newCfg.Groups...)
+	g := newCfg.Groups[groupIndex]
+	kept := make([]string, 0, len(g.Hosts))
+	for _, h := range g.Hosts {
+		if removeSet[h] {
+			continue
+		}
+		kept = append(kept, h)
+	}
+	g.Hosts = kept
+	newCfg.Groups[groupIndex] = g
+
+	if _, err := config.Save(m.opts.ConfigPath, newCfg); err != nil {
+		return err
+	}
+
+	m.opts.Config = newCfg
+	m.hosts.opts.Config = newCfg
+	m.groups.Refresh(newCfg)
+	return nil
+}
+
+func (m *appModel) saveToggleHidden(host string, hide bool) error {
+	newCfg := m.opts.Config
+	h := strings.TrimSpace(host)
+
+	// Work on independent copies of mutable slices.
+	newCfg.HiddenHosts = append([]string(nil), newCfg.HiddenHosts...)
+	newCfg.Hosts = append([]config.Host(nil), newCfg.Hosts...)
+
+	idx, hc := findHostConfig(newCfg, host)
+
+	if hide {
+		if idx >= 0 {
+			// Host has existing [[hosts]] entry — set Hidden there.
+			hc.Hidden = true
+			newCfg.Hosts[idx] = hc
+		} else {
+			// No per-host config — use compact list.
+			present := false
+			for _, hh := range newCfg.HiddenHosts {
+				if strings.TrimSpace(hh) == h {
+					present = true
+					break
+				}
+			}
+			if !present {
+				newCfg.HiddenHosts = append(newCfg.HiddenHosts, h)
+			}
+		}
+	} else {
+		// Remove from compact list (safe even if not present).
+		out := newCfg.HiddenHosts[:0]
+		for _, hh := range newCfg.HiddenHosts {
+			if strings.TrimSpace(hh) != h {
+				out = append(out, hh)
+			}
+		}
+		newCfg.HiddenHosts = out
+		// Also clear Hidden flag in [[hosts]] entry if set (handles old-format configs).
+		if idx >= 0 && hc.Hidden {
+			hc.Hidden = false
+			newCfg.Hosts[idx] = hc
+		}
+	}
+
+	if _, err := config.Save(m.opts.ConfigPath, newCfg); err != nil {
+		return err
+	}
+
+	m.opts.Config = newCfg
+	if m.hosts != nil {
+		m.hosts.opts.Config = newCfg
+	}
+	if m.groups != nil {
+		m.groups.Refresh(newCfg)
+	}
+	if m.gh != nil {
+		m.gh.opts.Config = newCfg
+	}
+	if m.picker != nil {
+		m.picker.opts.Config = newCfg
+	}
+	if m.gp != nil {
+		m.gp.opts.Config = newCfg
+	}
+	if m.customHost != nil {
+		m.customHost.opts.Config = newCfg
+	}
+	return nil
+}
+
+func (m *appModel) IsQuitting() bool { return m.quitting }
+func (m *appModel) ExecCmd() []string {
+	return m.execCmd
+}
