@@ -1,5 +1,5 @@
 Name:           ssh-tui
-Version:        1.0.0
+Version:        1.0.1
 Release:        1%{?dist}
 Summary:        Terminal UI for managing SSH connections
 
@@ -43,10 +43,22 @@ go build \
 %install
 install -Dpm 0755 %{name} %{buildroot}%{_bindir}/%{name}
 
+# Shell completion scripts
+./%{name} --config ./config.toml completion bash > %{name}.bash
+install -Dpm 0644 %{name}.bash %{buildroot}%{_datadir}/bash-completion/completions/%{name}
+
+./%{name} --config ./config.toml completion zsh > _ssh_tui
+install -Dpm 0644 _ssh_tui %{buildroot}%{_datadir}/zsh/site-functions/_ssh_tui
+
 %files
 %doc README.md
 %{_bindir}/%{name}
+%{_datadir}/bash-completion/completions/%{name}
+%{_datadir}/zsh/site-functions/_ssh_tui
 
 %changelog
+* Fri Feb 20 2026 Pavel Aksenov <41126916+al-bashkir@users.noreply.github.com> - 1.0.1-1
+- Add zsh and bash completions
+
 * Thu Feb 20 2026 Pavel Aksenov <41126916+al-bashkir@users.noreply.github.com> - 1.0.0-1
 - Initial package

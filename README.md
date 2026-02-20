@@ -1,6 +1,6 @@
 # ssh-tui
 
-[![Release](https://img.shields.io/github/v/release/bashkir/ssh-tui)](https://github.com/bashkir/ssh-tui/releases/latest)
+[![Release](https://img.shields.io/github/v/release/al-bashkir/ssh-tui)](https://github.com/al-bashkir/ssh-tui/releases/latest)
 [![Go version](https://img.shields.io/badge/go-1.25.6-00ADD8?logo=go)](go.mod)
 
 A terminal UI for managing SSH connections. Reads hosts from `known_hosts`, stores groups and per-host overrides in a TOML config, and delegates actual connections to the system `ssh` binary. Optionally integrates with tmux to open multiple connections as windows or panes.
@@ -9,6 +9,13 @@ A terminal UI for managing SSH connections. Reads hosts from `known_hosts`, stor
 
 ```bash
 go install github.com/bashkir/ssh-tui/cmd/ssh-tui@latest
+```
+
+Fedora (COPR): https://copr.fedorainfracloud.org/coprs/al-bashkir/ssh-tui/
+
+```bash
+sudo dnf copr enable al-bashkir/ssh-tui
+sudo dnf install ssh-tui
 ```
 
 Or build from source:
