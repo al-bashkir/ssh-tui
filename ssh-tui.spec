@@ -1,5 +1,5 @@
 Name:           ssh-tui
-Version:        0.3.0
+Version:        1.0.0
 Release:        1%{?dist}
 Summary:        Terminal UI for managing SSH connections
 
