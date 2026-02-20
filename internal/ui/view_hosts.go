@@ -18,7 +18,7 @@ func (m *hostsModel) View() string {
 		b.WriteString(m.cmdInput.View())
 		b.WriteString("\n")
 		b.WriteString(footerStyle.Render("Enter connect  Esc cancel"))
-		box := renderFrame(mw, mh, "Command", "", strings.TrimRight(b.String(), "\n"), "")
+		box := renderFrame(mw, mh, breadcrumbTitle("Hosts", "Command"), "", strings.TrimRight(b.String(), "\n"), "")
 		return placeCentered(m.width, m.height, box)
 	}
 	if m.confirmQuit {
@@ -31,13 +31,8 @@ func (m *hostsModel) View() string {
 
 	hasWarn := m.opts.SkippedLines > 0 || len(m.opts.LoadErrors) > 0
 	right := ""
-	toast := strings.TrimSpace(m.toast)
-	if toast != "" {
-		if spinnerActive {
-			right = statusWarn.Render(spinnerFrame() + " " + toast)
-		} else {
-			right = statusWarn.Render(toast)
-		}
+	if !m.toast.empty() {
+		right = renderToastWithSpinner(m.toast, spinnerActive)
 	} else if spinnerActive {
 		right = statusWarn.Render(spinnerFrame())
 	} else {
@@ -163,8 +158,8 @@ func (m *hostsModel) statusLine() string {
 	if loadInfo != "" {
 		left = left + "  " + loadInfo
 	}
-	if m.toast != "" {
-		left = left + "  " + statusWarn.Render(m.toast)
+	if !m.toast.empty() {
+		left = left + "  " + renderToast(m.toast)
 	}
 
 	return left + "  " + searchStatus

@@ -9,7 +9,8 @@ import (
 )
 
 type customHostModel struct {
-	opts Options
+	opts        Options
+	parentCrumb string
 
 	returnTo   screen
 	groupIndex int
@@ -19,7 +20,7 @@ type customHostModel struct {
 	height int
 
 	input  textinput.Model
-	toast  string
+	toast  toast
 	keymap keyMap
 }
 
@@ -63,10 +64,10 @@ func (m *customHostModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return customHostCancelMsg{} }
 		}
 		if key.Matches(msg, m.keymap.SelectAll) {
-			m.toast = ""
+			m.toast = toast{}
 			hosts := strings.Fields(strings.TrimSpace(m.input.Value()))
 			if len(hosts) == 0 {
-				m.toast = "host required"
+				m.toast = toast{text: "host required", level: toastWarn}
 				return m, nil
 			}
 			if m.groupIndex >= 0 {
@@ -75,10 +76,10 @@ func (m *customHostModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return customHostPickGroupMsg{returnTo: m.returnTo, hosts: hosts} }
 		}
 		if msg.String() == "enter" {
-			m.toast = ""
+			m.toast = toast{}
 			hosts := strings.Fields(strings.TrimSpace(m.input.Value()))
 			if len(hosts) == 0 {
-				m.toast = "host required"
+				m.toast = toast{text: "host required", level: toastWarn}
 				return m, nil
 			}
 			return m, func() tea.Msg {
@@ -93,14 +94,7 @@ func (m *customHostModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *customHostModel) View() string {
-	title := "Connect"
-	if m.groupIndex >= 0 {
-		if m.groupName != "" {
-			title = "Connect"
-		} else {
-			title = "Connect"
-		}
-	}
+	title := breadcrumbTitle(m.parentCrumb, "Connect")
 
 	var b strings.Builder
 	b.WriteString(m.input.View())
@@ -108,9 +102,9 @@ func (m *customHostModel) View() string {
 	b.WriteString(footerStyle.Render("Enter connect  Ctrl+a add to group  Esc cancel"))
 
 	footer := ""
-	if strings.TrimSpace(m.toast) != "" {
-		footer = statusWarn.Render(m.toast)
+	if !m.toast.empty() {
+		footer = renderToast(m.toast)
 	}
 
-	return renderFrame(m.width, m.height, title, strings.TrimSpace(m.groupName), strings.TrimRight(b.String(), "\n"), footer)
+	return renderFrame(m.width, m.height, title, "", strings.TrimRight(b.String(), "\n"), footer)
 }

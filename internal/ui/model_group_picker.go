@@ -39,7 +39,8 @@ func (d groupPickerDelegate) Render(w io.Writer, m list.Model, index int, item l
 }
 
 type groupPickerModel struct {
-	opts Options
+	opts        Options
+	parentCrumb string
 
 	width  int
 	height int
@@ -48,7 +49,7 @@ type groupPickerModel struct {
 	keymap      keyMap
 	help        help.Model
 	showHelp    bool
-	toast       string
+	toast       toast
 	confirmQuit bool
 
 	list       list.Model
@@ -120,7 +121,7 @@ func (m *groupPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			case "n", "N", "esc":
 				m.confirmQuit = false
-				m.toast = ""
+				m.toast = toast{}
 				return m, nil
 			default:
 				return m, nil
@@ -131,7 +132,7 @@ func (m *groupPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 			m.confirmQuit = true
-			m.toast = "quit? (y/n)"
+			m.toast = toast{text: "quit? (y/n)", level: toastWarn}
 			return m, nil
 		}
 		if key.Matches(msg, m.keymap.Help) {
@@ -219,7 +220,7 @@ func (m *groupPickerModel) View() string {
 	searchLine := m.search.View()
 	listView := strings.TrimRight(m.list.View(), "\n")
 	body := strings.TrimRight(searchLine+"\n"+sep+"\n"+listView+"\n"+sep, "\n")
-	return renderFrame(m.width, m.height, "Select group", "", body, m.statusLine())
+	return renderFrame(m.width, m.height, breadcrumbTitle(m.parentCrumb, "Select group"), "", body, m.statusLine())
 }
 
 func (m *groupPickerModel) helpKeys() helpMap {
@@ -266,8 +267,8 @@ func (m *groupPickerModel) statusLine() string {
 	if m.list.Paginator.TotalPages > 1 {
 		left += "  " + dim.Render(fmt.Sprintf("pg:%d/%d", m.list.Paginator.Page+1, m.list.Paginator.TotalPages))
 	}
-	if m.toast != "" {
-		left += "  " + statusWarn.Render(m.toast)
+	if !m.toast.empty() {
+		left += "  " + renderToast(m.toast)
 	}
 	q := strings.TrimSpace(m.search.Value())
 	searchInfo := "search"

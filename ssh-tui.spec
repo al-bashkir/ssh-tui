@@ -1,5 +1,5 @@
 Name:           ssh-tui
-Version:        1.0.1
+Version:        1.1.0
 Release:        1%{?dist}
 Summary:        Terminal UI for managing SSH connections
 
@@ -8,7 +8,7 @@ Summary:        Terminal UI for managing SSH connections
 
 # No LICENSE file exists yet; update this field when one is added.
 License:        MIT
-URL:            https://github.com/bashkir/ssh-tui
+URL:            https://github.com/al-bashkir/ssh-tui
 
 # Source tarball is prepared by .copr/Makefile, which runs go mod vendor
 # before creating the archive, so the vendor/ directory is already present.
@@ -57,8 +57,16 @@ install -Dpm 0644 _ssh_tui %{buildroot}%{_datadir}/zsh/site-functions/_ssh_tui
 %{_datadir}/zsh/site-functions/_ssh_tui
 
 %changelog
+* Fri Feb 20 2026 Pavel Aksenov <41126916+al-bashkir@users.noreply.github.com> - 1.1.0-1
+- Toast notifications now carry severity levels (info/ok/warn/err) with
+  distinct colors and auto-dismiss durations
+- Modal titles show navigation breadcrumbs (e.g. Groups > prod > Add hosts)
+- Remove-host confirmation dialog lists the affected host names
+- Rename "Confirm at" setting label to "Confirm connect at"
+- Rename module path to github.com/al-bashkir/ssh-tui
+
 * Fri Feb 20 2026 Pavel Aksenov <41126916+al-bashkir@users.noreply.github.com> - 1.0.1-1
 - Add zsh and bash completions
 
-* Thu Feb 20 2026 Pavel Aksenov <41126916+al-bashkir@users.noreply.github.com> - 1.0.0-1
+* Fri Feb 20 2026 Pavel Aksenov <41126916+al-bashkir@users.noreply.github.com> - 1.0.0-1
 - Initial package

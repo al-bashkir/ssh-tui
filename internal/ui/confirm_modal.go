@@ -103,18 +103,39 @@ func connectConfirmBox(maxWidth int, count int, hostNames []string) string {
 	return strings.Join(parts, "\n")
 }
 
-func removeHostsConfirmBox(maxWidth int, count int, groupName string) string {
+func removeHostsConfirmBox(maxWidth int, hosts []string, groupName string) string {
 	boxW := maxWidth
 	if boxW <= 0 {
 		boxW = 60
 	}
 	boxW = min(60, max(24, boxW-4))
+	totalW := boxW + 6
+	count := len(hosts)
 	title := confirmTitleStyle.Render("Remove hosts?")
-	body := fmt.Sprintf("Remove %d hosts", count)
-	if groupName != "" {
-		body = fmt.Sprintf("Remove %d from %q?", count, groupName)
-	}
 	footer := footerKeyStyle.Render("[y/\u21b5]") + dim.Render(" remove") +
 		"     " + footerKeyStyle.Render("[n/Esc]") + dim.Render(" cancel")
-	return renderConfirmBox(boxW+6, title, body, footer)
+
+	parts := []string{boxTitleTop(totalW, title), boxLine(totalW, "")}
+	shown := hosts
+	extra := 0
+	if count > 4 {
+		shown = hosts[:4]
+		extra = count - 4
+	}
+	for i, h := range shown {
+		line := "  " + h
+		if i == len(shown)-1 && extra > 0 {
+			line += fmt.Sprintf("    +%d more", extra)
+		}
+		parts = append(parts, boxLine(totalW, line))
+	}
+	if groupName != "" {
+		parts = append(parts, boxLine(totalW, ""))
+		parts = append(parts, boxLine(totalW, dim.Render("  from ")+groupName))
+	}
+	parts = append(parts, boxLine(totalW, ""))
+	parts = append(parts, boxLine(totalW, "  "+footer))
+	parts = append(parts, boxLine(totalW, ""))
+	parts = append(parts, boxBottom(totalW))
+	return strings.Join(parts, "\n")
 }

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os/exec"
 
-	"github.com/bashkir/ssh-tui/internal/config"
-	tmx "github.com/bashkir/ssh-tui/internal/tmux"
+	"github.com/al-bashkir/ssh-tui/internal/config"
+	tmx "github.com/al-bashkir/ssh-tui/internal/tmux"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -17,7 +17,7 @@ type dispatchResult struct {
 	// quit signals that the TUI should exit (execCmd will be run after).
 	quit bool
 	// toast is set for in-app feedback (errors or success).
-	toast string
+	toast toast
 }
 
 // dispatchConnect dispatches SSH commands based on the resolved open mode.
@@ -35,14 +35,14 @@ func dispatchConnect(
 ) (result dispatchResult, cmd tea.Cmd) {
 	if mode == tmx.OpenCurrent {
 		if len(sshCmds) > 1 {
-			return dispatchResult{toast: "multi-host requires tmux (window or pane mode)"}, nil
+			return dispatchResult{toast: toast{text: "multi-host requires tmux (window or pane mode)", level: toastWarn}}, nil
 		}
 		return dispatchResult{execCmd: sshCmds[0], quit: true}, nil
 	}
 
 	if !inTmux {
 		if len(sshCmds) > 1 {
-			return dispatchResult{toast: "multi-host requires an active tmux session"}, nil
+			return dispatchResult{toast: toast{text: "multi-host requires an active tmux session", level: toastWarn}}, nil
 		}
 		return dispatchResult{
 			execCmd: tmx.NewSessionCmd(defaults.TmuxSession, sshCmds[0]),
@@ -65,9 +65,9 @@ func dispatchConnect(
 				PaneBorderStatus: ps.BorderStatus,
 			})
 			if err != nil {
-				return toastMsg(err.Error())
+				return toastMsg{text: err.Error(), level: toastErr}
 			}
-			return toastMsg(fmt.Sprintf("opened %d in one window", len(sshCmds)))
+			return toastMsg{text: fmt.Sprintf("opened %d in one window", len(sshCmds)), level: toastInfo}
 		}
 
 		for i, sshCmd := range sshCmds {
@@ -75,10 +75,10 @@ func dispatchConnect(
 			tmuxCmd := tmx.NewWindowCmd(name, sshCmd)
 			// #nosec G204 -- tmux argv is constructed (no shell) from known host/group settings.
 			if err := exec.Command(tmuxCmd[0], tmuxCmd[1:]...).Run(); err != nil {
-				return toastMsg("tmux error: " + err.Error())
+				return toastMsg{text: "tmux error: " + err.Error(), level: toastErr}
 			}
 		}
-		return toastMsg(fmt.Sprintf("opened %d", len(sshCmds)))
+		return toastMsg{text: fmt.Sprintf("opened %d", len(sshCmds)), level: toastInfo}
 	}
 }
 

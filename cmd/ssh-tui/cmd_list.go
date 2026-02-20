@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/bashkir/ssh-tui/internal/config"
+	"github.com/al-bashkir/ssh-tui/internal/config"
 )
 
 func runList(args []string, cfg config.Config, knownHosts []string) {

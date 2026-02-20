@@ -1,8 +1,8 @@
 package ui
 
 import (
-	"github.com/bashkir/ssh-tui/internal/config"
-	tmx "github.com/bashkir/ssh-tui/internal/tmux"
+	"github.com/al-bashkir/ssh-tui/internal/config"
+	tmx "github.com/al-bashkir/ssh-tui/internal/tmux"
 )
 
 // paneSettings is an alias so existing callers in this package compile unchanged.

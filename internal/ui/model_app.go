@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bashkir/ssh-tui/internal/config"
-	"github.com/bashkir/ssh-tui/internal/hosts"
+	"github.com/al-bashkir/ssh-tui/internal/config"
+	"github.com/al-bashkir/ssh-tui/internal/hosts"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -245,29 +245,61 @@ func (m *appModel) applyWindowSize(ws tea.WindowSizeMsg) tea.Cmd {
 
 func (m *appModel) collectToastKey() string {
 	var b strings.Builder
-	if m.hosts != nil && m.hosts.toast != "" {
-		b.WriteString(m.hosts.toast)
+	if m.hosts != nil && !m.hosts.toast.empty() {
+		b.WriteString(m.hosts.toast.text)
 	}
-	if m.groups != nil && m.groups.toast != "" {
+	if m.groups != nil && !m.groups.toast.empty() {
 		b.WriteByte('|')
-		b.WriteString(m.groups.toast)
+		b.WriteString(m.groups.toast.text)
 	}
-	if m.gh != nil && m.gh.toast != "" {
+	if m.gh != nil && !m.gh.toast.empty() {
 		b.WriteByte('|')
-		b.WriteString(m.gh.toast)
+		b.WriteString(m.gh.toast.text)
 	}
 	return b.String()
 }
 
 func (m *appModel) clearToasts() {
 	if m.hosts != nil {
-		m.hosts.toast = ""
+		m.hosts.toast = toast{}
 	}
 	if m.groups != nil {
-		m.groups.toast = ""
+		m.groups.toast = toast{}
 	}
 	if m.gh != nil {
-		m.gh.toast = ""
+		m.gh.toast = toast{}
+	}
+}
+
+func (m *appModel) maxToastLevel() toastLevel {
+	var lvl toastLevel
+	if m.hosts != nil && !m.hosts.toast.empty() && m.hosts.toast.level > lvl {
+		lvl = m.hosts.toast.level
+	}
+	if m.groups != nil && !m.groups.toast.empty() && m.groups.toast.level > lvl {
+		lvl = m.groups.toast.level
+	}
+	if m.gh != nil && !m.gh.toast.empty() && m.gh.toast.level > lvl {
+		lvl = m.gh.toast.level
+	}
+	return lvl
+}
+
+func (m *appModel) breadcrumb() string {
+	switch m.screen {
+	case screenHosts:
+		return "Hosts"
+	case screenGroups:
+		return "Groups"
+	case screenGroupHosts:
+		if m.gh != nil {
+			return "Groups > " + m.gh.group.Name
+		}
+		return "Groups"
+	case screenDefaultsForm:
+		return "Settings"
+	default:
+		return ""
 	}
 }
 
@@ -301,7 +333,8 @@ func (m *appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if cur != "" && cur != prev {
 		m.toastToken++
 		token := m.toastToken
-		dismiss := tea.Tick(4*time.Second, func(time.Time) tea.Msg {
+		level := m.maxToastLevel()
+		dismiss := tea.Tick(toastDuration(level), func(time.Time) tea.Msg {
 			return toastDismissMsg{token: token}
 		})
 		return result, tea.Batch(cmd, dismiss)
@@ -322,6 +355,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			g = m.opts.Config.Groups[msg.index]
 		}
 		m.form = newGroupFormModel(msg.index, g, m.opts.Config.Defaults, m.opts.Config.Defaults.ConfirmQuit)
+		m.form.parentCrumb = "Groups"
 		if m.width > 0 && m.height > 0 {
 			mw, mh := groupFormModalSize(m.width, m.height)
 			_, _ = m.form.Update(tea.WindowSizeMsg{Width: mw, Height: mh})
@@ -330,6 +364,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case openGroupFormPrefillMsg:
 		m.form = newGroupFormModel(-1, msg.group, m.opts.Config.Defaults, m.opts.Config.Defaults.ConfirmQuit)
+		m.form.parentCrumb = "Groups"
 		if m.width > 0 && m.height > 0 {
 			mw, mh := groupFormModalSize(m.width, m.height)
 			_, _ = m.form.Update(tea.WindowSizeMsg{Width: mw, Height: mh})
@@ -343,23 +378,23 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case groupFormSaveMsg:
 		if err := m.saveGroup(msg.index, msg.group); err != nil {
 			// Keep form open on error.
-			m.form.toast = err.Error()
+			m.form.toast = toast{text: err.Error(), level: toastErr}
 			return m, nil
 		}
-		m.groups.toast = "saved"
+		m.groups.toast = toast{text: "saved", level: toastOK}
 		m.form = nil
 		m.screen = screenGroups
 		return m, nil
 	case deleteGroupMsg:
 		if err := m.deleteGroup(msg.index); err != nil {
-			m.groups.toast = err.Error()
+			m.groups.toast = toast{text: err.Error(), level: toastErr}
 			return m, nil
 		}
-		m.groups.toast = "deleted"
+		m.groups.toast = toast{text: "deleted", level: toastOK}
 		return m, nil
 	case openGroupHostsMsg:
 		if msg.index < 0 || msg.index >= len(m.opts.Config.Groups) {
-			m.groups.toast = "invalid group"
+			m.groups.toast = toast{text: "invalid group", level: toastErr}
 			return m, nil
 		}
 		m.gh = newGroupHostsModel(m.opts, msg.index)
@@ -370,6 +405,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case openHostPickerMsg:
 		m.picker = newHostPickerModel(m.opts, msg.groupIndex)
+		m.picker.parentCrumb = m.breadcrumb()
 		if m.width > 0 && m.height > 0 {
 			mw, mh := pickerModalSize(m.width, m.height)
 			_, _ = m.picker.Update(tea.WindowSizeMsg{Width: mw, Height: mh})
@@ -381,6 +417,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case openGroupPickerMsg:
 		m.gpHosts = append([]string(nil), msg.hosts...)
 		m.gp = newGroupPickerModel(m.opts)
+		m.gp.parentCrumb = m.breadcrumb()
 		m.gpReturnTo = screenHosts
 		m.gpConnectAfterAdd = false
 		if m.width > 0 && m.height > 0 {
@@ -403,13 +440,13 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case defaultsFormSaveMsg:
 		if err := m.saveDefaults(msg.defaults); err != nil {
-			m.defaultsForm.toast = err.Error()
+			m.defaultsForm.toast = toast{text: err.Error(), level: toastErr}
 			return m, nil
 		}
 		m.screen = screenDefaultsForm
 		if m.defaultsForm != nil {
 			m.defaultsForm.defaults = m.opts.Config.Defaults
-			m.defaultsForm.toast = "saved"
+			m.defaultsForm.toast = toast{text: "saved", level: toastOK}
 			m.defaultsToastToken++
 			token := m.defaultsToastToken
 			return m, tea.Tick(5*time.Second, func(time.Time) tea.Msg { return defaultsToastExpireMsg{token: token} })
@@ -419,12 +456,26 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.token != m.defaultsToastToken {
 			return m, nil
 		}
-		if m.defaultsForm != nil && strings.TrimSpace(m.defaultsForm.toast) == "saved" {
-			m.defaultsForm.toast = ""
+		// Match on text literal; if the "saved" message ever changes this
+		// timer will stop clearing the toast. A sentinel level or token on
+		// defaultsFormModel would be cleaner.
+		if m.defaultsForm != nil && m.defaultsForm.toast.text == "saved" {
+			m.defaultsForm.toast = toast{}
 		}
 		return m, nil
 	case openCustomHostMsg:
 		m.customHost = newCustomHostModel(m.opts, msg.groupIndex, msg.returnTo)
+		// Build breadcrumb: for screenGroups we need to include the specific
+		// group name since m.breadcrumb() only returns "Groups" at that level.
+		// For screenGroupHosts, m.breadcrumb() already returns "Groups > name".
+		// Other screens don't carry a meaningful groupIndex, so fall through.
+		crumb := m.breadcrumb()
+		if msg.groupIndex >= 0 && msg.groupIndex < len(m.opts.Config.Groups) {
+			if m.screen == screenGroups {
+				crumb = "Groups > " + m.opts.Config.Groups[msg.groupIndex].Name
+			}
+		}
+		m.customHost.parentCrumb = crumb
 		if m.width > 0 && m.height > 0 {
 			mw, mh := customHostModalSize(m.width, m.height)
 			_, _ = m.customHost.Update(tea.WindowSizeMsg{Width: mw, Height: mh})
@@ -434,6 +485,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case openHostFormMsg:
 		idx, hc := findHostConfig(m.opts.Config, msg.host)
 		m.hostForm = newHostFormModel(idx, hc, m.opts.Config.Defaults, m.opts.Config.Defaults.ConfirmQuit)
+		m.hostForm.parentCrumb = m.breadcrumb()
 		m.hostFormReturnTo = msg.returnTo
 		if m.width > 0 && m.height > 0 {
 			mw, mh := hostFormModalSize(m.width, m.height)
@@ -443,6 +495,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case openHostFormPrefillMsg:
 		m.hostForm = newHostFormModel(-1, msg.host, m.opts.Config.Defaults, m.opts.Config.Defaults.ConfirmQuit)
+		m.hostForm.parentCrumb = m.breadcrumb()
 		m.hostFormReturnTo = msg.returnTo
 		if m.width > 0 && m.height > 0 {
 			mw, mh := hostFormModalSize(m.width, m.height)
@@ -461,6 +514,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case customHostPickGroupMsg:
 		m.gpHosts = append([]string(nil), msg.hosts...)
 		m.gp = newGroupPickerModel(m.opts)
+		m.gp.parentCrumb = m.breadcrumb()
 		m.gpReturnTo = msg.returnTo
 		m.gpConnectAfterAdd = false
 		if m.width > 0 && m.height > 0 {
@@ -472,26 +526,26 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case customHostConnectMsg:
 		var execCmd []string
-		toast := ""
+		var toastResult toast
 		var err error
 		if msg.groupIndex >= 0 {
-			execCmd, toast, err = m.connectHostsForGroup(msg.groupIndex, msg.hosts, "")
+			execCmd, toastResult, err = m.connectHostsForGroup(msg.groupIndex, msg.hosts, "")
 		} else {
-			execCmd, toast, err = m.connectHostsWithDefaults(msg.hosts)
+			execCmd, toastResult, err = m.connectHostsWithDefaults(msg.hosts)
 		}
 		if err != nil {
-			toast = err.Error()
+			toastResult = toast{text: err.Error(), level: toastErr}
 		}
-		if toast != "" {
+		if !toastResult.empty() {
 			switch msg.returnTo {
 			case screenGroups:
-				m.groups.toast = toast
+				m.groups.toast = toastResult
 			case screenGroupHosts:
 				if m.gh != nil {
-					m.gh.toast = toast
+					m.gh.toast = toastResult
 				}
 			default:
-				m.hosts.toast = toast
+				m.hosts.toast = toastResult
 			}
 		}
 		m.customHost = nil
@@ -504,7 +558,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case customHostDoneMsg:
 		if err := m.addHostsToGroup(msg.groupIndex, msg.hosts); err != nil {
 			if m.customHost != nil {
-				m.customHost.toast = err.Error()
+				m.customHost.toast = toast{text: err.Error(), level: toastErr}
 			}
 			return m, nil
 		}
@@ -514,7 +568,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 				_, _ = m.gh.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
 			}
 		}
-		addedToast := fmt.Sprintf("added %d", len(msg.hosts))
+		addedToast := toast{text: fmt.Sprintf("added %d", len(msg.hosts)), level: toastOK}
 		switch msg.returnTo {
 		case screenGroups:
 			m.groups.toast = addedToast
@@ -536,20 +590,20 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case groupPickerDoneMsg:
 		if err := m.addHostsToGroup(msg.groupIndex, m.gpHosts); err != nil {
-			m.gp.toast = err.Error()
+			m.gp.toast = toast{text: err.Error(), level: toastErr}
 			return m, nil
 		}
 		if m.gpConnectAfterAdd {
-			execCmd, toast, err := m.connectHostsForGroup(msg.groupIndex, m.gpHosts, "")
+			execCmd, toastResult, err := m.connectHostsForGroup(msg.groupIndex, m.gpHosts, "")
 			if err != nil {
-				toast = err.Error()
+				toastResult = toast{text: err.Error(), level: toastErr}
 			}
-			if toast != "" {
+			if !toastResult.empty() {
 				switch m.gpReturnTo {
 				case screenGroups:
-					m.groups.toast = toast
+					m.groups.toast = toastResult
 				default:
-					m.hosts.toast = toast
+					m.hosts.toast = toastResult
 				}
 			}
 			m.gp = nil
@@ -562,7 +616,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		addedToast := fmt.Sprintf("added %d", len(m.gpHosts))
+		addedToast := toast{text: fmt.Sprintf("added %d", len(m.gpHosts)), level: toastOK}
 		switch m.gpReturnTo {
 		case screenGroups:
 			m.groups.toast = addedToast
@@ -583,10 +637,10 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case hostPickerDoneMsg:
 		if err := m.addHostsToGroup(m.returnGroupIndex, msg.hosts); err != nil {
-			m.picker.toast = err.Error()
+			m.picker.toast = toast{text: err.Error(), level: toastErr}
 			return m, nil
 		}
-		m.groups.toast = fmt.Sprintf("added %d", len(msg.hosts))
+		m.groups.toast = toast{text: fmt.Sprintf("added %d", len(msg.hosts)), level: toastOK}
 		m.picker = nil
 		m.screen = m.returnTo
 		if m.screen == screenGroupHosts {
@@ -599,12 +653,12 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case removeHostsMsg:
 		if err := m.removeHostsFromGroup(msg.groupIndex, msg.hosts); err != nil {
 			if m.screen == screenGroupHosts && m.gh != nil {
-				m.gh.toast = err.Error()
+				m.gh.toast = toast{text: err.Error(), level: toastErr}
 			}
 			return m, nil
 		}
 		if m.screen == screenGroupHosts && m.gh != nil {
-			m.gh.toast = fmt.Sprintf("removed %d", len(msg.hosts))
+			m.gh.toast = toast{text: fmt.Sprintf("removed %d", len(msg.hosts)), level: toastOK}
 		}
 		if m.screen == screenGroupHosts {
 			m.gh = newGroupHostsModel(m.opts, msg.groupIndex)
@@ -621,7 +675,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		hadForm := m.hostForm != nil
 		if err := m.saveHostConfig(msg.index, msg.host); err != nil {
 			if m.hostForm != nil {
-				m.hostForm.toast = err.Error()
+				m.hostForm.toast = toast{text: err.Error(), level: toastErr}
 			}
 			return m, nil
 		}
@@ -635,7 +689,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.picker != nil {
 			m.picker.refreshVisibleBadges()
 		}
-		savedToast := "saved"
+		savedToast := toast{text: "saved", level: toastOK}
 		if hadForm {
 			switch m.hostFormReturnTo {
 			case screenGroups:
@@ -656,13 +710,13 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case toggleHiddenHostMsg:
 		if err := m.saveToggleHidden(msg.host, msg.hide); err != nil {
 			if m.hosts != nil {
-				m.hosts.toast = err.Error()
+				m.hosts.toast = toast{text: err.Error(), level: toastErr}
 			}
 			return m, nil
 		}
 		if m.hosts != nil {
 			m.hosts.reapplyFilter()
-			m.hosts.toast = "saved"
+			m.hosts.toast = toast{text: "saved", level: toastOK}
 		}
 		return m, nil
 	}

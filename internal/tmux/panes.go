@@ -3,7 +3,7 @@ package tmux
 import (
 	"strings"
 
-	"github.com/bashkir/ssh-tui/internal/config"
+	"github.com/al-bashkir/ssh-tui/internal/config"
 )
 
 // PaneSettings holds resolved tmux pane display options.

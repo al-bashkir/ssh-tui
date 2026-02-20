@@ -3,7 +3,7 @@ package ui
 import (
 	"strings"
 
-	"github.com/bashkir/ssh-tui/internal/config"
+	"github.com/al-bashkir/ssh-tui/internal/config"
 )
 
 func paneBorderFormatChoices(defs config.Defaults) []string {

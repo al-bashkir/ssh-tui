@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bashkir/ssh-tui/internal/config"
-	"github.com/bashkir/ssh-tui/internal/hosts"
-	"github.com/bashkir/ssh-tui/internal/sshcmd"
-	tmx "github.com/bashkir/ssh-tui/internal/tmux"
+	"github.com/al-bashkir/ssh-tui/internal/config"
+	"github.com/al-bashkir/ssh-tui/internal/hosts"
+	"github.com/al-bashkir/ssh-tui/internal/sshcmd"
+	tmx "github.com/al-bashkir/ssh-tui/internal/tmux"
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
@@ -78,7 +78,7 @@ type hostsModel struct {
 	reloading   bool
 	showHidden  bool
 	prevSearch  string
-	toast       string
+	toast       toast
 	confirmQuit bool
 
 	confirmConnect      bool
@@ -169,7 +169,7 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.applyFilter(m.search.Value())
-		m.toast = fmt.Sprintf("%d hosts loaded", len(m.allHosts))
+		m.toast = toast{text: fmt.Sprintf("%d hosts loaded", len(m.allHosts)), level: toastInfo}
 		return m, nil
 
 	case tea.KeyMsg:
@@ -197,7 +197,7 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if cmd == "" {
 					return m, nil
 				}
-				m.toast = ""
+				m.toast = toast{}
 				return m, m.handleConnectWithRemoteCommand(cmd)
 			default:
 				var cmdTea tea.Cmd
@@ -214,7 +214,7 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			case "n", "N", "esc":
 				m.confirmQuit = false
-				m.toast = ""
+				m.toast = toast{}
 				return m, nil
 			default:
 				return m, nil
@@ -235,7 +235,7 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "n", "N", "esc":
 				m.confirmConnect = false
 				m.pendingConnectFn = nil
-				m.toast = ""
+				m.toast = toast{}
 				return m, nil
 			default:
 				return m, nil
@@ -248,7 +248,7 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 			m.confirmQuit = true
-			m.toast = "quit? (y/n)"
+			m.toast = toast{text: "quit? (y/n)", level: toastWarn}
 			return m, nil
 		}
 		if key.Matches(msg, m.keymap.Help) {
@@ -303,10 +303,10 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if key.Matches(msg, m.keymap.Reload) && m.focus != focusSearch {
 			if !m.opts.Config.Defaults.LoadKnownHosts {
-				m.toast = "known_hosts disabled"
+				m.toast = toast{text: "known_hosts disabled", level: toastWarn}
 				return m, nil
 			}
-			m.toast = "reloading"
+			m.toast = toast{text: "reloading", level: toastInfo}
 			m.reloading = true
 			spinnerStart()
 			return m, tea.Batch(
@@ -362,15 +362,15 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				setSearchBarFocused(&m.search, false)
 				return m, nil
 			}
-			m.toast = ""
+			m.toast = toast{}
 			return m, m.handleConnect()
 		}
 		if key.Matches(msg, m.keymap.OneWindow) && m.focus == focusList {
-			m.toast = ""
+			m.toast = toast{}
 			return m, m.openOneWindow()
 		}
 		if key.Matches(msg, m.keymap.ConnectSame) && m.focus == focusList {
-			m.toast = ""
+			m.toast = toast{}
 			return m, m.handleConnectSame()
 		}
 		if key.Matches(msg, m.keymap.AddHosts) && m.focus == focusList {
@@ -382,7 +382,7 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			if len(hostsToAdd) == 0 {
-				m.toast = "no host selected"
+				m.toast = toast{text: "no host selected", level: toastWarn}
 				return m, nil
 			}
 			return m, func() tea.Msg { return openGroupPickerMsg{hosts: hostsToAdd} }
@@ -393,7 +393,7 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, m.keymap.HostConfig) && m.focus == focusList {
 			row, ok := m.list.SelectedItem().(hostRow)
 			if !ok || strings.TrimSpace(row.host) == "" {
-				m.toast = "no host selected"
+				m.toast = toast{text: "no host selected", level: toastWarn}
 				return m, nil
 			}
 			return m, func() tea.Msg { return openHostFormMsg{host: row.host, returnTo: screenHosts} }
@@ -401,12 +401,12 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, m.keymap.Copy) && m.focus == focusList {
 			row, ok := m.list.SelectedItem().(hostRow)
 			if !ok || strings.TrimSpace(row.host) == "" {
-				m.toast = "no host selected"
+				m.toast = toast{text: "no host selected", level: toastWarn}
 				return m, nil
 			}
 			hc, ok := hostConfigFor(m.opts.Config, row.host)
 			if !ok {
-				m.toast = "no host config"
+				m.toast = toast{text: "no host config", level: toastWarn}
 				return m, nil
 			}
 			hc.Host = suggestCopyHostKey(m.opts.Config, hc.Host)
@@ -425,7 +425,7 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case toastMsg:
-		m.toast = string(msg)
+		m.toast = toast(msg)
 		return m, nil
 	}
 
@@ -483,7 +483,7 @@ func (m *hostsModel) setListItems(hosts []string) {
 	}
 }
 
-type toastMsg string
+type toastMsg toast
 
 func (m *hostsModel) refreshVisibleSelection() {
 	items := m.list.Items()
@@ -603,7 +603,7 @@ func connectThreshold(d config.Defaults) int {
 func (m *hostsModel) handleConnect() tea.Cmd {
 	hosts := m.hostsToOpen()
 	if len(hosts) == 0 {
-		m.toast = "no host selected"
+		m.toast = toast{text: "no host selected", level: toastWarn}
 		return nil
 	}
 
@@ -614,7 +614,7 @@ func (m *hostsModel) handleConnect() tea.Cmd {
 		sshCmds := m.buildSSHCmds(hosts, nil)
 
 		res, cmd := dispatchConnect(hosts, sshCmds, defaults, nil, mode, inTmux)
-		if res.toast != "" {
+		if !res.toast.empty() {
 			m.toast = res.toast
 		}
 		if res.quit {
@@ -637,13 +637,13 @@ func (m *hostsModel) handleConnect() tea.Cmd {
 func (m *hostsModel) handleConnectWithRemoteCommand(remoteCmd string) tea.Cmd {
 	hosts := m.hostsToOpen()
 	if len(hosts) == 0 {
-		m.toast = "no host selected"
+		m.toast = toast{text: "no host selected", level: toastWarn}
 		return nil
 	}
 
 	remoteCmd = strings.TrimSpace(remoteCmd)
 	if remoteCmd == "" {
-		m.toast = "command required"
+		m.toast = toast{text: "command required", level: toastWarn}
 		return nil
 	}
 
@@ -657,7 +657,7 @@ func (m *hostsModel) handleConnectWithRemoteCommand(remoteCmd string) tea.Cmd {
 		})
 
 		res, cmd := dispatchConnect(hosts, sshCmds, defaults, nil, mode, inTmux)
-		if res.toast != "" {
+		if !res.toast.empty() {
 			m.toast = res.toast
 		}
 		if res.quit {
@@ -680,11 +680,11 @@ func (m *hostsModel) handleConnectWithRemoteCommand(remoteCmd string) tea.Cmd {
 func (m *hostsModel) handleConnectSame() tea.Cmd {
 	hosts := m.hostsToOpen()
 	if len(hosts) == 0 {
-		m.toast = "no host selected"
+		m.toast = toast{text: "no host selected", level: toastWarn}
 		return nil
 	}
 	if len(hosts) > 1 {
-		m.toast = "select single host for same-window connect"
+		m.toast = toast{text: "select single host for same-window connect", level: toastWarn}
 		return nil
 	}
 	sshCmds := m.buildSSHCmds(hosts, nil)
@@ -695,11 +695,11 @@ func (m *hostsModel) handleConnectSame() tea.Cmd {
 func (m *hostsModel) openOneWindow() tea.Cmd {
 	hosts := m.hostsToOpen()
 	if len(hosts) == 0 {
-		m.toast = "no host selected"
+		m.toast = toast{text: "no host selected", level: toastWarn}
 		return nil
 	}
 	if !tmx.InTmux() {
-		m.toast = "requires an active tmux session"
+		m.toast = toast{text: "requires an active tmux session", level: toastWarn}
 		return nil
 	}
 
@@ -718,9 +718,9 @@ func (m *hostsModel) openOneWindow() tea.Cmd {
 				PaneBorderStatus: ps.BorderStatus,
 			})
 			if err != nil {
-				return toastMsg(err.Error())
+				return toastMsg(toast{text: err.Error(), level: toastErr})
 			}
-			return toastMsg(fmt.Sprintf("opened %d in one window", len(sshCmds)))
+			return toastMsg(toast{text: fmt.Sprintf("opened %d in one window", len(sshCmds)), level: toastInfo})
 		}
 	}
 

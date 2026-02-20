@@ -9,9 +9,9 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/bashkir/ssh-tui/internal/config"
-	"github.com/bashkir/ssh-tui/internal/hosts"
-	"github.com/bashkir/ssh-tui/internal/ui"
+	"github.com/al-bashkir/ssh-tui/internal/config"
+	"github.com/al-bashkir/ssh-tui/internal/hosts"
+	"github.com/al-bashkir/ssh-tui/internal/ui"
 )
 
 type multiFlag []string

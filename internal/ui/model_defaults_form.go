@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bashkir/ssh-tui/internal/config"
+	"github.com/al-bashkir/ssh-tui/internal/config"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -57,7 +57,7 @@ type defaultsFormModel struct {
 
 	borderPicker *paneBorderFormatsModel
 
-	toast string
+	toast toast
 
 	keymap keyMap
 
@@ -192,7 +192,7 @@ func (m *defaultsFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			case "n", "N", "esc":
 				m.confirmQuit = false
-				m.toast = ""
+				m.toast = toast{}
 				return m, nil
 			default:
 				return m, nil
@@ -203,9 +203,9 @@ func (m *defaultsFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.editing {
 				m.exitEdit()
 			}
-			m.toast = ""
+			m.toast = toast{}
 			if err := m.apply(); err != nil {
-				m.toast = err.Error()
+				m.toast = toast{text: err.Error(), level: toastErr}
 				return m, nil
 			}
 			return m, func() tea.Msg { return defaultsFormSaveMsg{defaults: m.defaults} }
@@ -216,7 +216,7 @@ func (m *defaultsFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 			m.confirmQuit = true
-			m.toast = "quit? (y/n)"
+			m.toast = toast{text: "quit? (y/n)", level: toastWarn}
 			return m, nil
 		}
 
@@ -244,6 +244,7 @@ func (m *defaultsFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if (s == "enter" || s == " " || s == "l") && m.focus == defaultsFieldPaneBorderFormat {
 			mw, mh := pickerModalSize(m.width, m.height)
 			m.borderPicker = newPaneBorderFormatsModel(m.defaults, m.defaults.PaneBorderFmt, false, true)
+			m.borderPicker.parentCrumb = "Settings"
 			if mw > 0 && mh > 0 {
 				_, _ = m.borderPicker.Update(tea.WindowSizeMsg{Width: mw, Height: mh})
 			}
@@ -616,7 +617,7 @@ func (m *defaultsFormModel) View() string {
 	if m.focus == defaultsFieldConnectThreshold {
 		focusLine = len(lines)
 	}
-	lines = append(lines, label("Confirm at:", m.focus == defaultsFieldConnectThreshold)+" "+inputLine(m.inThreshold, m.focus == defaultsFieldConnectThreshold, min(12, fieldW)))
+	lines = append(lines, label("Confirm connect at:", m.focus == defaultsFieldConnectThreshold)+" "+inputLine(m.inThreshold, m.focus == defaultsFieldConnectThreshold, min(12, fieldW)))
 
 	lines = append(lines, formSection("Panes", innerW))
 
@@ -673,8 +674,8 @@ func (m *defaultsFormModel) View() string {
 		footer = footerStyle.Render(fieldPos) + "  " + headerStyle.Render("INSERT") + "  " + footerStyle.Render("Ctrl+S save   Esc done")
 	}
 	toast := ""
-	if strings.TrimSpace(m.toast) != "" {
-		toast = statusWarn.Render(m.toast)
+	if !m.toast.empty() {
+		toast = renderToast(m.toast)
 	}
 
 	// Reserve lines for toast + footer.
