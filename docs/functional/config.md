@@ -1,24 +1,35 @@
 # Config
 
-Path:
+Two files in the same directory:
 
-- Default: `$XDG_CONFIG_HOME/ssh-tui/config.toml` or `~/.config/ssh-tui/config.toml`.
+- `config.toml` — application settings and SSH/tmux defaults.
+- `hosts.toml` — host overrides, groups, and hidden-hosts list.
 
-Write rules:
+Paths:
+
+- Default directory: `$XDG_CONFIG_HOME/ssh-tui/` or `~/.config/ssh-tui/`.
+- CLI flags: `-config` overrides config.toml path, `-hosts` overrides hosts.toml path.
+- When only `-config` is given, hosts.toml is derived from the same directory.
+
+Write rules (both files):
 
 - Atomic write (tmp + rename).
 - Final permissions: `0600`.
 
-Format:
+Migration:
+
+- On first run after upgrade, if `hosts.toml` does not exist but `config.toml` contains `[[hosts]]`, `[[groups]]`, or `hidden_hosts`, those sections are extracted into a new `hosts.toml` and `config.toml` is rewritten without them.
+- Migration is idempotent — if `hosts.toml` already exists, nothing happens.
+- If migration fails (e.g. read-only directory), a warning is printed and the app continues.
+
+## config.toml
 
 ```toml
 version = 1
 
-hidden_hosts = []    # hosts to hide from the Hosts list (compact alternative to [[hosts]] hidden=true)
-
 [defaults]
 accent_color = ""        # preset: default|blue|cyan|green|amber|red|magenta or a color string
-load_known_hosts = true  # when false: Hosts list is derived from config only
+load_known_hosts = true  # when false: Hosts list is derived from hosts.toml only
 user = ""
 port = 22
 identity_file = ""
@@ -37,6 +48,14 @@ open_mode = "auto"       # auto|current|tmux-window|tmux-pane
 tmux_session = "ssh-tui"
 confirm_quit = false
 connect_confirm_threshold = 5  # ask for confirmation when connecting to more than N hosts (0 = never ask)
+```
+
+## hosts.toml
+
+```toml
+version = 1
+
+hidden_hosts = []    # hosts to hide from the Hosts list (compact alternative to [[hosts]] hidden=true)
 
 [[hosts]]
 host = "db01.example.com"
@@ -71,9 +90,9 @@ hosts = [
 
 Settings merge (for an SSH connection):
 
-1) defaults
-2) group overrides (if connecting via group)
-3) host overrides (`[[hosts]]` exact match)
+1) defaults (from config.toml)
+2) group overrides (if connecting via group, from hosts.toml)
+3) host overrides (`[[hosts]]` exact match, from hosts.toml)
 
 Notes:
 

@@ -351,8 +351,8 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case openGroupFormMsg:
 		var g config.Group
-		if msg.index >= 0 && msg.index < len(m.opts.Config.Groups) {
-			g = m.opts.Config.Groups[msg.index]
+		if msg.index >= 0 && msg.index < len(m.opts.Inventory.Groups) {
+			g = m.opts.Inventory.Groups[msg.index]
 		}
 		m.form = newGroupFormModel(msg.index, g, m.opts.Config.Defaults, m.opts.Config.Defaults.ConfirmQuit)
 		m.form.parentCrumb = "Groups"
@@ -393,7 +393,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.groups.toast = toast{text: "deleted", level: toastOK}
 		return m, nil
 	case openGroupHostsMsg:
-		if msg.index < 0 || msg.index >= len(m.opts.Config.Groups) {
+		if msg.index < 0 || msg.index >= len(m.opts.Inventory.Groups) {
 			m.groups.toast = toast{text: "invalid group", level: toastErr}
 			return m, nil
 		}
@@ -470,9 +470,9 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// For screenGroupHosts, m.breadcrumb() already returns "Groups > name".
 		// Other screens don't carry a meaningful groupIndex, so fall through.
 		crumb := m.breadcrumb()
-		if msg.groupIndex >= 0 && msg.groupIndex < len(m.opts.Config.Groups) {
+		if msg.groupIndex >= 0 && msg.groupIndex < len(m.opts.Inventory.Groups) {
 			if m.screen == screenGroups {
-				crumb = "Groups > " + m.opts.Config.Groups[msg.groupIndex].Name
+				crumb = "Groups > " + m.opts.Inventory.Groups[msg.groupIndex].Name
 			}
 		}
 		m.customHost.parentCrumb = crumb
@@ -483,7 +483,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.screen = screenCustomHost
 		return m, nil
 	case openHostFormMsg:
-		idx, hc := findHostConfig(m.opts.Config, msg.host)
+		idx, hc := findHostConfig(m.opts.Inventory, msg.host)
 		m.hostForm = newHostFormModel(idx, hc, m.opts.Config.Defaults, m.opts.Config.Defaults.ConfirmQuit)
 		m.hostForm.parentCrumb = m.breadcrumb()
 		m.hostFormReturnTo = msg.returnTo
@@ -835,33 +835,33 @@ func (m *appModel) saveGroup(index int, g config.Group) error {
 	g.Name = strings.TrimSpace(g.Name)
 
 	// Unique name check.
-	for i := range m.opts.Config.Groups {
+	for i := range m.opts.Inventory.Groups {
 		if i == index {
 			continue
 		}
-		if strings.TrimSpace(m.opts.Config.Groups[i].Name) == g.Name {
+		if strings.TrimSpace(m.opts.Inventory.Groups[i].Name) == g.Name {
 			return fmt.Errorf("group name already exists")
 		}
 	}
 
-	newCfg := m.opts.Config
+	newInv := m.opts.Inventory
 	if index < 0 {
-		newCfg.Groups = append(newCfg.Groups, g)
+		newInv.Groups = append(newInv.Groups, g)
 	} else {
-		if index >= len(newCfg.Groups) {
+		if index >= len(newInv.Groups) {
 			return fmt.Errorf("invalid group index")
 		}
-		newCfg.Groups[index] = g
+		newInv.Groups[index] = g
 	}
 
-	if _, err := config.Save(m.opts.ConfigPath, newCfg); err != nil {
+	if _, err := config.SaveInventory(m.opts.InventoryPath, newInv); err != nil {
 		return err
 	}
 
-	m.opts.Config = newCfg
+	m.opts.Inventory = newInv
 	// Propagate to screens.
-	m.hosts.opts.Config = newCfg
-	m.groups.Refresh(newCfg)
+	m.hosts.opts.Inventory = newInv
+	m.groups.Refresh(newInv)
 	return nil
 }
 
@@ -894,7 +894,7 @@ func (m *appModel) saveDefaults(d config.Defaults) error {
 			m.opts.LoadErrors = errs
 		} else {
 			m.opts.KnownHosts = nil
-			m.opts.Hosts = config.ConfigHosts(m.opts.Config)
+			m.opts.Hosts = config.ConfigHosts(m.opts.Inventory)
 			m.opts.SkippedLines = 0
 			m.opts.LoadErrors = nil
 		}
@@ -919,7 +919,7 @@ func (m *appModel) saveDefaults(d config.Defaults) error {
 	}
 	if m.groups != nil {
 		m.groups.opts = m.opts
-		m.groups.Refresh(newCfg)
+		m.groups.Refresh(m.opts.Inventory)
 	}
 	if m.gh != nil {
 		m.gh.opts = m.opts
@@ -981,82 +981,82 @@ func (m *appModel) saveHostConfig(index int, h config.Host) error {
 	h.Host = strings.TrimSpace(h.Host)
 
 	// Unique host check.
-	for i := range m.opts.Config.Hosts {
+	for i := range m.opts.Inventory.Hosts {
 		if i == index {
 			continue
 		}
-		if strings.TrimSpace(m.opts.Config.Hosts[i].Host) == h.Host {
+		if strings.TrimSpace(m.opts.Inventory.Hosts[i].Host) == h.Host {
 			return fmt.Errorf("host config already exists")
 		}
 	}
 
-	newCfg := m.opts.Config
-	newCfg.Hosts = append([]config.Host(nil), newCfg.Hosts...)
+	newInv := m.opts.Inventory
+	newInv.Hosts = append([]config.Host(nil), newInv.Hosts...)
 	if index < 0 {
-		newCfg.Hosts = append(newCfg.Hosts, h)
+		newInv.Hosts = append(newInv.Hosts, h)
 	} else {
-		if index >= len(newCfg.Hosts) {
+		if index >= len(newInv.Hosts) {
 			return fmt.Errorf("invalid host index")
 		}
-		newCfg.Hosts[index] = h
+		newInv.Hosts[index] = h
 	}
 
-	if _, err := config.Save(m.opts.ConfigPath, newCfg); err != nil {
+	if _, err := config.SaveInventory(m.opts.InventoryPath, newInv); err != nil {
 		return err
 	}
 
-	m.opts.Config = newCfg
+	m.opts.Inventory = newInv
 	if m.hosts != nil {
-		m.hosts.opts.Config = newCfg
+		m.hosts.opts.Inventory = newInv
 	}
 	if m.groups != nil {
-		m.groups.Refresh(newCfg)
+		m.groups.Refresh(newInv)
 	}
 	if m.gh != nil {
-		m.gh.opts.Config = newCfg
+		m.gh.opts.Inventory = newInv
 	}
 	if m.picker != nil {
-		m.picker.opts.Config = newCfg
+		m.picker.opts.Inventory = newInv
 	}
 	if m.gp != nil {
-		m.gp.opts.Config = newCfg
+		m.gp.opts.Inventory = newInv
 	}
 	if m.customHost != nil {
-		m.customHost.opts.Config = newCfg
+		m.customHost.opts.Inventory = newInv
 	}
 	return nil
 }
 
 func (m *appModel) deleteGroup(index int) error {
-	if index < 0 || index >= len(m.opts.Config.Groups) {
+	if index < 0 || index >= len(m.opts.Inventory.Groups) {
 		return fmt.Errorf("invalid group index")
 	}
 
-	newCfg := m.opts.Config
-	newCfg.Groups = append([]config.Group(nil), newCfg.Groups...)
-	newCfg.Groups = append(newCfg.Groups[:index], newCfg.Groups[index+1:]...)
+	newInv := m.opts.Inventory
+	newInv.Groups = append([]config.Group(nil), newInv.Groups...)
+	newInv.Groups = append(newInv.Groups[:index], newInv.Groups[index+1:]...)
 
-	if _, err := config.Save(m.opts.ConfigPath, newCfg); err != nil {
+	if _, err := config.SaveInventory(m.opts.InventoryPath, newInv); err != nil {
 		return err
 	}
 
-	m.opts.Config = newCfg
-	m.hosts.opts.Config = newCfg
-	m.groups.Refresh(newCfg)
+	m.opts.Inventory = newInv
+	m.hosts.opts.Inventory = newInv
+	m.groups.Refresh(newInv)
 	return nil
 }
 
 func (m *appModel) addHostsToGroup(groupIndex int, hostsToAdd []string) error {
-	if groupIndex < 0 || groupIndex >= len(m.opts.Config.Groups) {
+	if groupIndex < 0 || groupIndex >= len(m.opts.Inventory.Groups) {
 		return fmt.Errorf("invalid group index")
 	}
 	if len(hostsToAdd) == 0 {
 		return nil
 	}
 
-	newCfg := m.opts.Config
-	newCfg.Groups = append([]config.Group(nil), newCfg.Groups...)
-	g := newCfg.Groups[groupIndex]
+	newInv := m.opts.Inventory
+	newInv.Groups = append([]config.Group(nil), newInv.Groups...)
+	g := newInv.Groups[groupIndex]
 
 	set := make(map[string]bool, len(g.Hosts))
 	for _, h := range g.Hosts {
@@ -1073,19 +1073,19 @@ func (m *appModel) addHostsToGroup(groupIndex int, hostsToAdd []string) error {
 		set[h] = true
 	}
 
-	newCfg.Groups[groupIndex] = g
-	if _, err := config.Save(m.opts.ConfigPath, newCfg); err != nil {
+	newInv.Groups[groupIndex] = g
+	if _, err := config.SaveInventory(m.opts.InventoryPath, newInv); err != nil {
 		return err
 	}
 
-	m.opts.Config = newCfg
-	m.hosts.opts.Config = newCfg
-	m.groups.Refresh(newCfg)
+	m.opts.Inventory = newInv
+	m.hosts.opts.Inventory = newInv
+	m.groups.Refresh(newInv)
 	return nil
 }
 
 func (m *appModel) removeHostsFromGroup(groupIndex int, hostsToRemove []string) error {
-	if groupIndex < 0 || groupIndex >= len(m.opts.Config.Groups) {
+	if groupIndex < 0 || groupIndex >= len(m.opts.Inventory.Groups) {
 		return fmt.Errorf("invalid group index")
 	}
 	if len(hostsToRemove) == 0 {
@@ -1097,9 +1097,9 @@ func (m *appModel) removeHostsFromGroup(groupIndex int, hostsToRemove []string) 
 		removeSet[h] = true
 	}
 
-	newCfg := m.opts.Config
-	newCfg.Groups = append([]config.Group(nil), newCfg.Groups...)
-	g := newCfg.Groups[groupIndex]
+	newInv := m.opts.Inventory
+	newInv.Groups = append([]config.Group(nil), newInv.Groups...)
+	g := newInv.Groups[groupIndex]
 	kept := make([]string, 0, len(g.Hosts))
 	for _, h := range g.Hosts {
 		if removeSet[h] {
@@ -1108,84 +1108,84 @@ func (m *appModel) removeHostsFromGroup(groupIndex int, hostsToRemove []string) 
 		kept = append(kept, h)
 	}
 	g.Hosts = kept
-	newCfg.Groups[groupIndex] = g
+	newInv.Groups[groupIndex] = g
 
-	if _, err := config.Save(m.opts.ConfigPath, newCfg); err != nil {
+	if _, err := config.SaveInventory(m.opts.InventoryPath, newInv); err != nil {
 		return err
 	}
 
-	m.opts.Config = newCfg
-	m.hosts.opts.Config = newCfg
-	m.groups.Refresh(newCfg)
+	m.opts.Inventory = newInv
+	m.hosts.opts.Inventory = newInv
+	m.groups.Refresh(newInv)
 	return nil
 }
 
 func (m *appModel) saveToggleHidden(host string, hide bool) error {
-	newCfg := m.opts.Config
+	newInv := m.opts.Inventory
 	h := strings.TrimSpace(host)
 
 	// Work on independent copies of mutable slices.
-	newCfg.HiddenHosts = append([]string(nil), newCfg.HiddenHosts...)
-	newCfg.Hosts = append([]config.Host(nil), newCfg.Hosts...)
+	newInv.HiddenHosts = append([]string(nil), newInv.HiddenHosts...)
+	newInv.Hosts = append([]config.Host(nil), newInv.Hosts...)
 
-	idx, hc := findHostConfig(newCfg, host)
+	idx, hc := findHostConfig(newInv, host)
 
 	if hide {
 		if idx >= 0 {
 			// Host has existing [[hosts]] entry — set Hidden there.
 			hc.Hidden = true
-			newCfg.Hosts[idx] = hc
+			newInv.Hosts[idx] = hc
 		} else {
 			// No per-host config — use compact list.
 			present := false
-			for _, hh := range newCfg.HiddenHosts {
+			for _, hh := range newInv.HiddenHosts {
 				if strings.TrimSpace(hh) == h {
 					present = true
 					break
 				}
 			}
 			if !present {
-				newCfg.HiddenHosts = append(newCfg.HiddenHosts, h)
+				newInv.HiddenHosts = append(newInv.HiddenHosts, h)
 			}
 		}
 	} else {
 		// Remove from compact list (safe even if not present).
-		out := newCfg.HiddenHosts[:0]
-		for _, hh := range newCfg.HiddenHosts {
+		out := newInv.HiddenHosts[:0]
+		for _, hh := range newInv.HiddenHosts {
 			if strings.TrimSpace(hh) != h {
 				out = append(out, hh)
 			}
 		}
-		newCfg.HiddenHosts = out
+		newInv.HiddenHosts = out
 		// Also clear Hidden flag in [[hosts]] entry if set (handles old-format configs).
 		if idx >= 0 && hc.Hidden {
 			hc.Hidden = false
-			newCfg.Hosts[idx] = hc
+			newInv.Hosts[idx] = hc
 		}
 	}
 
-	if _, err := config.Save(m.opts.ConfigPath, newCfg); err != nil {
+	if _, err := config.SaveInventory(m.opts.InventoryPath, newInv); err != nil {
 		return err
 	}
 
-	m.opts.Config = newCfg
+	m.opts.Inventory = newInv
 	if m.hosts != nil {
-		m.hosts.opts.Config = newCfg
+		m.hosts.opts.Inventory = newInv
 	}
 	if m.groups != nil {
-		m.groups.Refresh(newCfg)
+		m.groups.Refresh(newInv)
 	}
 	if m.gh != nil {
-		m.gh.opts.Config = newCfg
+		m.gh.opts.Inventory = newInv
 	}
 	if m.picker != nil {
-		m.picker.opts.Config = newCfg
+		m.picker.opts.Inventory = newInv
 	}
 	if m.gp != nil {
-		m.gp.opts.Config = newCfg
+		m.gp.opts.Inventory = newInv
 	}
 	if m.customHost != nil {
-		m.customHost.opts.Config = newCfg
+		m.customHost.opts.Inventory = newInv
 	}
 	return nil
 }

@@ -22,13 +22,13 @@ func runCompletion(args []string) {
 
 // runInternalComplete is called by shell completion scripts to get dynamic candidates.
 // It prints one entry per line and is intentionally silent on errors.
-func runInternalComplete(args []string, cfg config.Config, knownHosts []string) {
+func runInternalComplete(args []string, inv config.Inventory, knownHosts []string) {
 	if len(args) == 0 {
 		return
 	}
 	switch args[0] {
 	case "groups":
-		for _, g := range cfg.Groups {
+		for _, g := range inv.Groups {
 			fmt.Println(g.Name)
 		}
 	case "hosts":

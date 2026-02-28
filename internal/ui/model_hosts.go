@@ -97,7 +97,7 @@ type hostsModel struct {
 func newHostsModel(opts Options) *hostsModel {
 	items := make([]list.Item, 0, len(opts.Hosts))
 	for _, h := range opts.Hosts {
-		_, ok := hostConfigFor(opts.Config, h)
+		_, ok := hostConfigFor(opts.Inventory, h)
 		items = append(items, hostRow{host: h, hasCfg: ok})
 	}
 
@@ -404,12 +404,12 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.toast = toast{text: "no host selected", level: toastWarn}
 				return m, nil
 			}
-			hc, ok := hostConfigFor(m.opts.Config, row.host)
+			hc, ok := hostConfigFor(m.opts.Inventory, row.host)
 			if !ok {
 				m.toast = toast{text: "no host config", level: toastWarn}
 				return m, nil
 			}
-			hc.Host = suggestCopyHostKey(m.opts.Config, hc.Host)
+			hc.Host = suggestCopyHostKey(m.opts.Inventory, hc.Host)
 			return m, func() tea.Msg { return openHostFormPrefillMsg{host: hc, returnTo: screenHosts} }
 		}
 		if key.Matches(msg, m.keymap.Settings) && m.focus == focusList {
@@ -459,7 +459,7 @@ func (m *hostsModel) applyFilter(query string) {
 	if !m.showHidden {
 		visible := make([]string, 0, len(filtered))
 		for _, h := range filtered {
-			if isHostHidden(m.opts.Config, h) {
+			if isHostHidden(m.opts.Inventory, h) {
 				continue
 			}
 			visible = append(visible, h)
@@ -473,8 +473,8 @@ func (m *hostsModel) applyFilter(query string) {
 func (m *hostsModel) setListItems(hosts []string) {
 	items := make([]list.Item, 0, len(hosts))
 	for _, h := range hosts {
-		_, ok := hostConfigFor(m.opts.Config, h)
-		hidden := isHostHidden(m.opts.Config, h)
+		_, ok := hostConfigFor(m.opts.Inventory, h)
+		hidden := isHostHidden(m.opts.Inventory, h)
 		items = append(items, hostRow{host: h, selected: m.selected[h], hasCfg: ok, hidden: hidden})
 	}
 	m.list.SetItems(items)
@@ -506,7 +506,7 @@ func (m *hostsModel) refreshVisibleBadges() {
 		if !ok {
 			continue
 		}
-		_, ok = hostConfigFor(m.opts.Config, row.host)
+		_, ok = hostConfigFor(m.opts.Inventory, row.host)
 		row.hasCfg = ok
 		items[i] = row
 	}
@@ -521,7 +521,7 @@ func (m *hostsModel) toggleCurrentHidden() tea.Cmd {
 	if !ok || row.host == "" {
 		return nil
 	}
-	hide := !isHostHidden(m.opts.Config, row.host)
+	hide := !isHostHidden(m.opts.Inventory, row.host)
 	return func() tea.Msg { return toggleHiddenHostMsg{host: row.host, hide: hide} }
 }
 
@@ -532,7 +532,7 @@ func (m *hostsModel) reapplyFilter() {
 func (m *hostsModel) hiddenCount() int {
 	count := 0
 	for _, h := range m.allHosts {
-		if isHostHidden(m.opts.Config, h) {
+		if isHostHidden(m.opts.Inventory, h) {
 			count++
 		}
 	}
@@ -581,7 +581,7 @@ func (m *hostsModel) buildSSHCmds(hosts []string, modifySettings func(*sshcmd.Se
 	cmds := make([][]string, 0, len(hosts))
 	for _, h := range hosts {
 		s := base
-		if hc, ok := hostConfigFor(m.opts.Config, h); ok {
+		if hc, ok := hostConfigFor(m.opts.Inventory, h); ok {
 			s = sshcmd.ApplyHost(s, hc)
 		}
 		if modifySettings != nil {

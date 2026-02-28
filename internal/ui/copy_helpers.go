@@ -26,10 +26,10 @@ func suggestCopyName(name string, exists func(string) bool) string {
 	return c1
 }
 
-func suggestCopyGroupName(cfg config.Config, from string) string {
+func suggestCopyGroupName(inv config.Inventory, from string) string {
 	exists := func(n string) bool {
 		n = strings.TrimSpace(n)
-		for _, g := range cfg.Groups {
+		for _, g := range inv.Groups {
 			if strings.TrimSpace(g.Name) == n {
 				return true
 			}
@@ -39,10 +39,10 @@ func suggestCopyGroupName(cfg config.Config, from string) string {
 	return suggestCopyName(from, exists)
 }
 
-func suggestCopyHostKey(cfg config.Config, from string) string {
+func suggestCopyHostKey(inv config.Inventory, from string) string {
 	exists := func(n string) bool {
 		n = strings.TrimSpace(n)
-		for _, h := range cfg.Hosts {
+		for _, h := range inv.Hosts {
 			if strings.TrimSpace(h.Host) == n {
 				return true
 			}

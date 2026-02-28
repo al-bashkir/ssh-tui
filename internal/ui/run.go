@@ -18,13 +18,15 @@ type ExecRequest struct {
 func (e *ExecRequest) Error() string { return "exec requested" }
 
 type Options struct {
-	ConfigPath   string
-	Config       config.Config
-	KnownHosts   []string
-	Hosts        []string
-	SkippedLines int
-	LoadErrors   []hosts.PathError
-	Debug        bool
+	ConfigPath    string
+	Config        config.Config
+	InventoryPath string
+	Inventory     config.Inventory
+	KnownHosts    []string
+	Hosts         []string
+	SkippedLines  int
+	LoadErrors    []hosts.PathError
+	Debug         bool
 }
 
 type exitState interface {

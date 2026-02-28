@@ -12,7 +12,7 @@ CLI subcommand files:
 
 Packages:
 
-- `internal/config`: config schema + load/save (atomic, 0600)
+- `internal/config`: config + inventory schema, load/save (atomic, 0600), migration
 - `internal/hosts`: known_hosts parsing/loading
 - `internal/sshcmd`: build `ssh` argv from merged settings
 - `internal/tmux`: build `tmux` argv, detect tmux, pane helpers

@@ -24,11 +24,13 @@ func (m *multiFlag) Set(v string) error {
 
 func main() {
 	var configPath string
+	var hostsPath string
 	var knownHosts multiFlag
 	var noTmux bool
 	var debug bool
 
 	flag.StringVar(&configPath, "config", "", "path to config.toml (default: XDG config)")
+	flag.StringVar(&hostsPath, "hosts", "", "path to hosts.toml (default: next to config.toml)")
 	flag.Var(&knownHosts, "known-hosts", "known_hosts path (repeatable)")
 	flag.BoolVar(&noTmux, "no-tmux", false, "disable tmux integration")
 	flag.BoolVar(&debug, "debug", false, "enable debug logging")
@@ -43,6 +45,21 @@ func main() {
 		cfg.Defaults.Tmux = "never"
 	}
 
+	// Derive hosts.toml path from config path if not explicitly set.
+	if hostsPath == "" {
+		hostsPath = config.HostsPathFromConfigPath(cfgPathUsed)
+	}
+
+	// Migrate old single-file config if needed.
+	if err := config.Migrate(cfgPathUsed, hostsPath); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "warning: config migration failed: %v\n", err)
+	}
+
+	inv, invPathUsed, err := config.LoadInventory(hostsPath)
+	if err != nil {
+		fatal(err)
+	}
+
 	knownPaths := []string(knownHosts)
 	res := hosts.LoadResult{}
 	var loadErrs []hosts.PathError
@@ -50,32 +67,34 @@ func main() {
 		res, loadErrs = hosts.LoadKnownHosts(knownPaths)
 	} else {
 		knownPaths = nil
-		res.Hosts = config.ConfigHosts(cfg)
+		res.Hosts = config.ConfigHosts(inv)
 	}
 
 	args := flag.Args()
 	if len(args) == 0 {
 		runTUI(ui.Options{
-			ConfigPath:   cfgPathUsed,
-			Config:       cfg,
-			KnownHosts:   knownPaths,
-			Hosts:        res.Hosts,
-			SkippedLines: res.SkippedLines,
-			LoadErrors:   loadErrs,
-			Debug:        debug,
+			ConfigPath:    cfgPathUsed,
+			Config:        cfg,
+			InventoryPath: invPathUsed,
+			Inventory:     inv,
+			KnownHosts:    knownPaths,
+			Hosts:         res.Hosts,
+			SkippedLines:  res.SkippedLines,
+			LoadErrors:    loadErrs,
+			Debug:         debug,
 		})
 		return
 	}
 
 	switch args[0] {
 	case "connect", "c":
-		runConnect(args[1:], cfg, noTmux)
+		runConnect(args[1:], cfg, inv, noTmux)
 	case "list", "l":
-		runList(args[1:], cfg, res.Hosts)
+		runList(args[1:], inv, res.Hosts)
 	case "completion", "comp":
 		runCompletion(args[1:])
 	case "__complete":
-		runInternalComplete(args[1:], cfg, res.Hosts)
+		runInternalComplete(args[1:], inv, res.Hosts)
 	default:
 		fatal(fmt.Errorf("unknown command %q\nUsage: ssh-tui [flags] [connect|list|completion] ...", args[0]))
 	}
