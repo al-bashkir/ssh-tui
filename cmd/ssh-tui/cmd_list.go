@@ -9,7 +9,7 @@ import (
 	"github.com/al-bashkir/ssh-tui/internal/config"
 )
 
-func runList(args []string, cfg config.Config, knownHosts []string) {
+func runList(args []string, inv config.Inventory, knownHosts []string) {
 	if len(args) == 0 {
 		fatal(fmt.Errorf("list requires a subcommand: groups|g or hosts|h\nUsage: ssh-tui list groups|hosts [--json]"))
 	}
@@ -24,7 +24,7 @@ func runList(args []string, cfg config.Config, knownHosts []string) {
 
 	switch sub {
 	case "groups", "g":
-		listGroups(cfg, *jsonOut)
+		listGroups(inv, *jsonOut)
 	case "hosts", "h":
 		listHosts(knownHosts, *jsonOut)
 	default:
@@ -32,14 +32,14 @@ func runList(args []string, cfg config.Config, knownHosts []string) {
 	}
 }
 
-func listGroups(cfg config.Config, asJSON bool) {
+func listGroups(inv config.Inventory, asJSON bool) {
 	if asJSON {
 		type groupJSON struct {
 			Name  string   `json:"name"`
 			Hosts []string `json:"hosts"`
 		}
-		out := make([]groupJSON, 0, len(cfg.Groups))
-		for _, g := range cfg.Groups {
+		out := make([]groupJSON, 0, len(inv.Groups))
+		for _, g := range inv.Groups {
 			hosts := g.Hosts
 			if hosts == nil {
 				hosts = []string{}
@@ -49,7 +49,7 @@ func listGroups(cfg config.Config, asJSON bool) {
 		printJSON(out)
 		return
 	}
-	for _, g := range cfg.Groups {
+	for _, g := range inv.Groups {
 		fmt.Printf("%s (%d hosts)\n", g.Name, len(g.Hosts))
 	}
 }

@@ -19,7 +19,7 @@ func (m *appModel) connectHostsWithDefaults(hostsToOpen []string) (execCmd []str
 	sshCmds := make([][]string, 0, len(hostsToOpen))
 	for _, h := range hostsToOpen {
 		s := base
-		if hc, ok := hostConfigFor(m.opts.Config, h); ok {
+		if hc, ok := hostConfigFor(m.opts.Inventory, h); ok {
 			s = sshcmd.ApplyHost(s, hc)
 		}
 		cmd, _ := sshcmd.BuildCommand(h, s)
@@ -71,14 +71,14 @@ func (m *appModel) connectHostsWithDefaults(hostsToOpen []string) (execCmd []str
 }
 
 func (m *appModel) connectHostsForGroup(groupIndex int, hostsToOpen []string, remoteCommandOverride string) (execCmd []string, toastResult toast, err error) {
-	if groupIndex < 0 || groupIndex >= len(m.opts.Config.Groups) {
+	if groupIndex < 0 || groupIndex >= len(m.opts.Inventory.Groups) {
 		return nil, toast{}, fmt.Errorf("invalid group")
 	}
 	if len(hostsToOpen) == 0 {
 		return nil, toast{}, fmt.Errorf("no host selected")
 	}
 
-	g := m.opts.Config.Groups[groupIndex]
+	g := m.opts.Inventory.Groups[groupIndex]
 	defaults := m.opts.Config.Defaults
 	base := sshcmd.FromDefaults(defaults)
 	rc := strings.TrimSpace(remoteCommandOverride)
@@ -86,7 +86,7 @@ func (m *appModel) connectHostsForGroup(groupIndex int, hostsToOpen []string, re
 	sshCmds := make([][]string, 0, len(hostsToOpen))
 	for _, h := range hostsToOpen {
 		s := base
-		if hc, ok := hostConfigFor(m.opts.Config, h); ok {
+		if hc, ok := hostConfigFor(m.opts.Inventory, h); ok {
 			s = sshcmd.ApplyHost(s, hc)
 		}
 		s = sshcmd.ApplyGroup(s, g)

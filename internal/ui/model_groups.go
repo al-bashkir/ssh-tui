@@ -83,7 +83,7 @@ type groupsModel struct {
 }
 
 func newGroupsModel(opts Options) *groupsModel {
-	rows := groupsRows(opts.Config)
+	rows := groupsRows(opts.Inventory)
 	items := make([]list.Item, 0, len(rows))
 	for _, r := range rows {
 		items = append(items, r)
@@ -116,9 +116,9 @@ func newGroupsModel(opts Options) *groupsModel {
 	return m
 }
 
-func groupsRows(cfg config.Config) []groupRow {
-	rows := make([]groupRow, 0, len(cfg.Groups))
-	for i, g := range cfg.Groups {
+func groupsRows(inv config.Inventory) []groupRow {
+	rows := make([]groupRow, 0, len(inv.Groups))
+	for i, g := range inv.Groups {
 		rows = append(rows, groupRow{index: i, name: g.Name, hostCount: len(g.Hosts), hasCfg: groupHasCfg(g)})
 	}
 	return rows
@@ -151,9 +151,9 @@ func (m *groupsModel) setRows(rows []groupRow) {
 	}
 }
 
-func (m *groupsModel) Refresh(cfg config.Config) {
-	m.opts.Config = cfg
-	m.allRows = groupsRows(cfg)
+func (m *groupsModel) Refresh(inv config.Inventory) {
+	m.opts.Inventory = inv
+	m.allRows = groupsRows(inv)
 	m.applyFilter(m.search.Value())
 }
 
@@ -390,12 +390,12 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if key.Matches(msg, m.keymap.Copy) && m.focus == focusList {
 			row, ok := m.list.SelectedItem().(groupRow)
-			if !ok || row.index < 0 || row.index >= len(m.opts.Config.Groups) {
+			if !ok || row.index < 0 || row.index >= len(m.opts.Inventory.Groups) {
 				m.toast = toast{text: "no group selected", level: toastWarn}
 				return m, nil
 			}
-			g := m.opts.Config.Groups[row.index]
-			g.Name = suggestCopyGroupName(m.opts.Config, g.Name)
+			g := m.opts.Inventory.Groups[row.index]
+			g.Name = suggestCopyGroupName(m.opts.Inventory, g.Name)
 			return m, func() tea.Msg { return openGroupFormPrefillMsg{group: g} }
 		}
 		if key.Matches(msg, m.keymap.OneWindow) && m.focus == focusList {
@@ -446,9 +446,9 @@ func (m *groupsModel) View() string {
 	if m.confirmDelete {
 		name := ""
 		hostCount := 0
-		if m.deleteIndex >= 0 && m.deleteIndex < len(m.opts.Config.Groups) {
-			name = m.opts.Config.Groups[m.deleteIndex].Name
-			hostCount = len(m.opts.Config.Groups[m.deleteIndex].Hosts)
+		if m.deleteIndex >= 0 && m.deleteIndex < len(m.opts.Inventory.Groups) {
+			name = m.opts.Inventory.Groups[m.deleteIndex].Name
+			hostCount = len(m.opts.Inventory.Groups[m.deleteIndex].Hosts)
 		}
 		innerW := max(0, m.width-2)
 		innerH := max(0, m.height-2)
@@ -610,11 +610,11 @@ func (m *groupsModel) connectAllCmd(oneWindow bool, remoteCmd string) tea.Cmd {
 		m.toast = toast{text: "no group selected", level: toastWarn}
 		return nil
 	}
-	if row.index < 0 || row.index >= len(m.opts.Config.Groups) {
+	if row.index < 0 || row.index >= len(m.opts.Inventory.Groups) {
 		m.toast = toast{text: "invalid group", level: toastErr}
 		return nil
 	}
-	g := m.opts.Config.Groups[row.index]
+	g := m.opts.Inventory.Groups[row.index]
 	if len(g.Hosts) == 0 {
 		m.toast = toast{text: "group has no hosts", level: toastWarn}
 		return nil
@@ -656,7 +656,7 @@ func (m *groupsModel) doConnectAll(g config.Group, oneWindow bool, remoteCmd str
 	sshCmds := make([][]string, 0, len(g.Hosts))
 	for _, h := range g.Hosts {
 		s := base
-		if hc, ok := hostConfigFor(m.opts.Config, h); ok {
+		if hc, ok := hostConfigFor(m.opts.Inventory, h); ok {
 			s = sshcmd.ApplyHost(s, hc)
 		}
 		s = sshcmd.ApplyGroup(s, g)

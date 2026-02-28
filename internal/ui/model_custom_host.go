@@ -26,8 +26,8 @@ type customHostModel struct {
 
 func newCustomHostModel(opts Options, groupIndex int, returnTo screen) *customHostModel {
 	name := ""
-	if groupIndex >= 0 && groupIndex < len(opts.Config.Groups) {
-		name = strings.TrimSpace(opts.Config.Groups[groupIndex].Name)
+	if groupIndex >= 0 && groupIndex < len(opts.Inventory.Groups) {
+		name = strings.TrimSpace(opts.Inventory.Groups[groupIndex].Name)
 	}
 
 	in := textinput.New()

@@ -22,9 +22,14 @@ func ValidateGroupName(name string) error {
 }
 
 type Config struct {
+	Version  int      `toml:"version"`
+	Defaults Defaults `toml:"defaults"`
+}
+
+// Inventory holds host and group data (hosts.toml).
+type Inventory struct {
 	Version     int      `toml:"version"`
 	HiddenHosts []string `toml:"hidden_hosts,omitempty"`
-	Defaults    Defaults `toml:"defaults"`
 	Hosts       []Host   `toml:"hosts"`
 	Groups      []Group  `toml:"groups"`
 }
@@ -49,23 +54,23 @@ type Host struct {
 }
 
 type Defaults struct {
-	AccentColor    string   `toml:"accent_color"` // default UI accent color (preset name or color code)
-	LoadKnownHosts bool     `toml:"load_known_hosts"`
-	User           string   `toml:"user"`
-	Port           int      `toml:"port"`
-	IdentityFile   string   `toml:"identity_file"`
-	ExtraArgs      []string `toml:"extra_args"`
-	PaneSplit      string   `toml:"pane_split"`          // horizontal|vertical
-	PaneLayout     string   `toml:"pane_layout"`         // auto|tiled|even-horizontal|even-vertical|main-horizontal|main-vertical
-	PaneSync       string   `toml:"pane_sync"`           // on|off
-	PaneBorderFmt  string   `toml:"pane_border_format"`  // tmux format string
-	PaneBorderFmts []string `toml:"pane_border_formats"` // user-defined formats (built-in default is always available)
-	PaneBorderPos  string   `toml:"pane_border_status"`  // off|top|bottom
-	Tmux           string   `toml:"tmux"`                // auto|force|never
-	OpenMode       string   `toml:"open_mode"`           // auto|current|tmux-window|tmux-pane
-	TmuxSession    string   `toml:"tmux_session"`        // session name
-	ConfirmQuit            bool     `toml:"confirm_quit"`
-	ConnectConfirmThreshold int     `toml:"connect_confirm_threshold"`
+	AccentColor             string   `toml:"accent_color"` // default UI accent color (preset name or color code)
+	LoadKnownHosts          bool     `toml:"load_known_hosts"`
+	User                    string   `toml:"user"`
+	Port                    int      `toml:"port"`
+	IdentityFile            string   `toml:"identity_file"`
+	ExtraArgs               []string `toml:"extra_args"`
+	PaneSplit               string   `toml:"pane_split"`          // horizontal|vertical
+	PaneLayout              string   `toml:"pane_layout"`         // auto|tiled|even-horizontal|even-vertical|main-horizontal|main-vertical
+	PaneSync                string   `toml:"pane_sync"`           // on|off
+	PaneBorderFmt           string   `toml:"pane_border_format"`  // tmux format string
+	PaneBorderFmts          []string `toml:"pane_border_formats"` // user-defined formats (built-in default is always available)
+	PaneBorderPos           string   `toml:"pane_border_status"`  // off|top|bottom
+	Tmux                    string   `toml:"tmux"`                // auto|force|never
+	OpenMode                string   `toml:"open_mode"`           // auto|current|tmux-window|tmux-pane
+	TmuxSession             string   `toml:"tmux_session"`        // session name
+	ConfirmQuit             bool     `toml:"confirm_quit"`
+	ConnectConfirmThreshold int      `toml:"connect_confirm_threshold"`
 }
 
 type Group struct {
@@ -89,25 +94,32 @@ func DefaultConfig() Config {
 	return Config{
 		Version: 1,
 		Defaults: Defaults{
-			AccentColor:    "",
-			LoadKnownHosts: true,
-			User:           "",
-			Port:           22,
-			IdentityFile:   "",
-			ExtraArgs:      nil,
-			PaneSplit:      "vertical",
-			PaneLayout:     "even-vertical",
-			PaneSync:       "on",
-			PaneBorderFmt:  DefaultPaneBorderFormat,
-			PaneBorderFmts: nil,
-			PaneBorderPos:  "bottom",
-			Tmux:           "auto",
-			OpenMode:       "auto",
-			TmuxSession:    "ssh-tui",
-			ConfirmQuit:            false,
+			AccentColor:             "",
+			LoadKnownHosts:          true,
+			User:                    "",
+			Port:                    22,
+			IdentityFile:            "",
+			ExtraArgs:               nil,
+			PaneSplit:               "vertical",
+			PaneLayout:              "even-vertical",
+			PaneSync:                "on",
+			PaneBorderFmt:           DefaultPaneBorderFormat,
+			PaneBorderFmts:          nil,
+			PaneBorderPos:           "bottom",
+			Tmux:                    "auto",
+			OpenMode:                "auto",
+			TmuxSession:             "ssh-tui",
+			ConfirmQuit:             false,
 			ConnectConfirmThreshold: 5,
 		},
-		Hosts:  nil,
-		Groups: nil,
+	}
+}
+
+// DefaultInventory returns an empty inventory with version 1.
+func DefaultInventory() Inventory {
+	return Inventory{
+		Version: 1,
+		Hosts:   nil,
+		Groups:  nil,
 	}
 }

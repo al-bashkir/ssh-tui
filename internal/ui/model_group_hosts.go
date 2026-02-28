@@ -85,13 +85,13 @@ type groupHostsModel struct {
 
 func newGroupHostsModel(opts Options, groupIndex int) *groupHostsModel {
 	g := config.Group{}
-	if groupIndex >= 0 && groupIndex < len(opts.Config.Groups) {
-		g = opts.Config.Groups[groupIndex]
+	if groupIndex >= 0 && groupIndex < len(opts.Inventory.Groups) {
+		g = opts.Inventory.Groups[groupIndex]
 	}
 
 	items := make([]list.Item, 0, len(g.Hosts))
 	for _, h := range g.Hosts {
-		_, ok := hostConfigFor(opts.Config, h)
+		_, ok := hostConfigFor(opts.Inventory, h)
 		items = append(items, groupHostRow{host: h, hasCfg: ok})
 	}
 
@@ -378,12 +378,12 @@ func (m *groupHostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.toast = toast{text: "no host selected", level: toastWarn}
 				return m, nil
 			}
-			hc, ok := hostConfigFor(m.opts.Config, row.host)
+			hc, ok := hostConfigFor(m.opts.Inventory, row.host)
 			if !ok {
 				m.toast = toast{text: "no host config", level: toastWarn}
 				return m, nil
 			}
-			hc.Host = suggestCopyHostKey(m.opts.Config, hc.Host)
+			hc.Host = suggestCopyHostKey(m.opts.Inventory, hc.Host)
 			return m, func() tea.Msg { return openHostFormPrefillMsg{host: hc, returnTo: screenGroupHosts} }
 		}
 
@@ -603,7 +603,7 @@ func (m *groupHostsModel) applyFilter(query string) {
 func (m *groupHostsModel) setListItems(hosts []string) {
 	items := make([]list.Item, 0, len(hosts))
 	for _, h := range hosts {
-		_, ok := hostConfigFor(m.opts.Config, h)
+		_, ok := hostConfigFor(m.opts.Inventory, h)
 		items = append(items, groupHostRow{host: h, selected: m.selected[h], hasCfg: ok})
 	}
 	m.list.SetItems(items)
@@ -633,7 +633,7 @@ func (m *groupHostsModel) refreshVisibleBadges() {
 		if !ok {
 			continue
 		}
-		_, ok = hostConfigFor(m.opts.Config, row.host)
+		_, ok = hostConfigFor(m.opts.Inventory, row.host)
 		row.hasCfg = ok
 		items[i] = row
 	}
@@ -699,7 +699,7 @@ func (m *groupHostsModel) buildGroupSSHCmds(hosts []string, modifySettings func(
 	cmds := make([][]string, 0, len(hosts))
 	for _, h := range hosts {
 		s := base
-		if hc, ok := hostConfigFor(m.opts.Config, h); ok {
+		if hc, ok := hostConfigFor(m.opts.Inventory, h); ok {
 			s = sshcmd.ApplyHost(s, hc)
 		}
 		s = sshcmd.ApplyGroup(s, m.group)

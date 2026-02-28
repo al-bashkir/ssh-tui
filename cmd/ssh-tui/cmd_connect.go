@@ -11,7 +11,7 @@ import (
 	tmx "github.com/al-bashkir/ssh-tui/internal/tmux"
 )
 
-func runConnect(args []string, cfg config.Config, noTmux bool) {
+func runConnect(args []string, cfg config.Config, inv config.Inventory, noTmux bool) {
 	if len(args) == 0 {
 		fatal(fmt.Errorf("connect requires a subcommand: group|g or host|h\nUsage: ssh-tui connect group|host NAME"))
 	}
@@ -20,21 +20,21 @@ func runConnect(args []string, cfg config.Config, noTmux bool) {
 		if len(args) < 2 {
 			fatal(fmt.Errorf("connect group requires a name\nUsage: ssh-tui connect group NAME"))
 		}
-		connectGroup(args[1], cfg, noTmux)
+		connectGroup(args[1], cfg, inv, noTmux)
 	case "host", "h":
 		if len(args) < 2 {
 			fatal(fmt.Errorf("connect host requires a name\nUsage: ssh-tui connect host NAME"))
 		}
-		connectHost(args[1], cfg)
+		connectHost(args[1], cfg, inv)
 	default:
 		fatal(fmt.Errorf("unknown connect subcommand %q: use group|g or host|h", args[0]))
 	}
 }
 
-func connectGroup(name string, cfg config.Config, noTmux bool) {
+func connectGroup(name string, cfg config.Config, inv config.Inventory, noTmux bool) {
 	var group config.Group
 	found := false
-	for _, g := range cfg.Groups {
+	for _, g := range inv.Groups {
 		if strings.EqualFold(g.Name, name) {
 			group = g
 			found = true
@@ -54,7 +54,7 @@ func connectGroup(name string, cfg config.Config, noTmux bool) {
 	sshCmds := make([][]string, 0, len(group.Hosts))
 	for _, h := range group.Hosts {
 		s := base
-		if hc, ok := sshcmd.FindHostConfig(cfg, h); ok {
+		if hc, ok := sshcmd.FindHostConfig(inv.Hosts, h); ok {
 			s = sshcmd.ApplyHost(s, hc)
 		}
 		s = sshcmd.ApplyGroup(s, group)
@@ -83,12 +83,12 @@ func connectGroup(name string, cfg config.Config, noTmux bool) {
 	execConnect(group.Hosts, sshCmds, cfg.Defaults, &group, mode, inTmux)
 }
 
-func connectHost(name string, cfg config.Config) {
+func connectHost(name string, cfg config.Config, inv config.Inventory) {
 	// Build SSH command with the same precedence as the TUI:
 	// Defaults → per-host override (no group).
 	base := sshcmd.FromDefaults(cfg.Defaults)
 	s := base
-	if hc, ok := sshcmd.FindHostConfig(cfg, name); ok {
+	if hc, ok := sshcmd.FindHostConfig(inv.Hosts, name); ok {
 		s = sshcmd.ApplyHost(s, hc)
 	}
 	cmd, err := sshcmd.BuildCommand(name, s)

@@ -59,9 +59,9 @@ type groupPickerModel struct {
 }
 
 func newGroupPickerModel(opts Options) *groupPickerModel {
-	all := make([]groupPickRow, 0, len(opts.Config.Groups))
-	items := make([]list.Item, 0, len(opts.Config.Groups))
-	for i, g := range opts.Config.Groups {
+	all := make([]groupPickRow, 0, len(opts.Inventory.Groups))
+	items := make([]list.Item, 0, len(opts.Inventory.Groups))
+	for i, g := range opts.Inventory.Groups {
 		row := groupPickRow{index: i, name: g.Name}
 		all = append(all, row)
 		items = append(items, row)

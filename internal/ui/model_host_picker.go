@@ -73,7 +73,7 @@ func newHostPickerModel(opts Options, _groupIndex int) *hostPickerModel {
 	all := append([]string(nil), opts.Hosts...)
 	items := make([]list.Item, 0, len(all))
 	for _, h := range all {
-		_, ok := hostConfigFor(opts.Config, h)
+		_, ok := hostConfigFor(opts.Inventory, h)
 		items = append(items, pickerRow{host: h, hasCfg: ok})
 	}
 
@@ -345,7 +345,7 @@ func (m *hostPickerModel) applyFilter(query string) {
 func (m *hostPickerModel) setListItems(hosts []string) {
 	items := make([]list.Item, 0, len(hosts))
 	for _, h := range hosts {
-		_, ok := hostConfigFor(m.opts.Config, h)
+		_, ok := hostConfigFor(m.opts.Inventory, h)
 		items = append(items, pickerRow{host: h, selected: m.selected[h], hasCfg: ok})
 	}
 	m.list.SetItems(items)
@@ -375,7 +375,7 @@ func (m *hostPickerModel) refreshVisibleBadges() {
 		if !ok {
 			continue
 		}
-		_, ok = hostConfigFor(m.opts.Config, row.host)
+		_, ok = hostConfigFor(m.opts.Inventory, row.host)
 		row.hasCfg = ok
 		items[i] = row
 	}
