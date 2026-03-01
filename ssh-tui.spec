@@ -1,5 +1,5 @@
 Name:           ssh-tui
-Version:        1.1.0
+Version:        1.2.0
 Release:        1%{?dist}
 Summary:        Terminal UI for managing SSH connections
 
@@ -62,6 +62,23 @@ install -Dpm 0644 _ssh_tui %{buildroot}%{_datadir}/zsh/site-functions/_ssh_tui
 %{_datadir}/zsh/site-functions/_ssh_tui
 
 %changelog
+* Sun Mar 01 2026 Pavel Aksenov <41126916+al-bashkir@users.noreply.github.com> - 1.2.0-1
+- Host inventory (hosts, groups, hidden_hosts) moved to a separate
+  hosts.toml file; first launch after upgrade migrates automatically
+- Add -hosts flag to set the hosts.toml path independently of -config
+- Add -popup flag: TUI quits after a successful tmux connect, intended
+  for tmux popup use (e.g. bind-key f display-popup -E 'ssh-tui -popup')
+- Shell completion extended to cover all flags including -hosts and -popup
+- Badge column width is now stable as the cursor moves; cfg badge symbol
+  changed from "cfg" text to ⚙
+- Esc key in host/group-host views: blur search bar, then clear selection,
+  then clear search text, then navigate back (was: search then navigate)
+- Esc in the groups tab clears search text even when the list has focus
+- Group picker shows pending host names above the search bar (up to 2 lines)
+- Group picker status line shows filtered count vs total
+- Groups help modal collapsed from 4 to 3 columns to avoid clipping on
+  narrow terminals
+
 * Fri Feb 20 2026 Pavel Aksenov <41126916+al-bashkir@users.noreply.github.com> - 1.1.0-1
 - Toast notifications now carry severity levels (info/ok/warn/err) with
   distinct colors and auto-dismiss durations
