@@ -51,6 +51,16 @@ _ssh_tui() {
   local cmd="${COMP_WORDS[1]}"
   local subcmd="${COMP_WORDS[2]}"
 
+  # Complete flags when the current word starts with -
+  if [[ "$cur" == -* ]]; then
+    local flags="-config -hosts -known-hosts -no-tmux -debug"
+    if [[ "$cmd" == list || "$cmd" == l ]]; then
+      flags="$flags -json"
+    fi
+    COMPREPLY=($(compgen -W "$flags" -- "$cur"))
+    return
+  fi
+
   case $COMP_CWORD in
     1)
       COMPREPLY=($(compgen -W "connect c list l completion" -- "$cur"))
@@ -100,6 +110,23 @@ const zshCompletionScript = `#compdef ssh-tui
 _ssh_tui() {
   local cmd="${words[2]}"
   local subcmd="${words[3]}"
+
+  # Complete flags when the current word starts with -
+  if [[ "$words[$CURRENT]" == -* ]]; then
+    local -a flags
+    flags=(
+      '-config[path to config.toml]:file:_files'
+      '-hosts[path to hosts.toml]:file:_files'
+      '-known-hosts[known_hosts path]:file:_files'
+      '-no-tmux[disable tmux integration]'
+      '-debug[enable debug logging]'
+    )
+    if [[ "$cmd" == (list|l) ]]; then
+      flags+=('-json[output as JSON]')
+    fi
+    _describe 'flag' flags
+    return
+  fi
 
   case $CURRENT in
     2)
