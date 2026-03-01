@@ -40,6 +40,18 @@ Always build to the `build/` directory. Never place binaries in the repo root.
 - `internal/tmux` — tmux detection, argv builders, pane/window helpers
 - `internal/ui` — Bubble Tea models/views, styles, keybindings
 
+## Git Workflow
+
+After making file changes: **stop, report what was done, and wait for the next instruction.**
+Committing is a separate explicit step — never part of making changes.
+
+| Rule | Requirement |
+|------|-------------|
+| Trigger | Only run `git commit` when the user's message explicitly contains the word **"commit"** |
+| Frequency | One commit per user request maximum — stop after the first commit and wait |
+| Branch | Never commit directly to `main` — always work on a feature branch |
+| Push | Never run `git push` — leave pushing to the user |
+
 ## Limits (short)
 
 - Uses system `ssh` (no SSH protocol implementation).
