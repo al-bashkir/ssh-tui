@@ -409,6 +409,10 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case toastMsg:
 		m.toast = toast(msg)
+		if m.opts.Popup && msg.level != toastErr {
+			m.quitting = true
+			return m, tea.Quit
+		}
 		return m, nil
 	}
 

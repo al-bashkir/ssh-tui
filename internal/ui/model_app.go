@@ -556,6 +556,10 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.execCmd = execCmd
 			return m, tea.Quit
 		}
+		if m.opts.Popup && !toastResult.empty() && toastResult.level != toastErr {
+			m.quitting = true
+			return m, tea.Quit
+		}
 		return m, nil
 	case customHostDoneMsg:
 		if err := m.addHostsToGroup(msg.groupIndex, msg.hosts); err != nil {
@@ -614,6 +618,10 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.screen = m.gpReturnTo
 			if len(execCmd) != 0 {
 				m.execCmd = execCmd
+				return m, tea.Quit
+			}
+			if m.opts.Popup && !toastResult.empty() && toastResult.level != toastErr {
+				m.quitting = true
 				return m, tea.Quit
 			}
 			return m, nil
