@@ -38,17 +38,26 @@ Key bindings (hosts screen):
 
 | Key | Action |
 |---|---|
-| `Enter` | Connect |
+| `Enter` | Connect (or cursor host if nothing selected) |
 | `Space` | Toggle selection |
-| `o` | Open all selected as tmux windows |
+| `Ctrl+A` | Select all |
+| `Ctrl+D` | Clear selection |
+| `o` | Open selected in one tmux window (split panes) |
 | `O` | Open in current pane |
+| `C` | Connect all hosts in group (groups screen) |
+| `Ctrl+O` | Connect with custom remote command |
+| `c` | Connect a custom host |
 | `Ctrl+H` | Hide / unhide the current host |
-| `H` | Show / hide all hidden hosts |
-| `Tab` | Focus search |
-| `g` | Groups screen |
+| `H` | Show / hide hidden hosts |
+| `Ctrl+F` | Focus search bar |
+| `Tab` | Toggle focus between search and list |
+| `Esc` | Clear search / deselect / back |
 | `e` | Edit host config |
 | `r` | Reload known_hosts |
+| `g` | Switch to groups tab |
+| `Ctrl+S` | Settings |
 | `?` | Help |
+| `q` | Quit |
 
 ### CLI subcommands
 
@@ -79,10 +88,23 @@ Flags must come before the subcommand:
 ```bash
 ssh-tui [flags] [subcommand]
 
-  --config <path>        Path to config.toml (default: XDG config dir)
-  --known-hosts <path>   Extra known_hosts file (repeatable)
-  --no-tmux              Disable tmux integration
-  --debug                Enable debug logging
+  -config <path>        Path to config.toml (default: XDG config dir)
+  -hosts <path>         Path to hosts.toml (default: same dir as config.toml)
+  -known-hosts <path>   Extra known_hosts file (repeatable)
+  -no-tmux              Disable tmux integration
+  -popup                Quit after connecting (for tmux popup use)
+  -debug                Enable debug logging
+```
+
+#### tmux popup
+
+`-popup` is designed for running ssh-tui inside a tmux popup window. After
+hosts are opened in new tmux windows or panes the TUI quits automatically,
+closing the popup. Opening in the current pane (`O`) is unaffected.
+
+```bash
+# bind a key in tmux.conf to open ssh-tui as a popup
+bind-key f display-popup -E 'ssh-tui -popup'
 ```
 
 ## Shell completion
@@ -113,29 +135,42 @@ Completion covers subcommands and dynamically loads group/host names from your c
 
 ## Config
 
-Default path: `~/.config/ssh-tui/config.toml` (respects `$XDG_CONFIG_HOME`).
+Settings live in two files in the same directory (default: `~/.config/ssh-tui/`, respects `$XDG_CONFIG_HOME`):
+
+- **`config.toml`** — application settings and SSH/tmux defaults.
+- **`hosts.toml`** — host overrides, groups, and hidden-hosts list.
+
+On first run after upgrading from an older single-file layout, hosts.toml is created automatically from the existing config.toml.
+
+### config.toml
 
 ```toml
 version = 1
 
-# Hosts hidden via Ctrl+H in the TUI (compact form; no per-host config needed).
-hidden_hosts = []
-
 [defaults]
-load_known_hosts = true
+load_known_hosts = true  # when false, host list comes from hosts.toml only
 user = ""
 port = 22
 identity_file = ""
 extra_args = []
 
-tmux = "auto"         # auto | force | never
-open_mode = "auto"    # auto | current | tmux-window | tmux-pane
+tmux = "auto"            # auto | force | never
+open_mode = "auto"       # auto | current | tmux-window | tmux-pane
 tmux_session = "ssh-tui"
 
 pane_split = "vertical"       # horizontal | vertical
 pane_layout = "even-vertical" # auto | tiled | even-horizontal | even-vertical | main-horizontal | main-vertical
 pane_sync = "on"              # on | off
 pane_border_status = "bottom" # off | top | bottom
+```
+
+### hosts.toml
+
+```toml
+version = 1
+
+# Hosts hidden via Ctrl+H in the TUI (no [[hosts]] entry needed).
+hidden_hosts = []
 
 [[hosts]]
 host = "db01.example.com"
@@ -153,7 +188,7 @@ identity_file = "~/.ssh/prod_ed25519"
 open_mode = "tmux-pane"  # override open mode for this group
 ```
 
-Settings are merged in this order: `defaults` → `[[hosts]]` override → `[[groups]]` override.
+Settings are merged in this order: `defaults` (config.toml) → `[[groups]]` override → `[[hosts]]` override.
 
 ## Limits
 

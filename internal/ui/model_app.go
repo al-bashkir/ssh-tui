@@ -417,6 +417,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case openGroupPickerMsg:
 		m.gpHosts = append([]string(nil), msg.hosts...)
 		m.gp = newGroupPickerModel(m.opts)
+		m.gp.hosts = append([]string(nil), m.gpHosts...)
 		m.gp.parentCrumb = m.breadcrumb()
 		m.gpReturnTo = screenHosts
 		m.gpConnectAfterAdd = false
@@ -514,6 +515,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case customHostPickGroupMsg:
 		m.gpHosts = append([]string(nil), msg.hosts...)
 		m.gp = newGroupPickerModel(m.opts)
+		m.gp.hosts = append([]string(nil), m.gpHosts...)
 		m.gp.parentCrumb = m.breadcrumb()
 		m.gpReturnTo = msg.returnTo
 		m.gpConnectAfterAdd = false
@@ -552,6 +554,10 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.screen = msg.returnTo
 		if len(execCmd) != 0 {
 			m.execCmd = execCmd
+			return m, tea.Quit
+		}
+		if m.opts.Popup && !toastResult.empty() && toastResult.level != toastErr {
+			m.quitting = true
 			return m, tea.Quit
 		}
 		return m, nil
@@ -612,6 +618,10 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.screen = m.gpReturnTo
 			if len(execCmd) != 0 {
 				m.execCmd = execCmd
+				return m, tea.Quit
+			}
+			if m.opts.Popup && !toastResult.empty() && toastResult.level != toastErr {
+				m.quitting = true
 				return m, tea.Quit
 			}
 			return m, nil

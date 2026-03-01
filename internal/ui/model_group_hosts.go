@@ -279,22 +279,27 @@ func (m *groupHostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if key.Matches(msg, m.keymap.Esc) {
-			if m.focus == focusSearch {
-				if m.search.Value() != "" {
-					m.search.SetValue("")
-					m.applyFilter("")
-					m.prevSearch = ""
-					return m, nil
-				}
+			// Esc priority: blur search → clear selection → clear search → back.
+			if m.focus == focusSearch && m.search.Value() == "" {
 				m.focus = focusList
 				m.search.Blur()
 				setSearchBarFocused(&m.search, false)
+				return m, nil
+			}
+			if len(m.selected) > 0 {
+				m.selected = make(map[string]bool)
+				m.refreshVisibleSelection()
 				return m, nil
 			}
 			if m.search.Value() != "" {
 				m.search.SetValue("")
 				m.applyFilter("")
 				m.prevSearch = ""
+				if m.focus == focusSearch {
+					m.focus = focusList
+					m.search.Blur()
+					setSearchBarFocused(&m.search, false)
+				}
 				return m, nil
 			}
 			return m, func() tea.Msg { return switchScreenMsg{to: screenGroups} }
@@ -389,6 +394,10 @@ func (m *groupHostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case toastMsg:
 		m.toast = toast(msg)
+		if m.opts.Popup && msg.level != toastErr {
+			m.quitting = true
+			return m, tea.Quit
+		}
 		return m, nil
 	}
 

@@ -81,15 +81,19 @@ func renderHostLikeRow(width int, active bool, selected bool, host string, hasCf
 
 	prefix := cur + " " + checked + " "
 
+	// Always reserve the same width for the cfg badge regardless of active
+	// state so the host name column does not shift when the cursor moves.
 	suffix := ""
 	suffixW := 0
 	if hasCfg {
+		styledCfg := " " + badgeCfgStyle.Render("⚙")
+		suffixW = lipgloss.Width(styledCfg)
 		if active {
-			suffix = " cfg"
+			// Same visual width as the styled badge (padding 0,1 = 1 space each side).
+			suffix = "  ⚙ "
 		} else {
-			suffix = " " + badgeCfgStyle.Render("cfg")
+			suffix = styledCfg
 		}
-		suffixW = lipgloss.Width(suffix)
 	}
 
 	// Compute host width budget.
@@ -179,14 +183,19 @@ func renderGroupRow(width int, active bool, name string, hostCount int, _ bool) 
 	prefix := cur + " "
 
 	// Right-side badge: host count.
+	// Always compute layout width from the styled (inactive) version so the
+	// name column does not shift when the cursor moves onto or off the row.
 	countStr := fmt.Sprintf("%d", hostCount)
+	styledCountBadge := " " + badgeCountStyle.Render(countStr)
+	countBadgeW := lipgloss.Width(styledCountBadge)
 	var countBadge string
 	if active {
-		countBadge = " " + countStr
+		// Plain text occupying the same width as the styled badge.
+		// badgeCountStyle has Padding(0,1) = 1 space on each side.
+		countBadge = "  " + countStr + " "
 	} else {
-		countBadge = " " + badgeCountStyle.Render(countStr)
+		countBadge = styledCountBadge
 	}
-	countBadgeW := lipgloss.Width(countBadge)
 
 	suffix := countBadge
 	suffixW := countBadgeW
