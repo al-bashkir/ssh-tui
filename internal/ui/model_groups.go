@@ -299,16 +299,21 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return switchScreenMsg{to: screenHosts} }
 		}
 		if key.Matches(msg, m.keymap.Esc) {
-			if m.focus == focusSearch {
-				if m.search.Value() != "" {
-					m.search.SetValue("")
-					m.applyFilter("")
-					m.prevSearch = ""
-					return m, nil
-				}
+			if m.focus == focusSearch && m.search.Value() == "" {
 				m.focus = focusList
 				m.search.Blur()
 				setSearchBarFocused(&m.search, false)
+				return m, nil
+			}
+			if m.search.Value() != "" {
+				m.search.SetValue("")
+				m.applyFilter("")
+				m.prevSearch = ""
+				if m.focus == focusSearch {
+					m.focus = focusList
+					m.search.Blur()
+					setSearchBarFocused(&m.search, false)
+				}
 				return m, nil
 			}
 			return m, nil
@@ -529,7 +534,6 @@ func (m *groupsModel) helpKeys() helpMap {
 			m.keymap.OneWindow,
 			m.keymap.CustomHost,
 			m.keymap.AddHosts,
-		}, {
 			m.keymap.Settings,
 			m.keymap.Help,
 			m.keymap.Quit,

@@ -417,6 +417,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case openGroupPickerMsg:
 		m.gpHosts = append([]string(nil), msg.hosts...)
 		m.gp = newGroupPickerModel(m.opts)
+		m.gp.hosts = append([]string(nil), m.gpHosts...)
 		m.gp.parentCrumb = m.breadcrumb()
 		m.gpReturnTo = screenHosts
 		m.gpConnectAfterAdd = false
@@ -514,6 +515,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case customHostPickGroupMsg:
 		m.gpHosts = append([]string(nil), msg.hosts...)
 		m.gp = newGroupPickerModel(m.opts)
+		m.gp.hosts = append([]string(nil), m.gpHosts...)
 		m.gp.parentCrumb = m.breadcrumb()
 		m.gpReturnTo = msg.returnTo
 		m.gpConnectAfterAdd = false

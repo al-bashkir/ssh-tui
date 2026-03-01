@@ -123,7 +123,7 @@ func defaultKeyMap() keyMap {
 		),
 		AddHosts: key.NewBinding(
 			key.WithKeys("a", "A"),
-			key.WithHelp("a", "add"),
+			key.WithHelp("a", "add hosts to group"),
 		),
 		Copy: key.NewBinding(
 			key.WithKeys("y"),
