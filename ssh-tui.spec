@@ -44,11 +44,16 @@ go build \
 install -Dpm 0755 %{name} %{buildroot}%{_bindir}/%{name}
 
 # Shell completion scripts
-./%{name} --config ./config.toml completion bash > %{name}.bash
+./%{name} completion bash > %{name}.bash
 install -Dpm 0644 %{name}.bash %{buildroot}%{_datadir}/bash-completion/completions/%{name}
 
-./%{name} --config ./config.toml completion zsh > _ssh_tui
+./%{name} completion zsh > _ssh_tui
 install -Dpm 0644 _ssh_tui %{buildroot}%{_datadir}/zsh/site-functions/_ssh_tui
+
+%post
+# Regenerate completion files so they always match the installed binary.
+%{_bindir}/%{name} completion bash > %{_datadir}/bash-completion/completions/%{name} 2>/dev/null || :
+%{_bindir}/%{name} completion zsh  > %{_datadir}/zsh/site-functions/_ssh_tui         2>/dev/null || :
 
 %files
 %doc README.md
