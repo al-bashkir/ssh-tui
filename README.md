@@ -24,6 +24,22 @@ Or build from source:
 go build -o build/ssh-tui ./cmd/ssh-tui
 ```
 
+### Build RPM
+
+Requires `rpmbuild` and `go`. Version defaults to the value in `.copr/Makefile`
+and can be overridden via the environment:
+
+```bash
+# SRPM using the default version
+make -f .copr/Makefile srpm
+
+# SRPM with an explicit version
+VERSION=1.3.0 make -f .copr/Makefile srpm outdir=~/rpmbuild/SRPMS
+
+# Build a local binary RPM from the SRPM
+rpmbuild --rebuild ~/rpmbuild/SRPMS/ssh-tui-1.3.0-1.*.src.rpm
+```
+
 ## Usage
 
 ### TUI (interactive)

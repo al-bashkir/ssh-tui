@@ -6,7 +6,7 @@ outdir ?= .
 
 SPEC    := $(CURDIR)/ssh-tui.spec
 NAME    := ssh-tui
-VERSION := $(shell grep '^Version:' $(SPEC) | awk '{print $$2}')
+VERSION ?= 1.2.0
 TARBALL := $(NAME)-$(VERSION).tar.gz
 WORKDIR := /tmp/copr-$(NAME)-$(VERSION)
 
@@ -32,6 +32,7 @@ srpm:
 	rpmbuild -bs \
 		--define "_sourcedir $(WORKDIR)" \
 		--define "_srcrpmdir $(outdir)" \
+		--define "app_version $(VERSION)" \
 		$(SPEC)
 
 	# Clean up
