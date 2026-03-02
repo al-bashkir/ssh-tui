@@ -4,11 +4,12 @@
 
 outdir ?= .
 
-SPEC    := $(CURDIR)/ssh-tui.spec
-NAME    := ssh-tui
-VERSION ?= 1.2.0
-TARBALL := $(NAME)-$(VERSION).tar.gz
-WORKDIR := /tmp/copr-$(NAME)-$(VERSION)
+SPEC      := $(CURDIR)/ssh-tui.spec
+NAME      := ssh-tui
+VERSION   ?= 0.0.0
+TARBALL   := $(NAME)-$(VERSION).tar.gz
+WORKDIR   := /tmp/copr-$(NAME)-$(VERSION)
+SPEC_WORK := $(WORKDIR)/$(NAME).spec
 
 .PHONY: srpm
 srpm:
@@ -28,12 +29,17 @@ srpm:
 	cd $(WORKDIR)/$(NAME)-$(VERSION) && go mod vendor
 	tar czf $(WORKDIR)/$(TARBALL) -C $(WORKDIR) $(NAME)-$(VERSION)/
 
+	# Stamp the version into a spec copy so it is baked into the SRPM.
+	# COPR rebuilds from the spec inside the SRPM without any --define flags,
+	# so the version must be a literal value in the spec, not a macro argument.
+	sed 's/^%global app_version.*/%global app_version $(VERSION)/' \
+		$(SPEC) > $(SPEC_WORK)
+
 	# Build the SRPM
 	rpmbuild -bs \
 		--define "_sourcedir $(WORKDIR)" \
 		--define "_srcrpmdir $(outdir)" \
-		--define "app_version $(VERSION)" \
-		$(SPEC)
+		$(SPEC_WORK)
 
 	# Clean up
 	rm -rf $(WORKDIR)
