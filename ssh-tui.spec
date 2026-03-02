@@ -1,5 +1,9 @@
+# Version is normally injected by .copr/Makefile via --define "app_version X.Y.Z".
+# The fallback below is used only for manual rpmbuild invocations.
+%{!?app_version: %global app_version 0.0.0}
+
 Name:           ssh-tui
-Version:        1.2.0
+Version:        %{app_version}
 Release:        1%{?dist}
 Summary:        Terminal UI for managing SSH connections
 
@@ -62,6 +66,9 @@ install -Dpm 0644 _ssh_tui %{buildroot}%{_datadir}/zsh/site-functions/_ssh_tui
 %{_datadir}/zsh/site-functions/_ssh_tui
 
 %changelog
+* Mon Mar 02 2026 Pavel Aksenov <41126916+al-bashkir@users.noreply.github.com> - 1.2.1-1
+- Fix completion
+
 * Sun Mar 01 2026 Pavel Aksenov <41126916+al-bashkir@users.noreply.github.com> - 1.2.0-1
 - Host inventory (hosts, groups, hidden_hosts) moved to a separate
   hosts.toml file; first launch after upgrade migrates automatically
