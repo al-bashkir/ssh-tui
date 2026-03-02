@@ -1,6 +1,4 @@
-# Version is normally injected by .copr/Makefile via --define "app_version X.Y.Z".
-# The fallback below is used only for manual rpmbuild invocations.
-%{!?app_version: %global app_version 0.0.0}
+%global app_version 0.0.0
 
 Name:           ssh-tui
 Version:        %{app_version}
