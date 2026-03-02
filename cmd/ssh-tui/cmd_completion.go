@@ -108,29 +108,24 @@ const zshCompletionScript = `#compdef ssh-tui
 #   autoload -Uz compinit && compinit
 
 _ssh_tui() {
-  local cmd="${words[2]}"
-  local subcmd="${words[3]}"
+  local context state line
+  typeset -A opt_args
 
-  # Complete flags when the current word starts with -
-  if [[ "$words[$CURRENT]" == -* ]]; then
-    local -a flags
-    flags=(
-      '-config[path to config.toml]:file:_files'
-      '-hosts[path to hosts.toml]:file:_files'
-      '-known-hosts[known_hosts path]:file:_files'
-      '-no-tmux[disable tmux integration]'
-      '-popup[quit after connecting (for tmux popup)]'
-      '-debug[enable debug logging]'
-    )
-    if [[ "$cmd" == (list|l) ]]; then
-      flags+=('-json[output as JSON]')
-    fi
-    _describe 'flag' flags
-    return
-  fi
+  # _arguments -C drives flag and subcommand completion.
+  # Flags use the '[description]:message:action' format understood by
+  # _arguments; _describe (used below for commands) uses 'item:description'.
+  _arguments -C -s \
+    '-config[path to config.toml]:file:_files' \
+    '-hosts[path to hosts.toml]:file:_files' \
+    '*-known-hosts[known_hosts path]:file:_files' \
+    '-no-tmux[disable tmux integration]' \
+    '-popup[quit after connecting (for tmux popup)]' \
+    '-debug[enable debug logging]' \
+    '1: :->cmd' \
+    '*:: :->args' && return
 
-  case $CURRENT in
-    2)
+  case $state in
+    cmd)
       local -a cmds
       cmds=(
         'connect:connect to a host or group'
@@ -141,50 +136,47 @@ _ssh_tui() {
       )
       _describe 'command' cmds
       ;;
-    3)
-      case $cmd in
+    args)
+      # In this state $words[1] is the subcommand and $CURRENT is the
+      # index within the subcommand context.
+      case $words[1] in
         connect|c)
-          local -a sub
-          sub=(
-            'group:connect to all hosts in a group'
-            'g:alias for group'
-            'host:connect to a specific host'
-            'h:alias for host'
-          )
-          _describe 'subcommand' sub
+          case $CURRENT in
+            2)
+              local -a sub
+              sub=(
+                'group:connect to all hosts in a group'
+                'g:alias for group'
+                'host:connect to a specific host'
+                'h:alias for host'
+              )
+              _describe 'subcommand' sub
+              ;;
+            3)
+              case $words[2] in
+                group|g)
+                  local -a groups
+                  groups=(${(f)"$(ssh-tui __complete groups 2>/dev/null)"})
+                  _describe 'group' groups
+                  ;;
+                host|h)
+                  local -a hosts
+                  hosts=(${(f)"$(ssh-tui __complete hosts 2>/dev/null)"})
+                  _describe 'host' hosts
+                  ;;
+              esac
+              ;;
+          esac
           ;;
         list|l)
-          local -a sub
-          sub=(
-            'groups:list all groups'
-            'g:alias for groups'
-            'hosts:list all known hosts'
-            'h:alias for hosts'
-          )
-          _describe 'subcommand' sub
+          _arguments \
+            '-json[output as JSON]' \
+            '1: :(groups g hosts h)' && return
           ;;
         completion)
           local -a shells
           shells=('bash:bash completion script' 'zsh:zsh completion script')
           _describe 'shell' shells
-          ;;
-      esac
-      ;;
-    4)
-      case $cmd in
-        connect|c)
-          case $subcmd in
-            group|g)
-              local -a groups
-              groups=(${(f)"$(ssh-tui __complete groups 2>/dev/null)"})
-              _describe 'group' groups
-              ;;
-            host|h)
-              local -a hosts
-              hosts=(${(f)"$(ssh-tui __complete hosts 2>/dev/null)"})
-              _describe 'host' hosts
-              ;;
-          esac
           ;;
       esac
       ;;
