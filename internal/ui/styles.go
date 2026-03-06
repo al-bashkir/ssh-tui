@@ -248,6 +248,16 @@ func SetAccentColor(name string) {
 	// Switching to accent-only mode clears any theme background.
 	cBackground = ""
 	bgANSICode = ""
+	frameStyle = lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(cFrameBorder).
+		Padding(0, 1)
+	tabBoxBorderStyle = lipgloss.NewStyle().Foreground(cFrameBorder)
+	tabBoxPadStyle = lipgloss.NewStyle()
+	helpBoxStyle = lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(cFrameBorder).
+		Padding(1, 2)
 
 	name = strings.ToLower(strings.TrimSpace(name))
 	if name == "" || name == "default" {
@@ -398,6 +408,127 @@ func rebuildAllStyles() {
 	toastOKStyle = lipgloss.NewStyle().Foreground(cOK)
 	toastInfoStyle = lipgloss.NewStyle().Foreground(cMuted)
 	toastErrStyle = lipgloss.NewStyle().Foreground(cErr)
+}
+
+// hexToANSIBG converts a "#RRGGBB" hex string to an ANSI truecolor background
+// escape sequence "\x1b[48;2;R;G;Bm". Returns "" on parse failure.
+func hexToANSIBG(hex string) string {
+	hex = strings.TrimPrefix(hex, "#")
+	if len(hex) != 6 {
+		return ""
+	}
+	r, err1 := strconv.ParseUint(hex[0:2], 16, 8)
+	g, err2 := strconv.ParseUint(hex[2:4], 16, 8)
+	b, err3 := strconv.ParseUint(hex[4:6], 16, 8)
+	if err1 != nil || err2 != nil || err3 != nil {
+		return ""
+	}
+	return fmt.Sprintf("\x1b[48;2;%d;%d;%dm", r, g, b)
+}
+
+// withThemeBG prepends bgANSICode to s and re-injects it after every ANSI
+// reset ("\x1b[0m" or "\x1b[m") so the theme background persists through all
+// styled sub-elements. Does nothing when bgANSICode is empty.
+func withThemeBG(s string) string {
+	if bgANSICode == "" {
+		return s
+	}
+	// Re-inject after every full reset sequence so background is never lost.
+	s = strings.ReplaceAll(s, "\x1b[0m", "\x1b[0m"+bgANSICode)
+	s = strings.ReplaceAll(s, "\x1b[m", "\x1b[m"+bgANSICode)
+	return bgANSICode + s
+}
+
+// ApplyColorScheme applies a named colorscheme if scheme is non-empty and
+// known; otherwise falls back to SetAccentColor(accentColor) for backward
+// compatibility with configs that only set accent_color.
+func ApplyColorScheme(scheme, accentColor string) {
+	scheme = strings.ToLower(strings.TrimSpace(scheme))
+	if scheme != "" && scheme != "default" {
+		if cs, ok := builtinColorSchemes[scheme]; ok {
+			applyScheme(cs)
+			return
+		}
+	}
+	// scheme is empty, "default", or unknown — fall back to accent logic.
+	SetAccentColor(accentColor)
+}
+
+// applyScheme mutates all global color vars from cs and rebuilds all styles.
+func applyScheme(cs colorScheme) {
+	cAccent = cs.Accent
+	cSegFocusedBG = cs.SegFocusedBG
+	cSegFocusedFG = cs.SegFocusedFG
+	cMuted = cs.Muted
+	cOK = cs.OK
+	cWarn = cs.Warn
+	cErr = cs.Err
+	cFrameBorder = cs.FrameBorder
+	cSearchDim = cs.SearchDim
+	cRowActiveBG = cs.RowActiveBG
+	cRowActiveFG = cs.RowActiveFG
+	cBackground = cs.Background
+	bgANSICode = hexToANSIBG(cs.Background)
+
+	// Rebuild every style that references a color variable.
+	statusOK = lipgloss.NewStyle().Foreground(cOK)
+	statusWarn = lipgloss.NewStyle().Foreground(cWarn)
+	statusErr = lipgloss.NewStyle().Foreground(cErr)
+	dim = lipgloss.NewStyle().Foreground(cMuted)
+
+	// Build frameStyle; apply theme background to modal/frame interiors when set.
+	fs := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(cFrameBorder).
+		Padding(0, 1)
+	if cs.Background != "" {
+		fs = fs.Background(lipgloss.Color(cs.Background))
+	}
+	frameStyle = fs
+
+	headerStyle = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
+	footerStyle = lipgloss.NewStyle().Foreground(cMuted)
+
+	checkedStyle = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
+	uncheckedStyle = lipgloss.NewStyle().Foreground(cMuted)
+
+	rowActiveStyle = lipgloss.NewStyle().Background(cRowActiveBG).Foreground(cRowActiveFG).Bold(true)
+	segFocusedStyle = lipgloss.NewStyle().Background(cSegFocusedBG).Foreground(cSegFocusedFG).Bold(true)
+
+	badgeCfgStyle = lipgloss.NewStyle().Foreground(cAccent).Background(lipgloss.AdaptiveColor{Light: "254", Dark: "235"}).Padding(0, 1).Bold(true)
+	badgeCountStyle = lipgloss.NewStyle().Foreground(cMuted).Background(lipgloss.AdaptiveColor{Light: "254", Dark: "236"}).Padding(0, 1)
+	badgeSelStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.AdaptiveColor{Light: "255", Dark: "16"}).
+		Background(cAccent).
+		Padding(0, 1).
+		Bold(true)
+
+	footerKeyStyle = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
+	tabActiveStyle = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
+	tabInactiveStyle = lipgloss.NewStyle().Foreground(cMuted)
+
+	searchUnfocused = lipgloss.NewStyle().Foreground(cSearchDim)
+
+	helpTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
+
+	// Rebuild tab-box border and padding styles.
+	if cs.Background != "" {
+		bg := lipgloss.Color(cs.Background)
+		tabBoxBorderStyle = lipgloss.NewStyle().Foreground(cFrameBorder).Background(bg)
+		tabBoxPadStyle = lipgloss.NewStyle().Background(bg)
+		helpBoxStyle = lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(cFrameBorder).
+			Padding(1, 2).
+			Background(bg)
+	} else {
+		tabBoxBorderStyle = lipgloss.NewStyle().Foreground(cFrameBorder)
+		tabBoxPadStyle = lipgloss.NewStyle()
+		helpBoxStyle = lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(cFrameBorder).
+			Padding(1, 2)
+	}
 }
 
 // hexToANSIBG converts a "#RRGGBB" hex string to an ANSI truecolor background
