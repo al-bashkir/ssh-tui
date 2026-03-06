@@ -586,20 +586,39 @@ func (m *groupHostsModel) statusLine() string {
 }
 
 func (m *groupHostsModel) applyFilter(query string) {
+	prevIdx := m.list.Index()
+	var prevHost string
+	if row, ok := m.list.SelectedItem().(groupHostRow); ok {
+		prevHost = row.host
+	}
+
 	query = strings.TrimSpace(query)
 	if query == "" {
 		m.filtered = append([]string(nil), m.allHosts...)
-		m.setListItems(m.filtered)
+	} else {
+		matches := fuzzy.Find(query, m.allHosts)
+		m.filtered = make([]string, 0, len(matches))
+		for _, match := range matches {
+			m.filtered = append(m.filtered, match.Str)
+		}
+	}
+	m.setListItems(m.filtered)
+
+	if len(m.filtered) == 0 {
 		return
 	}
-
-	matches := fuzzy.Find(query, m.allHosts)
-	filtered := make([]string, 0, len(matches))
-	for _, match := range matches {
-		filtered = append(filtered, match.Str)
+	if prevHost != "" {
+		for i, h := range m.filtered {
+			if h == prevHost {
+				m.list.Select(i)
+				return
+			}
+		}
 	}
-	m.filtered = filtered
-	m.setListItems(m.filtered)
+	if prevIdx >= len(m.filtered) {
+		prevIdx = len(m.filtered) - 1
+	}
+	m.list.Select(prevIdx)
 }
 
 func (m *groupHostsModel) setListItems(hosts []string) {
@@ -609,9 +628,6 @@ func (m *groupHostsModel) setListItems(hosts []string) {
 		items = append(items, groupHostRow{host: h, selected: m.selected[h], hasCfg: ok})
 	}
 	m.list.SetItems(items)
-	if len(items) > 0 {
-		m.list.Select(0)
-	}
 }
 
 func (m *groupHostsModel) refreshVisibleSelection() {

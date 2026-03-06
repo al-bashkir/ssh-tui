@@ -465,6 +465,13 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *hostsModel) applyFilter(query string) {
+	// Remember current selection so we can restore cursor position.
+	prevIdx := m.list.Index()
+	var prevHost string
+	if row, ok := m.list.SelectedItem().(hostRow); ok {
+		prevHost = row.host
+	}
+
 	query = strings.TrimSpace(query)
 	var filtered []string
 	if query == "" {
@@ -488,6 +495,23 @@ func (m *hostsModel) applyFilter(query string) {
 	}
 	m.filtered = filtered
 	m.setListItems(m.filtered)
+
+	// Restore cursor: prefer same host, fall back to same index (clamped).
+	if len(m.filtered) == 0 {
+		return
+	}
+	if prevHost != "" {
+		for i, h := range m.filtered {
+			if h == prevHost {
+				m.list.Select(i)
+				return
+			}
+		}
+	}
+	if prevIdx >= len(m.filtered) {
+		prevIdx = len(m.filtered) - 1
+	}
+	m.list.Select(prevIdx)
 }
 
 func (m *hostsModel) setListItems(hosts []string) {
@@ -498,9 +522,6 @@ func (m *hostsModel) setListItems(hosts []string) {
 		items = append(items, hostRow{host: h, selected: m.selected[h], hasCfg: ok, hidden: hidden})
 	}
 	m.list.SetItems(items)
-	if len(items) > 0 {
-		m.list.Select(0)
-	}
 }
 
 type toastMsg toast
