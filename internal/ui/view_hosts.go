@@ -12,14 +12,8 @@ func (m *hostsModel) View() string {
 		return renderHelpModalWithVP(m.width, m.height, "Hosts", m.help, m.helpKeys(), &m.helpVP)
 	}
 	if m.cmdPrompt {
-		mw, mh := modalSize(m.width, m.height, 88, 9, 6, 10)
-		var b strings.Builder
-		b.WriteString("Connect and run a remote command (keeps session open).\n\n")
-		b.WriteString(m.cmdInput.View())
-		b.WriteString("\n")
-		b.WriteString(footerStyle.Render("Enter connect  Esc cancel"))
-		box := renderFrame(mw, mh, breadcrumbTitle("Hosts", "Command"), "", strings.TrimRight(b.String(), "\n"), "")
-		return placeCentered(m.width, m.height, box)
+		return renderCmdPromptModal(m.width, m.height, "Hosts",
+			"Connect and run a remote command (keeps session open).", m.cmdInput)
 	}
 	if m.confirmQuit {
 		return renderQuitConfirm(m.width, m.height)
@@ -61,7 +55,7 @@ func (m *hostsModel) View() string {
 	}
 	var footer string
 	hasSel := len(m.selected) > 0
-	if m.width < 60 {
+	if m.width < compactWidthThreshold {
 		if hasSel {
 			footer = styledFooter("\u21b5 connect  o panes  \u2423 clear  ? help")
 		} else {
@@ -70,12 +64,12 @@ func (m *hostsModel) View() string {
 	} else {
 		if hasSel {
 			footer = styledFooter("\u21b5 connect  o panes  ·  Ctrl+o cmd  a add-to-group  ·  \u2423 clear")
-			if m.height >= 20 {
+			if m.height >= twoLineFooterMinHeight {
 				footer += "\n" + styledFooter("e config  r reload  ·  g groups  ? help")
 			}
 		} else {
 			footer = styledFooter("\u21b5 connect  O pane  ·  \u2423 select  o panes  ·  c custom  g groups  Ctrl+H hide")
-			if m.height >= 20 {
+			if m.height >= twoLineFooterMinHeight {
 				footer += "\n" + styledFooter("e config  Ctrl+o cmd  a add  r reload  ·  tab search  H show hidden  ? help")
 			}
 		}
@@ -89,31 +83,22 @@ func (m *hostsModel) View() string {
 }
 
 func (m *hostsModel) emptyStateView() string {
-	innerW := max(0, m.width-2)
-	innerH := max(0, m.height-2)
-	contentH := max(0, innerH-6) // tabs+sep+header+sep+footsep+footer
-
-	q := strings.TrimSpace(m.search.Value())
-	dots := dim.Render("·  ·  ·")
-	var msg string
-	if q != "" {
-		msg = dots + "\n\n" + dim.Render(fmt.Sprintf("No matches for %q", q)) + "\n" + dim.Render("Esc to clear search")
-	} else if len(m.allHosts) == 0 {
+	var defaultMsg string
+	if len(m.allHosts) == 0 {
 		divider := formSection("", 26)
 		hint1 := footerKeyStyle.Render("c") + dim.Render("          custom host")
 		hint3 := footerKeyStyle.Render("Ctrl+s") + dim.Render("     open settings")
 		if m.opts.Config.Defaults.LoadKnownHosts {
 			hint2 := footerKeyStyle.Render("r") + dim.Render("          reload known_hosts")
-			msg = dots + "\n\n" + dim.Render("No hosts found.") + "\n" + divider + "\n" + hint1 + "\n" + hint2 + "\n" + hint3
+			defaultMsg = dim.Render("No hosts found.") + "\n" + divider + "\n" + hint1 + "\n" + hint2 + "\n" + hint3
 		} else {
 			note := dim.Render("(known_hosts loading is off)")
-			msg = dots + "\n\n" + dim.Render("No hosts found.") + "\n" + divider + "\n" + hint1 + "\n" + hint3 + "\n" + note
+			defaultMsg = dim.Render("No hosts found.") + "\n" + divider + "\n" + hint1 + "\n" + hint3 + "\n" + note
 		}
 	} else {
-		msg = dots + "\n\n" + dim.Render("No hosts.")
+		defaultMsg = dim.Render("No hosts.")
 	}
-
-	return lipgloss.Place(innerW, contentH, lipgloss.Center, lipgloss.Center, msg)
+	return renderListEmptyState(m.width, m.height, m.search.Value(), defaultMsg)
 }
 
 func (m *hostsModel) statusLine() string {

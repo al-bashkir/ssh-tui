@@ -436,14 +436,8 @@ func (m *groupsModel) View() string {
 		return renderHelpModalWithVP(m.width, m.height, "Groups", m.help, m.helpKeys(), &m.helpVP)
 	}
 	if m.cmdPrompt {
-		mw, mh := modalSize(m.width, m.height, 88, 9, 6, 10)
-		var b strings.Builder
-		b.WriteString("Connect and run a remote command for all hosts (keeps sessions open).\n\n")
-		b.WriteString(m.cmdInput.View())
-		b.WriteString("\n")
-		b.WriteString(footerStyle.Render("Enter connect  Esc cancel"))
-		box := renderFrame(mw, mh, breadcrumbTitle("Groups", "Command"), "", strings.TrimRight(b.String(), "\n"), "")
-		return placeCentered(m.width, m.height, box)
+		return renderCmdPromptModal(m.width, m.height, "Groups",
+			"Connect and run a remote command for all hosts (keeps sessions open).", m.cmdInput)
 	}
 	if m.confirmQuit {
 		return renderQuitConfirm(m.width, m.height)
@@ -475,11 +469,11 @@ func (m *groupsModel) View() string {
 		right = statusDot(true, false) + "   " + dim.Render(fmt.Sprintf("%d groups", len(m.allRows)))
 	}
 	var footer string
-	if m.width < 60 {
+	if m.width < compactWidthThreshold {
 		footer = styledFooter("\u21b5 open  C connect  ? help")
 	} else {
 		footer = styledFooter("\u21b5 open  C connect  ·  o panes  Ctrl+o cmd  ·  n new")
-		if m.height >= 20 {
+		if m.height >= twoLineFooterMinHeight {
 			footer += "\n" + styledFooter("e edit  d delete  y copy  a add hosts  c custom  ·  g hosts  tab search  ? help")
 		}
 	}
@@ -546,20 +540,8 @@ func (m *groupsModel) helpKeys() helpMap {
 }
 
 func (m *groupsModel) emptyStateView() string {
-	innerW := max(0, m.width-2)
-	innerH := max(0, m.height-2)
-	contentH := max(0, innerH-6)
-
-	q := strings.TrimSpace(m.search.Value())
-	dots := dim.Render("·  ·  ·")
-	var msg string
-	if q != "" {
-		msg = dots + "\n\n" + dim.Render(fmt.Sprintf("No matches for %q", q)) + "\n" + dim.Render("Esc to clear search")
-	} else {
-		msg = dots + "\n\n" + dim.Render("No groups yet.") + "\n" + dim.Render("n \u2014 create a new group")
-	}
-
-	return lipgloss.Place(innerW, contentH, lipgloss.Center, lipgloss.Center, msg)
+	return renderListEmptyState(m.width, m.height, m.search.Value(),
+		dim.Render("No groups yet.")+"\n"+dim.Render("n \u2014 create a new group"))
 }
 
 func (m *groupsModel) statusLine() string {

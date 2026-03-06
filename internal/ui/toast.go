@@ -3,8 +3,6 @@ package ui
 import (
 	"strings"
 	"time"
-
-	"github.com/charmbracelet/lipgloss"
 )
 
 // toastLevel represents the severity of a toast notification.
@@ -39,14 +37,6 @@ func toastDuration(l toastLevel) time.Duration {
 	}
 	return 4 * time.Second
 }
-
-// Toast rendering styles (initialised once, refreshed on accent change).
-var (
-	toastOKStyle   = lipgloss.NewStyle().Foreground(cOK)
-	toastInfoStyle = lipgloss.NewStyle().Foreground(cMuted)
-	toastErrStyle  = lipgloss.NewStyle().Foreground(cErr)
-	// toastWarn reuses the existing statusWarn (orange).
-)
 
 // renderToast returns the styled string for a toast.
 func renderToast(t toast) string {
