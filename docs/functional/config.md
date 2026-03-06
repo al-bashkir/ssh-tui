@@ -28,7 +28,9 @@ Migration:
 version = 1
 
 [defaults]
-accent_color = ""        # preset: default|blue|cyan|green|amber|red|magenta or a color string
+colorscheme = ""         # named theme: default|dracula|nord|gruvbox|catppuccin|kanagawa
+                         # when set, overrides accent_color and all UI colors
+accent_color = ""        # accent color when no colorscheme is set: default|blue|cyan|green|amber|red|magenta or a color string
 load_known_hosts = true  # when false: Hosts list is derived from hosts.toml only
 user = ""
 port = 22

@@ -13,9 +13,9 @@ func boxTop(w int) string {
 		return ""
 	}
 	if w == 2 {
-		return "┌┐"
+		return tabBoxBorderStyle.Render("┌┐")
 	}
-	return "┌" + strings.Repeat("─", w-2) + "┐"
+	return tabBoxBorderStyle.Render("┌" + strings.Repeat("─", w-2) + "┐")
 }
 
 func boxTitleTop(w int, title string) string {
@@ -27,7 +27,7 @@ func boxTitleTop(w int, title string) string {
 		return ""
 	}
 	if w == 2 {
-		return "┌┐"
+		return tabBoxBorderStyle.Render("┌┐")
 	}
 	innerW := w - 2
 	seg := " " + title + " "
@@ -40,7 +40,8 @@ func boxTitleTop(w int, title string) string {
 	if fill < 0 {
 		fill = 0
 	}
-	return "┌" + seg + strings.Repeat("─", fill) + "┐"
+	// Style the non-title border parts; keep title unstyled so its own colors show.
+	return tabBoxBorderStyle.Render("┌") + seg + tabBoxBorderStyle.Render(strings.Repeat("─", fill)+"┐")
 }
 
 func boxBottom(w int) string {
@@ -48,9 +49,9 @@ func boxBottom(w int) string {
 		return ""
 	}
 	if w == 2 {
-		return "└┘"
+		return tabBoxBorderStyle.Render("└┘")
 	}
-	return "└" + strings.Repeat("─", w-2) + "┘"
+	return tabBoxBorderStyle.Render("└" + strings.Repeat("─", w-2) + "┘")
 }
 
 func boxSep(w int) string {
@@ -58,17 +59,18 @@ func boxSep(w int) string {
 		return ""
 	}
 	if w == 2 {
-		return "├┤"
+		return tabBoxBorderStyle.Render("├┤")
 	}
-	return "├" + strings.Repeat("─", w-2) + "┤"
+	return tabBoxBorderStyle.Render("├" + strings.Repeat("─", w-2) + "┤")
 }
 
 func boxLine(w int, content string) string {
 	if w <= 1 {
 		return ""
 	}
+	border := tabBoxBorderStyle.Render("│")
 	if w == 2 {
-		return "││"
+		return border + border
 	}
 	innerW := w - 2
 	content = strings.TrimRight(content, "\n")
@@ -81,7 +83,9 @@ func boxLine(w int, content string) string {
 	if pad < 0 {
 		pad = 0
 	}
-	return "│" + content + strings.Repeat(" ", pad) + "│"
+	padding := tabBoxPadStyle.Render(strings.Repeat(" ", pad))
+	// Apply theme background so gaps between styled elements inherit it.
+	return border + withThemeBG(content+padding) + border
 }
 
 func padVisible(s string, width int) string {
@@ -96,7 +100,7 @@ func padVisible(s string, width int) string {
 	}
 	pad := width - cw
 	if pad > 0 {
-		s += strings.Repeat(" ", pad)
+		s += tabBoxPadStyle.Render(strings.Repeat(" ", pad))
 	}
 	return s
 }
@@ -167,7 +171,7 @@ func renderBreadcrumbTabBox(width, height int, breadcrumb string, headerLeft str
 		if i < len(contentLines) {
 			line = padVisible(contentLines[i], innerW)
 		} else {
-			line = strings.Repeat(" ", innerW)
+			line = tabBoxPadStyle.Render(strings.Repeat(" ", innerW))
 		}
 		out = append(out, boxLine(width, line))
 	}
@@ -234,7 +238,7 @@ func renderMainTabBoxWithFooter(width, height int, activeTab int, headerLeft str
 		if i < len(contentLines) {
 			line = padVisible(contentLines[i], innerW)
 		} else {
-			line = strings.Repeat(" ", innerW)
+			line = tabBoxPadStyle.Render(strings.Repeat(" ", innerW))
 		}
 		out = append(out, boxLine(width, line))
 	}

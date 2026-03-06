@@ -54,7 +54,8 @@ type Host struct {
 }
 
 type Defaults struct {
-	AccentColor             string   `toml:"accent_color"` // default UI accent color (preset name or color code)
+	Colorscheme             string   `toml:"colorscheme"`  // UI colorscheme: default|dracula|nord|gruvbox|catppuccin|kanagawa
+	AccentColor             string   `toml:"accent_color"` // accent color when no colorscheme is set (preset name or color code)
 	LoadKnownHosts          bool     `toml:"load_known_hosts"`
 	User                    string   `toml:"user"`
 	Port                    int      `toml:"port"`
@@ -94,6 +95,7 @@ func DefaultConfig() Config {
 	return Config{
 		Version: 1,
 		Defaults: Defaults{
+			Colorscheme:             "",
 			AccentColor:             "",
 			LoadKnownHosts:          true,
 			User:                    "",

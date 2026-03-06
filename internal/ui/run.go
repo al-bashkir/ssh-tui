@@ -40,7 +40,7 @@ func Run(opts Options) error {
 		opts.KnownHosts = hosts.DefaultKnownHostsPaths()
 	}
 
-	SetAccentColor(opts.Config.Defaults.AccentColor)
+	ApplyColorScheme(opts.Config.Defaults.Colorscheme, opts.Config.Defaults.AccentColor)
 
 	m := newAppModel(opts)
 	p := tea.NewProgram(m, tea.WithAltScreen())

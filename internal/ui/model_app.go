@@ -816,26 +816,31 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *appModel) View() string {
+	var s string
 	switch m.screen {
 	case screenGroups:
-		return m.groups.View()
+		s = m.groups.View()
 	case screenGroupForm:
-		return placeCentered(m.width, m.height, m.form.View())
+		s = placeCentered(m.width, m.height, m.form.View())
 	case screenGroupHosts:
-		return m.gh.View()
+		s = m.gh.View()
 	case screenHostPicker:
-		return placeCentered(m.width, m.height, m.picker.View())
+		s = placeCentered(m.width, m.height, m.picker.View())
 	case screenGroupPicker:
-		return placeCentered(m.width, m.height, m.gp.View())
+		s = placeCentered(m.width, m.height, m.gp.View())
 	case screenDefaultsForm:
-		return m.defaultsForm.View()
+		s = m.defaultsForm.View()
 	case screenCustomHost:
-		return placeCentered(m.width, m.height, m.customHost.View())
+		s = placeCentered(m.width, m.height, m.customHost.View())
 	case screenHostForm:
-		return placeCentered(m.width, m.height, m.hostForm.View())
+		s = placeCentered(m.width, m.height, m.hostForm.View())
 	default:
-		return m.hosts.View()
+		s = m.hosts.View()
 	}
+	// Apply theme background to the entire screen output so every pixel —
+	// including lipgloss.Place padding around modal dialogs — uses the
+	// colorscheme background. withThemeBG is a no-op when no theme is active.
+	return withThemeBG(s)
 }
 
 func (m *appModel) saveGroup(index int, g config.Group) error {
@@ -886,7 +891,7 @@ func (m *appModel) saveDefaults(d config.Defaults) error {
 	}
 
 	m.opts.Config = newCfg
-	SetAccentColor(newCfg.Defaults.AccentColor)
+	ApplyColorScheme(newCfg.Defaults.Colorscheme, newCfg.Defaults.AccentColor)
 	m.refreshAccentStyles()
 
 	// Update hosts source if load_known_hosts toggled.
