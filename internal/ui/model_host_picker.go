@@ -326,7 +326,6 @@ func (m *hostPickerModel) statusLine() string {
 }
 
 func (m *hostPickerModel) applyFilter(query string) {
-	prevIdx := m.list.Index()
 	var prevHost string
 	if row, ok := m.list.SelectedItem().(pickerRow); ok {
 		prevHost = row.host
@@ -354,11 +353,34 @@ func (m *hostPickerModel) applyFilter(query string) {
 				return
 			}
 		}
+		filteredSet := make(map[string]int, len(m.filtered))
+		for i, h := range m.filtered {
+			filteredSet[h] = i
+		}
+		past := false
+		for _, h := range m.allHosts {
+			if h == prevHost {
+				past = true
+				continue
+			}
+			if past {
+				if idx, ok := filteredSet[h]; ok {
+					m.list.Select(idx)
+					return
+				}
+			}
+		}
+		for j := len(m.allHosts) - 1; j >= 0; j-- {
+			if m.allHosts[j] == prevHost {
+				break
+			}
+			if idx, ok := filteredSet[m.allHosts[j]]; ok {
+				m.list.Select(idx)
+				return
+			}
+		}
 	}
-	if prevIdx >= len(m.filtered) {
-		prevIdx = len(m.filtered) - 1
-	}
-	m.list.Select(prevIdx)
+	m.list.Select(0)
 }
 
 func (m *hostPickerModel) setListItems(hosts []string) {

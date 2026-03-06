@@ -579,7 +579,6 @@ func (m *groupsModel) statusLine() string {
 }
 
 func (m *groupsModel) applyFilter(query string) {
-	prevIdx := m.list.Index()
 	var prevName string
 	if row, ok := m.list.SelectedItem().(groupRow); ok {
 		prevName = row.name
@@ -612,11 +611,34 @@ func (m *groupsModel) applyFilter(query string) {
 				return
 			}
 		}
+		rowSet := make(map[string]int, len(rows))
+		for i, r := range rows {
+			rowSet[r.name] = i
+		}
+		past := false
+		for _, r := range m.allRows {
+			if r.name == prevName {
+				past = true
+				continue
+			}
+			if past {
+				if idx, ok := rowSet[r.name]; ok {
+					m.list.Select(idx)
+					return
+				}
+			}
+		}
+		for j := len(m.allRows) - 1; j >= 0; j-- {
+			if m.allRows[j].name == prevName {
+				break
+			}
+			if idx, ok := rowSet[m.allRows[j].name]; ok {
+				m.list.Select(idx)
+				return
+			}
+		}
 	}
-	if prevIdx >= len(rows) {
-		prevIdx = len(rows) - 1
-	}
-	m.list.Select(prevIdx)
+	m.list.Select(0)
 }
 
 func (m *groupsModel) connectAllCmd(oneWindow bool, remoteCmd string) tea.Cmd {
