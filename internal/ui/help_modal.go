@@ -124,11 +124,11 @@ func renderHelpModalWithVP(width, height int, title string, h help.Model, keys h
 		}
 
 		box := helpBoxStyle.Width(boxW).Render(content)
-		return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, box)
+		return withThemeBG(lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, box))
 	}
 
 	// Non-viewport fallback (legacy).
 	content := helpContent(title, h, keys, innerW)
 	box := helpBoxStyle.Width(boxW).Render(content)
-	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, box)
+	return withThemeBG(lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, box))
 }

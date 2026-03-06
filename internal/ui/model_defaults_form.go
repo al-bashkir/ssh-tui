@@ -25,6 +25,7 @@ const (
 	defaultsFieldPort
 	defaultsFieldIdentity
 	defaultsFieldExtraArgs
+	defaultsFieldColorscheme
 	defaultsFieldAccentColor
 	defaultsFieldLoadKnownHosts
 	defaultsFieldTmux
@@ -267,6 +268,9 @@ func (m *defaultsFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				delta = -1
 			}
 			switch m.focus {
+			case defaultsFieldColorscheme:
+				m.defaults.Colorscheme = cycleChoice(m.defaults.Colorscheme, []string{"", "dracula", "nord", "gruvbox", "catppuccin", "kanagawa"}, delta)
+				return m, nil
 			case defaultsFieldAccentColor:
 				m.defaults.AccentColor = cycleChoice(m.defaults.AccentColor, []string{"", "blue", "cyan", "green", "amber", "red", "magenta"}, delta)
 				return m, nil
@@ -307,6 +311,7 @@ func (m *defaultsFormModel) moveFocus(delta int) tea.Cmd {
 		defaultsFieldPort,
 		defaultsFieldIdentity,
 		defaultsFieldExtraArgs,
+		defaultsFieldColorscheme,
 		defaultsFieldAccentColor,
 		defaultsFieldLoadKnownHosts,
 		defaultsFieldTmux,
@@ -432,6 +437,10 @@ func (m *defaultsFormModel) apply() error {
 	m.defaults.User = strings.TrimSpace(m.inUser.Value())
 	m.defaults.IdentityFile = strings.TrimSpace(m.inIdentity.Value())
 	m.defaults.TmuxSession = strings.TrimSpace(m.inSession.Value())
+	m.defaults.Colorscheme = strings.ToLower(strings.TrimSpace(m.defaults.Colorscheme))
+	if m.defaults.Colorscheme == "default" {
+		m.defaults.Colorscheme = ""
+	}
 	m.defaults.AccentColor = strings.ToLower(strings.TrimSpace(m.defaults.AccentColor))
 	if m.defaults.AccentColor == "default" {
 		m.defaults.AccentColor = ""
@@ -556,15 +565,37 @@ func (m *defaultsFormModel) View() string {
 	lines = append(lines, label("Extra args:", m.focus == defaultsFieldExtraArgs)+" "+inputLine(m.inExtra, m.focus == defaultsFieldExtraArgs, fieldW))
 
 	lines = append(lines, formSection("UI", innerW))
+
+	schemeCur := strings.TrimSpace(m.defaults.Colorscheme)
+	schemeFocused := m.focus == defaultsFieldColorscheme
+	if schemeFocused {
+		focusLine = len(lines)
+	}
+	scheme1 := seg(schemeCur, "", "default", schemeFocused) + "  " + seg(schemeCur, "dracula", "dracula", schemeFocused) + "  " + seg(schemeCur, "nord", "nord", schemeFocused)
+	scheme2 := seg(schemeCur, "gruvbox", "gruvbox", schemeFocused) + "  " + seg(schemeCur, "catppuccin", "catppuccin", schemeFocused) + "  " + seg(schemeCur, "kanagawa", "kanagawa", schemeFocused)
+	lines = append(lines, label("Colorscheme:", schemeFocused)+" "+scheme1)
+	lines = append(lines, "  "+scheme2)
+
 	if m.focus == defaultsFieldAccentColor {
 		focusLine = len(lines)
 	}
 
 	accentCur := strings.TrimSpace(m.defaults.AccentColor)
 	accentFocused := m.focus == defaultsFieldAccentColor
+	// When a named colorscheme is active and the accent field is not focused,
+	// dim the label to signal that accent_color is overridden.
+	accentSchemeActive := schemeCur != "" && !accentFocused
+	accentLabelStr := "Accent:"
+	var accentLabelRendered string
+	if accentSchemeActive {
+		padded := accentLabelStr + strings.Repeat(" ", max(0, labelW-len(accentLabelStr)))
+		accentLabelRendered = dim.Render(padded)
+	} else {
+		accentLabelRendered = label(accentLabelStr, accentFocused)
+	}
 	accent1 := seg(accentCur, "", "default", accentFocused) + "  " + seg(accentCur, "blue", "blue", accentFocused) + "  " + seg(accentCur, "cyan", "cyan", accentFocused) + "  " + seg(accentCur, "green", "green", accentFocused)
 	accent2 := seg(accentCur, "amber", "amber", accentFocused) + "  " + seg(accentCur, "red", "red", accentFocused) + "  " + seg(accentCur, "magenta", "magenta", accentFocused)
-	lines = append(lines, label("Accent:", accentFocused)+" "+accent1)
+	lines = append(lines, accentLabelRendered+" "+accent1)
 	lines = append(lines, "  "+accent2)
 
 	loadCur := "no"

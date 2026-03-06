@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -28,7 +30,142 @@ var (
 	cSegFocusedBG       = defaultSegFocusedBG
 	cSegFocusedFG       = lipgloss.AdaptiveColor{Light: "17", Dark: "231"}
 
+	// cBackground is the hex background color for the active colorscheme.
+	// Empty string means no override — terminal default is used.
+	cBackground string
+
+	// bgANSICode is the precomputed ANSI escape sequence for cBackground,
+	// e.g. "\x1b[48;2;40;42;54m". Empty when no theme background is active.
+	bgANSICode string
 )
+
+// tabBoxBorderStyle styles box-drawing characters (│ ─ ┌ ┐ └ ┘ ├ ┤).
+// Rebuilt by applyScheme and SetAccentColor.
+var tabBoxBorderStyle = lipgloss.NewStyle().Foreground(cFrameBorder)
+
+// tabBoxPadStyle fills interior line padding with the theme background.
+// Rebuilt by applyScheme and SetAccentColor.
+var tabBoxPadStyle = lipgloss.NewStyle()
+
+// colorScheme holds the full set of color variables for a named theme.
+// Background is an optional hex color applied to modal/frame backgrounds;
+// empty string means use terminal default (no override).
+type colorScheme struct {
+	Accent       lipgloss.AdaptiveColor
+	SegFocusedBG lipgloss.AdaptiveColor
+	SegFocusedFG lipgloss.AdaptiveColor
+	Muted        lipgloss.AdaptiveColor
+	OK           lipgloss.AdaptiveColor
+	Warn         lipgloss.AdaptiveColor
+	Err          lipgloss.AdaptiveColor
+	FrameBorder  lipgloss.AdaptiveColor
+	SearchDim    lipgloss.AdaptiveColor
+	RowActiveBG  lipgloss.AdaptiveColor
+	RowActiveFG  lipgloss.AdaptiveColor
+	Background   string // hex color for frame/modal background; "" = terminal default
+}
+
+// themeColor creates an AdaptiveColor from a single truecolor hex value.
+// Named themes are dark-themed so the same hex is used for both light and dark modes.
+func themeColor(hex string) lipgloss.AdaptiveColor {
+	return lipgloss.AdaptiveColor{Light: hex, Dark: hex}
+}
+
+// builtinColorSchemes maps scheme names to their full color definitions.
+// Named theme colors are sourced from official palette specifications.
+// The "default" entry uses adaptive ANSI codes for proper light/dark terminal support.
+var builtinColorSchemes = map[string]colorScheme{
+	"default": {
+		// Adaptive ANSI 256 codes — no background override.
+		Accent:       lipgloss.AdaptiveColor{Light: "25", Dark: "39"},
+		SegFocusedBG: lipgloss.AdaptiveColor{Light: "153", Dark: "24"},
+		SegFocusedFG: lipgloss.AdaptiveColor{Light: "17", Dark: "231"},
+		Muted:        lipgloss.AdaptiveColor{Light: "242", Dark: "242"},
+		OK:           lipgloss.AdaptiveColor{Light: "28", Dark: "35"},
+		Warn:         lipgloss.AdaptiveColor{Light: "166", Dark: "214"},
+		Err:          lipgloss.AdaptiveColor{Light: "160", Dark: "203"},
+		FrameBorder:  lipgloss.AdaptiveColor{Light: "250", Dark: "238"},
+		SearchDim:    lipgloss.AdaptiveColor{Light: "247", Dark: "246"},
+		RowActiveBG:  lipgloss.AdaptiveColor{Light: "253", Dark: "238"},
+		RowActiveFG:  lipgloss.AdaptiveColor{Light: "0", Dark: "255"},
+		Background:   "",
+	},
+	// Dracula — https://draculatheme.com/contribute
+	"dracula": {
+		Accent:       themeColor("#bd93f9"), // purple
+		SegFocusedBG: themeColor("#44475a"), // current line / selection
+		SegFocusedFG: themeColor("#f8f8f2"), // foreground
+		Muted:        themeColor("#6272a4"), // comment
+		OK:           themeColor("#50fa7b"), // green
+		Warn:         themeColor("#ffb86c"), // orange
+		Err:          themeColor("#ff5555"), // red
+		FrameBorder:  themeColor("#44475a"), // current line
+		SearchDim:    themeColor("#6272a4"), // comment
+		RowActiveBG:  themeColor("#44475a"), // selection
+		RowActiveFG:  themeColor("#f8f8f2"), // foreground
+		Background:   "#282a36",             // background
+	},
+	// Nord — https://www.nordtheme.com/docs/colors-and-palettes
+	"nord": {
+		Accent:       themeColor("#88c0d0"), // nord8 — frost teal
+		SegFocusedBG: themeColor("#434c5e"), // nord2 — polar night
+		SegFocusedFG: themeColor("#eceff4"), // nord6 — snow storm
+		Muted:        themeColor("#4c566a"), // nord3 — polar night (dim)
+		OK:           themeColor("#a3be8c"), // nord14 — aurora green
+		Warn:         themeColor("#ebcb8b"), // nord13 — aurora yellow
+		Err:          themeColor("#bf616a"), // nord11 — aurora red
+		FrameBorder:  themeColor("#3b4252"), // nord1 — polar night
+		SearchDim:    themeColor("#4c566a"), // nord3
+		RowActiveBG:  themeColor("#434c5e"), // nord2 — selection
+		RowActiveFG:  themeColor("#eceff4"), // nord6
+		Background:   "#2e3440",             // nord0 — polar night base
+	},
+	// Gruvbox dark — https://github.com/morhetz/gruvbox
+	"gruvbox": {
+		Accent:       themeColor("#fe8019"), // bright orange
+		SegFocusedBG: themeColor("#665c54"), // bg3 — dark selection
+		SegFocusedFG: themeColor("#ebdbb2"), // fg — warm light
+		Muted:        themeColor("#928374"), // gray
+		OK:           themeColor("#b8bb26"), // bright green
+		Warn:         themeColor("#fabd2f"), // bright yellow
+		Err:          themeColor("#fb4934"), // bright red
+		FrameBorder:  themeColor("#504945"), // bg2 — warm mid-dark
+		SearchDim:    themeColor("#928374"), // gray
+		RowActiveBG:  themeColor("#665c54"), // bg3 — selection
+		RowActiveFG:  themeColor("#ebdbb2"), // fg
+		Background:   "#282828",             // bg
+	},
+	// Catppuccin Mocha — https://github.com/catppuccin/catppuccin
+	"catppuccin": {
+		Accent:       themeColor("#cba4f7"), // mauve
+		SegFocusedBG: themeColor("#585b70"), // overlay2 / selection
+		SegFocusedFG: themeColor("#cdd6f4"), // text
+		Muted:        themeColor("#6c7086"), // overlay0
+		OK:           themeColor("#a6e3a1"), // green
+		Warn:         themeColor("#f9e2af"), // yellow
+		Err:          themeColor("#f38ba8"), // red
+		FrameBorder:  themeColor("#45475a"), // surface1 — border
+		SearchDim:    themeColor("#585b70"), // overlay2
+		RowActiveBG:  themeColor("#585b70"), // overlay2 — selection
+		RowActiveFG:  themeColor("#cdd6f4"), // text
+		Background:   "#1e1e2e",             // base
+	},
+	// Kanagawa Wave — https://github.com/rebelot/kanagawa.nvim
+	"kanagawa": {
+		Accent:       themeColor("#7e9cd8"), // crystalBlue
+		SegFocusedBG: themeColor("#223249"), // waveBlue1 — selection
+		SegFocusedFG: themeColor("#dcd7ba"), // fujiWhite
+		Muted:        themeColor("#727169"), // fujiGray
+		OK:           themeColor("#98bb6c"), // springGreen
+		Warn:         themeColor("#ffa066"), // surimiOrange
+		Err:          themeColor("#e46876"), // peachRed
+		FrameBorder:  themeColor("#2a2a37"), // bg_p1
+		SearchDim:    themeColor("#727169"), // fujiGray
+		RowActiveBG:  themeColor("#223249"), // waveBlue1 — selection
+		RowActiveFG:  themeColor("#dcd7ba"), // fujiWhite
+		Background:   "#1f1f28",             // sumInk2 / base bg
+	},
+}
 
 var accentPresets = map[string]lipgloss.AdaptiveColor{
 	"default": {Light: "25", Dark: "39"},
@@ -90,8 +227,21 @@ var (
 	tabInactiveStyle = lipgloss.NewStyle().Foreground(cMuted)
 )
 
-
 func SetAccentColor(name string) {
+	// Switching to accent-only mode clears any theme background.
+	cBackground = ""
+	bgANSICode = ""
+	frameStyle = lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(cFrameBorder).
+		Padding(0, 1)
+	tabBoxBorderStyle = lipgloss.NewStyle().Foreground(cFrameBorder)
+	tabBoxPadStyle = lipgloss.NewStyle()
+	helpBoxStyle = lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(cFrameBorder).
+		Padding(1, 2)
+
 	name = strings.ToLower(strings.TrimSpace(name))
 	if name == "" || name == "default" {
 		cAccent = defaultAccent
@@ -129,6 +279,127 @@ func SetAccentColor(name string) {
 
 	// Help modal title style lives in help_modal.go.
 	helpTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
+}
+
+// ApplyColorScheme applies a named colorscheme if scheme is non-empty and
+// known; otherwise falls back to SetAccentColor(accentColor) for backward
+// compatibility with configs that only set accent_color.
+func ApplyColorScheme(scheme, accentColor string) {
+	scheme = strings.ToLower(strings.TrimSpace(scheme))
+	if scheme != "" && scheme != "default" {
+		if cs, ok := builtinColorSchemes[scheme]; ok {
+			applyScheme(cs)
+			return
+		}
+	}
+	// scheme is empty, "default", or unknown — fall back to accent logic.
+	SetAccentColor(accentColor)
+}
+
+// applyScheme mutates all global color vars from cs and rebuilds all styles.
+func applyScheme(cs colorScheme) {
+	cAccent = cs.Accent
+	cSegFocusedBG = cs.SegFocusedBG
+	cSegFocusedFG = cs.SegFocusedFG
+	cMuted = cs.Muted
+	cOK = cs.OK
+	cWarn = cs.Warn
+	cErr = cs.Err
+	cFrameBorder = cs.FrameBorder
+	cSearchDim = cs.SearchDim
+	cRowActiveBG = cs.RowActiveBG
+	cRowActiveFG = cs.RowActiveFG
+	cBackground = cs.Background
+	bgANSICode = hexToANSIBG(cs.Background)
+
+	// Rebuild every style that references a color variable.
+	statusOK = lipgloss.NewStyle().Foreground(cOK)
+	statusWarn = lipgloss.NewStyle().Foreground(cWarn)
+	statusErr = lipgloss.NewStyle().Foreground(cErr)
+	dim = lipgloss.NewStyle().Foreground(cMuted)
+
+	// Build frameStyle; apply theme background to modal/frame interiors when set.
+	fs := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(cFrameBorder).
+		Padding(0, 1)
+	if cs.Background != "" {
+		fs = fs.Background(lipgloss.Color(cs.Background))
+	}
+	frameStyle = fs
+
+	headerStyle = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
+	footerStyle = lipgloss.NewStyle().Foreground(cMuted)
+
+	checkedStyle = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
+	uncheckedStyle = lipgloss.NewStyle().Foreground(cMuted)
+
+	rowActiveStyle = lipgloss.NewStyle().Background(cRowActiveBG).Foreground(cRowActiveFG).Bold(true)
+	segFocusedStyle = lipgloss.NewStyle().Background(cSegFocusedBG).Foreground(cSegFocusedFG).Bold(true)
+
+	badgeCfgStyle = lipgloss.NewStyle().Foreground(cAccent).Background(lipgloss.AdaptiveColor{Light: "254", Dark: "235"}).Padding(0, 1).Bold(true)
+	badgeCountStyle = lipgloss.NewStyle().Foreground(cMuted).Background(lipgloss.AdaptiveColor{Light: "254", Dark: "236"}).Padding(0, 1)
+	badgeSelStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.AdaptiveColor{Light: "255", Dark: "16"}).
+		Background(cAccent).
+		Padding(0, 1).
+		Bold(true)
+
+	footerKeyStyle = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
+	tabActiveStyle = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
+	tabInactiveStyle = lipgloss.NewStyle().Foreground(cMuted)
+
+	searchUnfocused = lipgloss.NewStyle().Foreground(cSearchDim)
+
+	helpTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
+
+	// Rebuild tab-box border and padding styles.
+	if cs.Background != "" {
+		bg := lipgloss.Color(cs.Background)
+		tabBoxBorderStyle = lipgloss.NewStyle().Foreground(cFrameBorder).Background(bg)
+		tabBoxPadStyle = lipgloss.NewStyle().Background(bg)
+		helpBoxStyle = lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(cFrameBorder).
+			Padding(1, 2).
+			Background(bg)
+	} else {
+		tabBoxBorderStyle = lipgloss.NewStyle().Foreground(cFrameBorder)
+		tabBoxPadStyle = lipgloss.NewStyle()
+		helpBoxStyle = lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(cFrameBorder).
+			Padding(1, 2)
+	}
+}
+
+// hexToANSIBG converts a "#RRGGBB" hex string to an ANSI truecolor background
+// escape sequence "\x1b[48;2;R;G;Bm". Returns "" on parse failure.
+func hexToANSIBG(hex string) string {
+	hex = strings.TrimPrefix(hex, "#")
+	if len(hex) != 6 {
+		return ""
+	}
+	r, err1 := strconv.ParseUint(hex[0:2], 16, 8)
+	g, err2 := strconv.ParseUint(hex[2:4], 16, 8)
+	b, err3 := strconv.ParseUint(hex[4:6], 16, 8)
+	if err1 != nil || err2 != nil || err3 != nil {
+		return ""
+	}
+	return fmt.Sprintf("\x1b[48;2;%d;%d;%dm", r, g, b)
+}
+
+// withThemeBG prepends bgANSICode to s and re-injects it after every ANSI
+// reset ("\x1b[0m" or "\x1b[m") so the theme background persists through all
+// styled sub-elements. Does nothing when bgANSICode is empty.
+func withThemeBG(s string) string {
+	if bgANSICode == "" {
+		return s
+	}
+	// Re-inject after every full reset sequence so background is never lost.
+	s = strings.ReplaceAll(s, "\x1b[0m", "\x1b[0m"+bgANSICode)
+	s = strings.ReplaceAll(s, "\x1b[m", "\x1b[m"+bgANSICode)
+	return bgANSICode + s
 }
 
 func frameInnerSize(w, h int) (innerW, innerH int) {
@@ -212,7 +483,7 @@ func renderFrame(w, h int, title string, headerRight string, body string, footer
 		content = strings.TrimRight(content, "\n") + "\n" + foot
 	}
 	box := frameStyle.Width(w).Height(h).Render(content)
-	return box
+	return withThemeBG(box)
 }
 
 func configureSearch(m *textinput.Model) {
@@ -272,7 +543,6 @@ func styledFooter(raw string) string {
 	}
 	return strings.Join(out, "\n")
 }
-
 
 // Spinner for loading states.
 var (
