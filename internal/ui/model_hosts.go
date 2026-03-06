@@ -86,12 +86,13 @@ type hostsModel struct {
 	confirmConnectHosts []string
 	pendingConnectFn    func() tea.Cmd
 
-	quitting  bool
-	showHelp  bool
-	helpVP    viewport.Model
-	cmdPrompt bool
-	cmdInput  textinput.Model
-	execCmd   []string
+	quitting       bool
+	showHelp       bool
+	helpVP         viewport.Model
+	cmdPrompt      bool
+	cmdPromptCrumb string
+	cmdInput       textinput.Model
+	execCmd        []string
 }
 
 func newHostsModel(opts Options) *hostsModel {
@@ -336,6 +337,16 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if key.Matches(msg, m.keymap.ConnectCmd) && m.focus == focusList {
+			targets := m.hostsToOpen()
+			if len(targets) == 0 {
+				return m, nil
+			}
+			switch len(targets) {
+			case 1:
+				m.cmdPromptCrumb = "Hosts > " + targets[0]
+			default:
+				m.cmdPromptCrumb = fmt.Sprintf("Hosts > %d selected", len(targets))
+			}
 			in := textinput.New()
 			in.CharLimit = 512
 			in.Prompt = "cmd: "

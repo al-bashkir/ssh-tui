@@ -60,13 +60,14 @@ type groupsModel struct {
 	search textinput.Model
 	focus  focusState
 
-	keymap    keyMap
-	help      help.Model
-	showHelp  bool
-	helpVP    viewport.Model
-	cmdPrompt bool
-	cmdInput  textinput.Model
-	toast     toast
+	keymap         keyMap
+	help           help.Model
+	showHelp       bool
+	helpVP         viewport.Model
+	cmdPrompt      bool
+	cmdPromptCrumb string
+	cmdInput       textinput.Model
+	toast          toast
 
 	confirmQuit         bool
 	confirmDelete       bool
@@ -371,6 +372,11 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return openGroupHostsMsg{index: row.index} }
 		}
 		if key.Matches(msg, m.keymap.ConnectCmd) && m.focus == focusList {
+			row, ok := m.list.SelectedItem().(groupRow)
+			if !ok {
+				return m, nil
+			}
+			m.cmdPromptCrumb = "Groups > " + row.name
 			in := textinput.New()
 			in.CharLimit = 512
 			in.Prompt = "cmd: "
@@ -436,7 +442,7 @@ func (m *groupsModel) View() string {
 		return renderHelpModalWithVP(m.width, m.height, "Groups", m.help, m.helpKeys(), &m.helpVP)
 	}
 	if m.cmdPrompt {
-		return renderCmdPromptModal(m.width, m.height, "Groups",
+		return renderCmdPromptModal(m.width, m.height, m.cmdPromptCrumb,
 			"Connect and run a remote command for all hosts (keeps sessions open).", m.cmdInput)
 	}
 	if m.confirmQuit {

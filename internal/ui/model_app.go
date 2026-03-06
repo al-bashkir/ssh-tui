@@ -447,6 +447,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.screen = screenDefaultsForm
 		if m.defaultsForm != nil {
 			m.defaultsForm.defaults = m.opts.Config.Defaults
+			m.defaultsForm.form.resetOriginals()
 			m.defaultsForm.toast = toast{text: "saved", level: toastOK}
 			m.defaultsToastToken++
 			token := m.defaultsToastToken

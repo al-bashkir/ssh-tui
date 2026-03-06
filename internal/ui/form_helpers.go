@@ -2,8 +2,6 @@ package ui
 
 import (
 	"strings"
-
-	"github.com/charmbracelet/bubbles/textinput"
 )
 
 // formLabel renders a padded label for a form field.
@@ -34,26 +32,8 @@ func formSegment(cur, val, text string, focused bool) string {
 	return tabInactiveStyle.Render(text)
 }
 
-// formInputLine renders a text input with underline fill.
-// Convenience wrapper that documents intent in form context.
-func formInputLine(in textinput.Model, focused bool, w int) string {
-	return underlineInput(in, focused, w)
-}
-
-// formFooterLine renders the standard form footer with field position and
-// hints. In edit mode, shows an INSERT indicator.
-func formFooterLine(fieldPos string, editing bool, normalHints string) string {
-	if editing {
-		return footerStyle.Render(fieldPos) + "  " + headerStyle.Render("INSERT") + "  " + footerStyle.Render("Ctrl+S save   Esc done")
-	}
-	return footerStyle.Render(fieldPos + "  " + normalHints)
-}
-
 // renderFormBox renders a scrollable modal form box with a title, visible
-// content lines, optional toast, and a footer.
-//
-// The footer is wrapped in footerStyle automatically (matching the modal
-// form rendering convention where the footer string is plain or mixed-styled).
+// content lines, optional toast, and a pre-styled footer.
 func renderFormBox(totalW int, title string, visibleLines []string, visibleH int, toastStr string, footer string) string {
 	innerW := max(0, totalW-2)
 	out := make([]string, 0, visibleH+5)
@@ -68,7 +48,7 @@ func renderFormBox(totalW int, title string, visibleLines []string, visibleH int
 		out = append(out, boxLine(totalW, padVisible(toastStr, innerW)))
 	}
 	out = append(out, boxSep(totalW))
-	out = append(out, boxLine(totalW, padVisible(footerStyle.Render(footer), innerW)))
+	out = append(out, boxLine(totalW, padVisible(footer, innerW)))
 	out = append(out, boxBottom(totalW))
 	return strings.Join(out, "\n")
 }
