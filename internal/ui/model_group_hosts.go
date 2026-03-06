@@ -586,20 +586,61 @@ func (m *groupHostsModel) statusLine() string {
 }
 
 func (m *groupHostsModel) applyFilter(query string) {
+	var prevHost string
+	if row, ok := m.list.SelectedItem().(groupHostRow); ok {
+		prevHost = row.host
+	}
+
 	query = strings.TrimSpace(query)
 	if query == "" {
 		m.filtered = append([]string(nil), m.allHosts...)
-		m.setListItems(m.filtered)
+	} else {
+		matches := fuzzy.Find(query, m.allHosts)
+		m.filtered = make([]string, 0, len(matches))
+		for _, match := range matches {
+			m.filtered = append(m.filtered, match.Str)
+		}
+	}
+	m.setListItems(m.filtered)
+
+	if len(m.filtered) == 0 {
 		return
 	}
-
-	matches := fuzzy.Find(query, m.allHosts)
-	filtered := make([]string, 0, len(matches))
-	for _, match := range matches {
-		filtered = append(filtered, match.Str)
+	if prevHost != "" {
+		for i, h := range m.filtered {
+			if h == prevHost {
+				m.list.Select(i)
+				return
+			}
+		}
+		filteredSet := make(map[string]int, len(m.filtered))
+		for i, h := range m.filtered {
+			filteredSet[h] = i
+		}
+		past := false
+		for _, h := range m.allHosts {
+			if h == prevHost {
+				past = true
+				continue
+			}
+			if past {
+				if idx, ok := filteredSet[h]; ok {
+					m.list.Select(idx)
+					return
+				}
+			}
+		}
+		for j := len(m.allHosts) - 1; j >= 0; j-- {
+			if m.allHosts[j] == prevHost {
+				break
+			}
+			if idx, ok := filteredSet[m.allHosts[j]]; ok {
+				m.list.Select(idx)
+				return
+			}
+		}
 	}
-	m.filtered = filtered
-	m.setListItems(m.filtered)
+	m.list.Select(0)
 }
 
 func (m *groupHostsModel) setListItems(hosts []string) {
@@ -609,9 +650,6 @@ func (m *groupHostsModel) setListItems(hosts []string) {
 		items = append(items, groupHostRow{host: h, selected: m.selected[h], hasCfg: ok})
 	}
 	m.list.SetItems(items)
-	if len(items) > 0 {
-		m.list.Select(0)
-	}
 }
 
 func (m *groupHostsModel) refreshVisibleSelection() {

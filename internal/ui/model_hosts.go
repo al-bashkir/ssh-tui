@@ -465,6 +465,12 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *hostsModel) applyFilter(query string) {
+	// Remember current selection so we can restore cursor position.
+	var prevHost string
+	if row, ok := m.list.SelectedItem().(hostRow); ok {
+		prevHost = row.host
+	}
+
 	query = strings.TrimSpace(query)
 	var filtered []string
 	if query == "" {
@@ -488,6 +494,51 @@ func (m *hostsModel) applyFilter(query string) {
 	}
 	m.filtered = filtered
 	m.setListItems(m.filtered)
+
+	// Restore cursor: prefer same host; if gone, pick the next visible
+	// neighbour based on the master allHosts order, then fall back to 0.
+	if len(m.filtered) == 0 {
+		return
+	}
+	if prevHost != "" {
+		// Fast path: host is still in the list.
+		for i, h := range m.filtered {
+			if h == prevHost {
+				m.list.Select(i)
+				return
+			}
+		}
+		// Host was removed (e.g. hidden). Walk allHosts forward from the
+		// previous host to find the first entry that is in the new list.
+		filteredSet := make(map[string]int, len(m.filtered))
+		for i, h := range m.filtered {
+			filteredSet[h] = i
+		}
+		past := false
+		for _, h := range m.allHosts {
+			if h == prevHost {
+				past = true
+				continue
+			}
+			if past {
+				if idx, ok := filteredSet[h]; ok {
+					m.list.Select(idx)
+					return
+				}
+			}
+		}
+		// Nothing after — try walking backward.
+		for j := len(m.allHosts) - 1; j >= 0; j-- {
+			if m.allHosts[j] == prevHost {
+				break
+			}
+			if idx, ok := filteredSet[m.allHosts[j]]; ok {
+				m.list.Select(idx)
+				return
+			}
+		}
+	}
+	m.list.Select(0)
 }
 
 func (m *hostsModel) setListItems(hosts []string) {
@@ -498,9 +549,6 @@ func (m *hostsModel) setListItems(hosts []string) {
 		items = append(items, hostRow{host: h, selected: m.selected[h], hasCfg: ok, hidden: hidden})
 	}
 	m.list.SetItems(items)
-	if len(items) > 0 {
-		m.list.Select(0)
-	}
 }
 
 type toastMsg toast

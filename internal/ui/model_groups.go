@@ -147,9 +147,6 @@ func (m *groupsModel) setRows(rows []groupRow) {
 		items = append(items, r)
 	}
 	m.list.SetItems(items)
-	if len(items) > 0 {
-		m.list.Select(0)
-	}
 }
 
 func (m *groupsModel) Refresh(inv config.Inventory) {
@@ -582,22 +579,66 @@ func (m *groupsModel) statusLine() string {
 }
 
 func (m *groupsModel) applyFilter(query string) {
-	query = strings.TrimSpace(query)
-	if query == "" {
-		m.setRows(append([]groupRow(nil), m.allRows...))
-		return
+	var prevName string
+	if row, ok := m.list.SelectedItem().(groupRow); ok {
+		prevName = row.name
 	}
 
-	names := make([]string, 0, len(m.allRows))
-	for _, r := range m.allRows {
-		names = append(names, r.name)
-	}
-	matches := fuzzy.Find(query, names)
-	rows := make([]groupRow, 0, len(matches))
-	for _, mt := range matches {
-		rows = append(rows, m.allRows[mt.Index])
+	query = strings.TrimSpace(query)
+	var rows []groupRow
+	if query == "" {
+		rows = append([]groupRow(nil), m.allRows...)
+	} else {
+		names := make([]string, 0, len(m.allRows))
+		for _, r := range m.allRows {
+			names = append(names, r.name)
+		}
+		matches := fuzzy.Find(query, names)
+		rows = make([]groupRow, 0, len(matches))
+		for _, mt := range matches {
+			rows = append(rows, m.allRows[mt.Index])
+		}
 	}
 	m.setRows(rows)
+
+	if len(rows) == 0 {
+		return
+	}
+	if prevName != "" {
+		for i, r := range rows {
+			if r.name == prevName {
+				m.list.Select(i)
+				return
+			}
+		}
+		rowSet := make(map[string]int, len(rows))
+		for i, r := range rows {
+			rowSet[r.name] = i
+		}
+		past := false
+		for _, r := range m.allRows {
+			if r.name == prevName {
+				past = true
+				continue
+			}
+			if past {
+				if idx, ok := rowSet[r.name]; ok {
+					m.list.Select(idx)
+					return
+				}
+			}
+		}
+		for j := len(m.allRows) - 1; j >= 0; j-- {
+			if m.allRows[j].name == prevName {
+				break
+			}
+			if idx, ok := rowSet[m.allRows[j].name]; ok {
+				m.list.Select(idx)
+				return
+			}
+		}
+	}
+	m.list.Select(0)
 }
 
 func (m *groupsModel) connectAllCmd(oneWindow bool, remoteCmd string) tea.Cmd {
