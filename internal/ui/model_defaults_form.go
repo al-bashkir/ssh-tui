@@ -267,7 +267,7 @@ func (m *defaultsFormModel) refreshAccentStyles() {
 
 func newDefaultsFormModel(d config.Defaults, confirmQuitEnabled bool) *defaultsFormModel {
 	values := defaultsToValues(d)
-	fm := newFormModel(settingsSchema(), values, defaultsFormLabelWidth, true)
+	fm := newFormModel(settingsSchema(), values, defaultsFormLabelWidth)
 
 	return &defaultsFormModel{
 		form:               fm,

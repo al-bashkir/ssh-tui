@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -23,70 +22,20 @@ func (m *formModel) renderFormContent(innerW int) ([]string, int) {
 		focused := i == m.focusIdx
 		sec := &m.schema.Sections[item.sectionIdx]
 
-		switch item.kind {
-		case navSection:
-			// Blank line before sections (except first).
-			if len(lines) > 0 {
-				lines = append(lines, "")
-			}
-			if focused {
-				focusLine = len(lines)
-			}
-			collapsed := m.collapsed[item.sectionIdx]
-			lines = append(lines, renderCollapsibleHeader(
-				sec.Label, focused, collapsed, innerW, len(sec.Fields)))
+		// Render a section separator before the first field of each section.
+		if item.sectionIdx != prevSectionIdx {
+			lines = append(lines, formSection(sec.Label, innerW))
 			prevSectionIdx = item.sectionIdx
-
-		case navField:
-			// Non-collapsible forms: render a section separator before the
-			// first field of each new section.
-			if !m.collapsible && item.sectionIdx != prevSectionIdx {
-				lines = append(lines, formSection(sec.Label, innerW))
-				prevSectionIdx = item.sectionIdx
-			}
-			fd := &sec.Fields[item.fieldIdx]
-			if focused {
-				focusLine = len(lines)
-			}
-			lines = append(lines, m.renderFieldLines(fd, focused, innerW, fieldW)...)
 		}
+
+		fd := &sec.Fields[item.fieldIdx]
+		if focused {
+			focusLine = len(lines)
+		}
+		lines = append(lines, m.renderFieldLines(fd, focused, innerW, fieldW)...)
 	}
 
 	return lines, focusLine
-}
-
-// ---------------------------------------------------------------------------
-// Section header
-// ---------------------------------------------------------------------------
-
-// renderCollapsibleHeader renders a section header with ▼/▸ indicator.
-// Collapsed headers show a dot-leader and field count.
-func renderCollapsibleHeader(label string, focused, collapsed bool, innerW int, fieldCount int) string {
-	indicator := "▼"
-	if collapsed {
-		indicator = "▸"
-	}
-
-	text := indicator + " " + label
-
-	if collapsed && fieldCount > 0 {
-		countStr := strconv.Itoa(fieldCount)
-		// Space before dots + dots + space + count.
-		usedW := lipgloss.Width(text) + 1 + 1 + len(countStr)
-		dotsLen := innerW - usedW
-		if dotsLen > 0 {
-			text += " " + strings.Repeat("·", dotsLen) + " " + countStr
-		} else {
-			text += " " + countStr
-		}
-	}
-
-	text = padVisible(text, innerW)
-
-	if focused {
-		return headerStyle.Render(text)
-	}
-	return dim.Render(text)
 }
 
 // ---------------------------------------------------------------------------

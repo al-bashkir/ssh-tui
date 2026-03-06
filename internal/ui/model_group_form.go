@@ -179,7 +179,7 @@ func newGroupFormModel(index int, g config.Group, defs config.Defaults, confirmQ
 	}
 
 	values := groupToValues(g)
-	fm := newFormModel(groupSchema(defs), values, modalFormLabelWidth, false)
+	fm := newFormModel(groupSchema(defs), values, modalFormLabelWidth)
 
 	return &groupFormModel{
 		form:               fm,

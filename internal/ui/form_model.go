@@ -12,19 +12,10 @@ import (
 // Navigation item
 // ---------------------------------------------------------------------------
 
-// formNavKind distinguishes section headers from fields in the navigation list.
-type formNavKind int
-
-const (
-	navSection formNavKind = iota
-	navField
-)
-
-// formNavItem is a single navigable item in the form's flat item list.
+// formNavItem is a single navigable item (always a field) in the form.
 type formNavItem struct {
-	kind       formNavKind
 	sectionIdx int
-	fieldIdx   int // valid only when kind == navField
+	fieldIdx   int
 }
 
 // ---------------------------------------------------------------------------
@@ -41,19 +32,17 @@ type formTextInput struct {
 // formModel
 // ---------------------------------------------------------------------------
 
-// formModel manages the generic state of a form with optional collapsible
-// sections, vim-style navigation, and declarative field definitions.
+// formModel manages the generic state of a form with vim-style navigation
+// and declarative field definitions.
 //
 // It is not a tea.Model itself — specific form models (defaults, group, host)
 // embed it and delegate to its methods.
 type formModel struct {
-	schema      formSchema
-	values      map[string]string // current values by field key
-	originals   map[string]string // snapshot at creation (for dirty check)
-	collapsible bool              // whether sections can collapse/expand
-	collapsed   map[int]bool      // section index → collapsed state
+	schema    formSchema
+	values    map[string]string // current values by field key
+	originals map[string]string // snapshot at creation (for dirty check)
 
-	items    []formNavItem // navigable items (rebuilt on collapse change)
+	items    []formNavItem // navigable field items
 	focusIdx int           // index into items
 	editing  bool          // true when in insert mode
 
@@ -67,8 +56,7 @@ type formModel struct {
 }
 
 // newFormModel creates a formModel from a schema and initial values.
-// When collapsible is true, all sections except the first start collapsed.
-func newFormModel(schema formSchema, values map[string]string, labelWidth int, collapsible bool) formModel {
+func newFormModel(schema formSchema, values map[string]string, labelWidth int) formModel {
 	originals := make(map[string]string, len(values))
 	for k, v := range values {
 		originals[k] = v
@@ -78,17 +66,8 @@ func newFormModel(schema formSchema, values map[string]string, labelWidth int, c
 		schema:      schema,
 		values:      values,
 		originals:   originals,
-		collapsible: collapsible,
-		collapsed:   make(map[int]bool),
 		labelWidth:  labelWidth,
 		fieldIndent: 2,
-	}
-
-	// Collapse all sections except the first.
-	if collapsible && len(schema.Sections) > 0 {
-		for i := 1; i < len(schema.Sections); i++ {
-			m.collapsed[i] = true
-		}
 	}
 
 	// Create text inputs for text/number fields.
@@ -114,14 +93,9 @@ func newFormModel(schema formSchema, values map[string]string, labelWidth int, c
 
 	m.rebuildItems()
 
-	// Focus the first field (skip section header if present).
+	// Focus the first field.
 	if len(m.items) > 0 {
-		for i, item := range m.items {
-			if item.kind == navField {
-				m.focusIdx = i
-				break
-			}
-		}
+		m.focusIdx = 0
 		m.applyFocusStyles()
 	}
 
@@ -162,22 +136,24 @@ func (m *formModel) isDirty() bool {
 	return false
 }
 
+// resetOriginals snapshots the current values as the new baseline,
+// clearing the dirty state.
+func (m *formModel) resetOriginals() {
+	for k, v := range m.values {
+		m.originals[k] = v
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Navigation items
 // ---------------------------------------------------------------------------
 
-// rebuildItems reconstructs the flat navigation list based on collapse state.
+// rebuildItems constructs the flat navigation list of fields.
 func (m *formModel) rebuildItems() {
 	m.items = m.items[:0]
 	for si, sec := range m.schema.Sections {
-		if m.collapsible {
-			m.items = append(m.items, formNavItem{kind: navSection, sectionIdx: si})
-			if m.collapsed[si] {
-				continue
-			}
-		}
 		for fi := range sec.Fields {
-			m.items = append(m.items, formNavItem{kind: navField, sectionIdx: si, fieldIdx: fi})
+			m.items = append(m.items, formNavItem{sectionIdx: si, fieldIdx: fi})
 		}
 	}
 }
@@ -194,14 +170,16 @@ func (m *formModel) focusedItem() formNavItem {
 	return formNavItem{}
 }
 
-// focusedField returns the definition of the focused field, or nil if
-// focus is on a section header.
+// focusedField returns the definition of the focused field, or nil.
 func (m *formModel) focusedField() *fieldDef {
 	item := m.focusedItem()
-	if item.kind != navField {
-		return nil
+	if item.sectionIdx < len(m.schema.Sections) {
+		sec := &m.schema.Sections[item.sectionIdx]
+		if item.fieldIdx < len(sec.Fields) {
+			return &sec.Fields[item.fieldIdx]
+		}
 	}
-	return &m.schema.Sections[item.sectionIdx].Fields[item.fieldIdx]
+	return nil
 }
 
 // focusedFieldKey returns the key of the focused field, or "".
@@ -210,11 +188,6 @@ func (m *formModel) focusedFieldKey() string {
 		return fd.Key
 	}
 	return ""
-}
-
-// isOnSection returns true if focus is on a section header.
-func (m *formModel) isOnSection() bool {
-	return m.focusedItem().kind == navSection
 }
 
 // ---------------------------------------------------------------------------
@@ -265,94 +238,6 @@ func (m *formModel) moveFocus(delta int) {
 		pos = 0
 	}
 	m.setFocusIdx(pos)
-}
-
-// jumpSection jumps to the next (+1) or previous (-1) section header.
-func (m *formModel) jumpSection(delta int) {
-	if !m.collapsible || len(m.items) == 0 {
-		return
-	}
-	start := m.focusIdx
-	pos := start
-	for {
-		pos += delta
-		if pos < 0 {
-			pos = len(m.items) - 1
-		}
-		if pos >= len(m.items) {
-			pos = 0
-		}
-		if pos == start {
-			return
-		}
-		if m.items[pos].kind == navSection {
-			m.setFocusIdx(pos)
-			return
-		}
-	}
-}
-
-// focusFirst moves focus to the first item.
-func (m *formModel) focusFirst() {
-	if len(m.items) > 0 {
-		m.setFocusIdx(0)
-	}
-}
-
-// focusLast moves focus to the last item.
-func (m *formModel) focusLast() {
-	if n := len(m.items); n > 0 {
-		m.setFocusIdx(n - 1)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Section collapse/expand
-// ---------------------------------------------------------------------------
-
-// toggleSection toggles the collapse state of the focused section.
-func (m *formModel) toggleSection() {
-	if !m.collapsible {
-		return
-	}
-	item := m.focusedItem()
-	if item.kind != navSection {
-		return
-	}
-	si := item.sectionIdx
-	m.collapsed[si] = !m.collapsed[si]
-	m.rebuildItems()
-	// Re-find the section header in the rebuilt list.
-	for i, it := range m.items {
-		if it.kind == navSection && it.sectionIdx == si {
-			m.focusIdx = i
-			break
-		}
-	}
-}
-
-// expandSection expands the focused section (no-op if already expanded).
-func (m *formModel) expandSection() {
-	if !m.collapsible {
-		return
-	}
-	item := m.focusedItem()
-	if item.kind != navSection || !m.collapsed[item.sectionIdx] {
-		return
-	}
-	m.toggleSection()
-}
-
-// collapseSection collapses the focused section (no-op if already collapsed).
-func (m *formModel) collapseSection() {
-	if !m.collapsible {
-		return
-	}
-	item := m.focusedItem()
-	if item.kind != navSection || m.collapsed[item.sectionIdx] {
-		return
-	}
-	m.toggleSection()
 }
 
 // ---------------------------------------------------------------------------
@@ -461,28 +346,12 @@ func (m *formModel) handleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	case "k", "up", "shift+tab":
 		m.moveFocus(-1)
 		return true, nil
-	case "g":
-		m.focusFirst()
-		return true, nil
-	case "G":
-		m.focusLast()
-		return true, nil
-	case "{":
-		m.jumpSection(-1)
-		return true, nil
-	case "}":
-		m.jumpSection(1)
-		return true, nil
 	case "i":
 		if fd := m.focusedField(); fd != nil && fd.isTextField() {
 			m.enterEdit()
 		}
 		return true, nil
 	case "enter":
-		if m.isOnSection() {
-			m.toggleSection()
-			return true, nil
-		}
 		if fd := m.focusedField(); fd != nil {
 			if fd.isTextField() {
 				m.enterEdit()
@@ -495,10 +364,6 @@ func (m *formModel) handleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		m.moveFocus(1)
 		return true, nil
 	case " ":
-		if m.isOnSection() {
-			m.toggleSection()
-			return true, nil
-		}
 		if fd := m.focusedField(); fd != nil {
 			switch fd.Kind {
 			case fieldPicker, fieldToggle:
@@ -510,10 +375,6 @@ func (m *formModel) handleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		}
 		return true, nil
 	case "h", "left":
-		if m.isOnSection() {
-			m.collapseSection()
-			return true, nil
-		}
 		if fd := m.focusedField(); fd != nil {
 			if fd.Kind == fieldPicker || fd.Kind == fieldToggle {
 				m.cycleValue(-1)
@@ -522,10 +383,6 @@ func (m *formModel) handleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		}
 		return true, nil
 	case "l", "right":
-		if m.isOnSection() {
-			m.expandSection()
-			return true, nil
-		}
 		if fd := m.focusedField(); fd != nil {
 			switch fd.Kind {
 			case fieldPicker, fieldToggle:
@@ -572,9 +429,6 @@ func (m *formModel) positionInfo() string {
 	}
 	item := m.items[m.focusIdx]
 	sec := &m.schema.Sections[item.sectionIdx]
-	if item.kind == navSection {
-		return sec.Label
-	}
 	return fmt.Sprintf("%d/%d %s", item.fieldIdx+1, len(sec.Fields), sec.Label)
 }
 
@@ -582,9 +436,6 @@ func (m *formModel) positionInfo() string {
 func (m *formModel) footerHints() string {
 	if m.editing {
 		return "Ctrl+S save   Esc done"
-	}
-	if m.isOnSection() && m.collapsible {
-		return "Ctrl+S save   j/k nav   Enter toggle   Esc back"
 	}
 	fd := m.focusedField()
 	if fd == nil {
