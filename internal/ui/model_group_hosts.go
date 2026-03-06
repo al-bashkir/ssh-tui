@@ -62,13 +62,14 @@ type groupHostsModel struct {
 	search textinput.Model
 	focus  focusState
 
-	keymap    keyMap
-	help      help.Model
-	showHelp  bool
-	helpVP    viewport.Model
-	cmdPrompt bool
-	cmdInput  textinput.Model
-	toast     toast
+	keymap         keyMap
+	help           help.Model
+	showHelp       bool
+	helpVP         viewport.Model
+	cmdPrompt      bool
+	cmdPromptCrumb string
+	cmdInput       textinput.Model
+	toast          toast
 
 	confirmQuit         bool
 	confirmRemove       bool
@@ -322,6 +323,17 @@ func (m *groupHostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if key.Matches(msg, m.keymap.ConnectCmd) && m.focus == focusList {
+			targets := m.ghHostsToOpen()
+			if len(targets) == 0 {
+				return m, nil
+			}
+			prefix := "Groups > " + m.group.Name
+			switch len(targets) {
+			case 1:
+				m.cmdPromptCrumb = prefix + " > " + targets[0]
+			default:
+				m.cmdPromptCrumb = fmt.Sprintf("%s > %d selected", prefix, len(targets))
+			}
 			in := textinput.New()
 			in.CharLimit = 512
 			in.Prompt = "cmd: "
@@ -421,7 +433,7 @@ func (m *groupHostsModel) View() string {
 		return renderHelpModalWithVP(m.width, m.height, "Group Hosts", m.help, m.helpKeys(), &m.helpVP)
 	}
 	if m.cmdPrompt {
-		return renderCmdPromptModal(m.width, m.height, "Groups > "+m.group.Name,
+		return renderCmdPromptModal(m.width, m.height, m.cmdPromptCrumb,
 			"Connect and run a remote command (keeps session open).", m.cmdInput)
 	}
 	if m.confirmQuit {

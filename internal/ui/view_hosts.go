@@ -12,7 +12,7 @@ func (m *hostsModel) View() string {
 		return renderHelpModalWithVP(m.width, m.height, "Hosts", m.help, m.helpKeys(), &m.helpVP)
 	}
 	if m.cmdPrompt {
-		return renderCmdPromptModal(m.width, m.height, "Hosts",
+		return renderCmdPromptModal(m.width, m.height, m.cmdPromptCrumb,
 			"Connect and run a remote command (keeps session open).", m.cmdInput)
 	}
 	if m.confirmQuit {
