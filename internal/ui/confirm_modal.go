@@ -7,10 +7,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-var (
-	confirmTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(cErr)
-)
-
 func renderQuitConfirm(width, height int) string {
 	box := quitConfirmBox(width)
 	if width <= 0 || height <= 0 {
@@ -44,23 +40,23 @@ func renderConfirmBox(totalW int, title, body, footer string) string {
 func quitConfirmBox(maxWidth int) string {
 	boxW := maxWidth
 	if boxW <= 0 {
-		boxW = 52
+		boxW = quitConfirmMaxW
 	}
-	boxW = min(52, max(22, boxW-4))
+	boxW = min(quitConfirmMaxW, max(22, boxW-confirmDialogMargin))
 	title := confirmTitleStyle.Render("Quit?")
 	body := "Exit ssh-tui?"
 	footer := footerKeyStyle.Render("[y/\u21b5]") + dim.Render(" quit") +
 		"     " + footerKeyStyle.Render("[n/Esc]") + dim.Render(" cancel")
-	return renderConfirmBox(boxW+6, title, body, footer)
+	return renderConfirmBox(boxW+confirmDialogPadding, title, body, footer)
 }
 
 func deleteGroupConfirmBox(maxWidth int, name string, hostCount int) string {
 	name = strings.TrimSpace(name)
 	boxW := maxWidth
 	if boxW <= 0 {
-		boxW = 60
+		boxW = confirmDialogMaxW
 	}
-	boxW = min(60, max(24, boxW-4))
+	boxW = min(confirmDialogMaxW, max(24, boxW-confirmDialogMargin))
 	title := confirmTitleStyle.Render("Delete group?")
 	body := "This will remove the group"
 	if name != "" {
@@ -68,16 +64,16 @@ func deleteGroupConfirmBox(maxWidth int, name string, hostCount int) string {
 	}
 	footer := footerKeyStyle.Render("[y/\u21b5]") + dim.Render(" delete") +
 		"     " + footerKeyStyle.Render("[n/Esc]") + dim.Render(" cancel")
-	return renderConfirmBox(boxW+6, title, body, footer)
+	return renderConfirmBox(boxW+confirmDialogPadding, title, body, footer)
 }
 
 func connectConfirmBox(maxWidth int, count int, hostNames []string) string {
 	boxW := maxWidth
 	if boxW <= 0 {
-		boxW = 60
+		boxW = confirmDialogMaxW
 	}
-	boxW = min(60, max(24, boxW-4))
-	totalW := boxW + 6
+	boxW = min(confirmDialogMaxW, max(24, boxW-confirmDialogMargin))
+	totalW := boxW + confirmDialogPadding
 	title := confirmTitleStyle.Render(fmt.Sprintf("Connect %d hosts?", count))
 	footer := footerKeyStyle.Render("[y/\u21b5]") + dim.Render(" connect") +
 		"     " + footerKeyStyle.Render("[n/Esc]") + dim.Render(" cancel")
@@ -106,10 +102,10 @@ func connectConfirmBox(maxWidth int, count int, hostNames []string) string {
 func removeHostsConfirmBox(maxWidth int, hosts []string, groupName string) string {
 	boxW := maxWidth
 	if boxW <= 0 {
-		boxW = 60
+		boxW = confirmDialogMaxW
 	}
-	boxW = min(60, max(24, boxW-4))
-	totalW := boxW + 6
+	boxW = min(confirmDialogMaxW, max(24, boxW-confirmDialogMargin))
+	totalW := boxW + confirmDialogPadding
 	count := len(hosts)
 	title := confirmTitleStyle.Render("Remove hosts?")
 	footer := footerKeyStyle.Render("[y/\u21b5]") + dim.Render(" remove") +

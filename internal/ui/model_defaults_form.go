@@ -511,37 +511,15 @@ func (m *defaultsFormModel) View() string {
 
 	innerW := max(0, m.width-2)
 	innerH := max(0, m.height-2)
-	contentH := max(0, innerH-4)
-	labelW := 16
+	contentH := max(0, innerH-tabBoxHeaderLines)
+	labelW := defaultsFormLabelWidth
 	fieldW := max(10, innerW-labelW-1)
 
 	label := func(s string, focused bool) string {
-		padded := s
-		if len(padded) < labelW {
-			padded = padded + strings.Repeat(" ", labelW-len(padded))
-		}
-		if focused {
-			return headerStyle.Render(padded)
-		}
-		return padded
+		return formLabel(s, labelW, focused)
 	}
-
-	inputLine := func(in textinput.Model, focused bool, w int) string {
-		return underlineInput(in, focused, w)
-	}
-
-	seg := func(cur, val, text string, focused bool) string {
-		cur = strings.TrimSpace(cur)
-		val = strings.TrimSpace(val)
-		if cur == val {
-			box := "[" + text + "]"
-			if focused {
-				return segFocusedStyle.Render(box)
-			}
-			return checkedStyle.Render(box)
-		}
-		return tabInactiveStyle.Render(text)
-	}
+	inputLine := formInputLine
+	seg := formSegment
 
 	lines := []string{}
 	focusLine := 0
@@ -700,10 +678,7 @@ func (m *defaultsFormModel) View() string {
 	lines = append(lines, label("Border format:", m.focus == defaultsFieldPaneBorderFormat)+" "+bf)
 
 	fieldPos := fmt.Sprintf("%d/%d", int(m.focus)+1, int(defaultsFieldPaneBorderFormat)+1)
-	footer := footerStyle.Render(fieldPos + "  Ctrl+S save   j/k move   h/l option   i edit   Esc back")
-	if m.editing {
-		footer = footerStyle.Render(fieldPos) + "  " + headerStyle.Render("INSERT") + "  " + footerStyle.Render("Ctrl+S save   Esc done")
-	}
+	footer := formFooterLine(fieldPos, m.editing, "Ctrl+S save   j/k move   h/l option   i edit   Esc back")
 	toast := ""
 	if !m.toast.empty() {
 		toast = renderToast(m.toast)

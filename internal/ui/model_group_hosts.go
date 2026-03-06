@@ -421,15 +421,8 @@ func (m *groupHostsModel) View() string {
 		return renderHelpModalWithVP(m.width, m.height, "Group Hosts", m.help, m.helpKeys(), &m.helpVP)
 	}
 	if m.cmdPrompt {
-		mw, mh := modalSize(m.width, m.height, 88, 9, 6, 10)
-		var b strings.Builder
-		b.WriteString("Connect and run a remote command (keeps session open).\n\n")
-		b.WriteString(m.cmdInput.View())
-		b.WriteString("\n")
-		b.WriteString(footerStyle.Render("Enter connect  Esc cancel"))
-		breadcrumb := "Groups > " + m.group.Name
-		box := renderFrame(mw, mh, breadcrumbTitle(breadcrumb, "Command"), "", strings.TrimRight(b.String(), "\n"), "")
-		return placeCentered(m.width, m.height, box)
+		return renderCmdPromptModal(m.width, m.height, "Groups > "+m.group.Name,
+			"Connect and run a remote command (keeps session open).", m.cmdInput)
 	}
 	if m.confirmQuit {
 		return renderQuitConfirm(m.width, m.height)
@@ -467,11 +460,11 @@ func (m *groupHostsModel) View() string {
 		}
 	}
 	var footer string
-	if m.width < 60 {
+	if m.width < compactWidthThreshold {
 		footer = styledFooter("\u21b5 connect  \u2423 select  esc back  ? help")
 	} else {
 		footer = styledFooter("\u21b5 connect  O pane  ·  \u2423 select  o panes  ·  Ctrl+o cmd  a add")
-		if m.height >= 20 {
+		if m.height >= twoLineFooterMinHeight {
 			footer += "\n" + styledFooter("e config  c custom  d remove  y copy  ·  tab search  esc back  ? help")
 		}
 	}
@@ -544,20 +537,8 @@ func (m *groupHostsModel) helpKeys() helpMap {
 }
 
 func (m *groupHostsModel) emptyStateView() string {
-	innerW := max(0, m.width-2)
-	innerH := max(0, m.height-2)
-	contentH := max(0, innerH-6)
-
-	q := strings.TrimSpace(m.search.Value())
-	dots := dim.Render("·  ·  ·")
-	var msg string
-	if q != "" {
-		msg = dots + "\n\n" + dim.Render(fmt.Sprintf("No matches for %q", q)) + "\n" + dim.Render("Esc to clear search")
-	} else {
-		msg = dots + "\n\n" + dim.Render("No hosts in this group.") + "\n" + dim.Render("a \u2014 add hosts")
-	}
-
-	return lipgloss.Place(innerW, contentH, lipgloss.Center, lipgloss.Center, msg)
+	return renderListEmptyState(m.width, m.height, m.search.Value(),
+		dim.Render("No hosts in this group.")+"\n"+dim.Render("a \u2014 add hosts"))
 }
 
 func (m *groupHostsModel) statusLine() string {

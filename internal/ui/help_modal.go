@@ -10,15 +10,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-var (
-	helpBoxStyle = lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(cFrameBorder).
-			Padding(1, 2)
-
-	helpTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
-)
-
 // helpContent generates the rendered help text body (without the box).
 func helpContent(title string, h help.Model, keys helpMap, innerW int) string {
 	hh := h
@@ -35,7 +26,7 @@ func helpContent(title string, h help.Model, keys helpMap, innerW int) string {
 }
 
 func helpBoxWidth(termW int) int {
-	boxW := min(88, termW-4)
+	boxW := min(helpMaxBoxWidth, termW-confirmDialogMargin)
 	if boxW < 30 {
 		boxW = min(termW, 30)
 	}
@@ -43,7 +34,8 @@ func helpBoxWidth(termW int) int {
 }
 
 func helpInnerWidth(boxW int) int {
-	innerW := boxW - 6
+	// Subtract border (2) + horizontal padding (2*2) = 6.
+	innerW := boxW - confirmDialogPadding
 	if innerW < 20 {
 		innerW = 0
 	}
@@ -59,8 +51,7 @@ func initHelpViewport(width, height int, title string, h help.Model, keys helpMa
 
 	// Size viewport to fit content, but cap at available terminal height.
 	contentLines := strings.Count(content, "\n") + 1
-	// borders (2) + padding (2) = 4 lines overhead
-	maxVPH := height - 4
+	maxVPH := height - helpBoxOverhead
 	if maxVPH < 3 {
 		maxVPH = 3
 	}

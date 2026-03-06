@@ -225,6 +225,23 @@ var (
 
 	tabActiveStyle   = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
 	tabInactiveStyle = lipgloss.NewStyle().Foreground(cMuted)
+
+	searchUnfocused = lipgloss.NewStyle().Foreground(cSearchDim)
+
+	// Confirm dialog title (referenced in confirm_modal.go).
+	confirmTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(cErr)
+
+	// Help overlay (referenced in help_modal.go).
+	helpBoxStyle = lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(cFrameBorder).
+			Padding(1, 2)
+	helpTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
+
+	// Toast notifications (referenced in toast.go).
+	toastOKStyle   = lipgloss.NewStyle().Foreground(cOK)
+	toastInfoStyle = lipgloss.NewStyle().Foreground(cMuted)
+	toastErrStyle  = lipgloss.NewStyle().Foreground(cErr)
 )
 
 func SetAccentColor(name string) {
@@ -262,23 +279,7 @@ func SetAccentColor(name string) {
 		cSegFocusedBG = cAccent
 	}
 
-	// Rebuild styles that capture color vars at creation time.
-	headerStyle = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
-	checkedStyle = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
-	badgeCfgStyle = lipgloss.NewStyle().Foreground(cAccent).Background(lipgloss.AdaptiveColor{Light: "254", Dark: "235"}).Padding(0, 1).Bold(true)
-	badgeSelStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.AdaptiveColor{Light: "255", Dark: "16"}).
-		Background(cAccent).
-		Padding(0, 1).
-		Bold(true)
-	tabActiveStyle = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
-	footerKeyStyle = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
-
-	// rowActiveStyle stays fixed (subtle gray bg, no accent dependency).
-	segFocusedStyle = lipgloss.NewStyle().Background(cSegFocusedBG).Foreground(cSegFocusedFG).Bold(true)
-
-	// Help modal title style lives in help_modal.go.
-	helpTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
+	rebuildAllStyles()
 }
 
 // ApplyColorScheme applies a named colorscheme if scheme is non-empty and
@@ -296,7 +297,7 @@ func ApplyColorScheme(scheme, accentColor string) {
 	SetAccentColor(accentColor)
 }
 
-// applyScheme mutates all global color vars from cs and rebuilds all styles.
+// applyScheme mutates all global color vars from cs, then calls rebuildAllStyles.
 func applyScheme(cs colorScheme) {
 	cAccent = cs.Accent
 	cSegFocusedBG = cs.SegFocusedBG
@@ -312,65 +313,101 @@ func applyScheme(cs colorScheme) {
 	cBackground = cs.Background
 	bgANSICode = hexToANSIBG(cs.Background)
 
-	// Rebuild every style that references a color variable.
+	rebuildAllStyles()
+}
+
+// rebuildAllStyles reconstructs every style variable from the current color
+// variables. This is the single source of truth for all style construction.
+// Called after any color change (theme switch, accent change).
+func rebuildAllStyles() {
+	hasBG := cBackground != ""
+	var bg lipgloss.TerminalColor
+	if hasBG {
+		bg = lipgloss.Color(cBackground)
+	}
+
+	// Semantic status.
 	statusOK = lipgloss.NewStyle().Foreground(cOK)
 	statusWarn = lipgloss.NewStyle().Foreground(cWarn)
 	statusErr = lipgloss.NewStyle().Foreground(cErr)
 	dim = lipgloss.NewStyle().Foreground(cMuted)
 
-	// Build frameStyle; apply theme background to modal/frame interiors when set.
+	// Frame / modal chrome.
 	fs := lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(cFrameBorder).
 		Padding(0, 1)
-	if cs.Background != "" {
-		fs = fs.Background(lipgloss.Color(cs.Background))
+	if hasBG {
+		fs = fs.Background(bg)
 	}
 	frameStyle = fs
 
+	// Header / footer text.
 	headerStyle = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
 	footerStyle = lipgloss.NewStyle().Foreground(cMuted)
 
+	// Selection checkboxes.
 	checkedStyle = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
 	uncheckedStyle = lipgloss.NewStyle().Foreground(cMuted)
 
+	// Active list row highlight.
 	rowActiveStyle = lipgloss.NewStyle().Background(cRowActiveBG).Foreground(cRowActiveFG).Bold(true)
+
+	// Form segment focus.
 	segFocusedStyle = lipgloss.NewStyle().Background(cSegFocusedBG).Foreground(cSegFocusedFG).Bold(true)
 
-	badgeCfgStyle = lipgloss.NewStyle().Foreground(cAccent).Background(lipgloss.AdaptiveColor{Light: "254", Dark: "235"}).Padding(0, 1).Bold(true)
-	badgeCountStyle = lipgloss.NewStyle().Foreground(cMuted).Background(lipgloss.AdaptiveColor{Light: "254", Dark: "236"}).Padding(0, 1)
+	// Badge pills.
+	badgeCfgStyle = lipgloss.NewStyle().
+		Foreground(cAccent).
+		Background(lipgloss.AdaptiveColor{Light: "254", Dark: "235"}).
+		Padding(0, 1).Bold(true)
+	badgeCountStyle = lipgloss.NewStyle().
+		Foreground(cMuted).
+		Background(lipgloss.AdaptiveColor{Light: "254", Dark: "236"}).
+		Padding(0, 1)
 	badgeSelStyle = lipgloss.NewStyle().
 		Foreground(lipgloss.AdaptiveColor{Light: "255", Dark: "16"}).
 		Background(cAccent).
 		Padding(0, 1).
 		Bold(true)
 
+	// Key hints.
 	footerKeyStyle = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
+
+	// Tab labels.
 	tabActiveStyle = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
 	tabInactiveStyle = lipgloss.NewStyle().Foreground(cMuted)
 
+	// Search bar.
 	searchUnfocused = lipgloss.NewStyle().Foreground(cSearchDim)
 
-	helpTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
-
-	// Rebuild tab-box border and padding styles.
-	if cs.Background != "" {
-		bg := lipgloss.Color(cs.Background)
+	// Tab box chrome.
+	if hasBG {
 		tabBoxBorderStyle = lipgloss.NewStyle().Foreground(cFrameBorder).Background(bg)
 		tabBoxPadStyle = lipgloss.NewStyle().Background(bg)
-		helpBoxStyle = lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(cFrameBorder).
-			Padding(1, 2).
-			Background(bg)
 	} else {
 		tabBoxBorderStyle = lipgloss.NewStyle().Foreground(cFrameBorder)
 		tabBoxPadStyle = lipgloss.NewStyle()
-		helpBoxStyle = lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(cFrameBorder).
-			Padding(1, 2)
 	}
+
+	// Help overlay.
+	hs := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(cFrameBorder).
+		Padding(1, 2)
+	if hasBG {
+		hs = hs.Background(bg)
+	}
+	helpBoxStyle = hs
+	helpTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
+
+	// Confirm dialog title.
+	confirmTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(cErr)
+
+	// Toast notifications.
+	toastOKStyle = lipgloss.NewStyle().Foreground(cOK)
+	toastInfoStyle = lipgloss.NewStyle().Foreground(cMuted)
+	toastErrStyle = lipgloss.NewStyle().Foreground(cErr)
 }
 
 // hexToANSIBG converts a "#RRGGBB" hex string to an ANSI truecolor background
@@ -491,8 +528,6 @@ func configureSearch(m *textinput.Model) {
 	m.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "0", Dark: "255"})
 	m.Cursor.Style = lipgloss.NewStyle().Foreground(cAccent)
 }
-
-var searchUnfocused = lipgloss.NewStyle().Foreground(cSearchDim)
 
 func setSearchFocused(m *textinput.Model, focused bool) {
 	if focused {

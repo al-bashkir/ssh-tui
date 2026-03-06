@@ -524,36 +524,14 @@ func (m *groupFormModel) View() string {
 	}
 
 	innerW := max(0, m.width-2)
-	labelW := 14
+	labelW := modalFormLabelWidth
 	fieldW := max(10, innerW-labelW-1)
 
 	label := func(s string, focused bool) string {
-		padded := s
-		if len(padded) < labelW {
-			padded = padded + strings.Repeat(" ", labelW-len(padded))
-		}
-		if focused {
-			return headerStyle.Render(padded)
-		}
-		return padded
+		return formLabel(s, labelW, focused)
 	}
-
-	inputLine := func(in textinput.Model, focused bool, w int) string {
-		return underlineInput(in, focused, w)
-	}
-
-	seg := func(cur, val, label string, focused bool) string {
-		cur = strings.TrimSpace(cur)
-		val = strings.TrimSpace(val)
-		if cur == val {
-			box := "[" + label + "]"
-			if focused {
-				return segFocusedStyle.Render(box)
-			}
-			return checkedStyle.Render(box)
-		}
-		return tabInactiveStyle.Render(label)
-	}
+	inputLine := formInputLine
+	seg := formSegment
 
 	openCur := strings.TrimSpace(m.group.OpenMode)
 	openFocused := m.focus == groupFieldOpenMode
@@ -654,10 +632,7 @@ func (m *groupFormModel) View() string {
 	lines = append(lines, label("Border format:", m.focus == groupFieldPaneBorderFormat)+" "+bf)
 
 	fieldPos := fmt.Sprintf("%d/%d", int(m.focus)+1, int(groupFieldPaneBorderFormat)+1)
-	footer := fieldPos + "  Ctrl+S save   j/k move   h/l option   i edit   Esc cancel"
-	if m.editing {
-		footer = footerStyle.Render(fieldPos) + "  " + headerStyle.Render("INSERT") + "  " + footerStyle.Render("Ctrl+S save   Esc done")
-	}
+	footer := formFooterLine(fieldPos, m.editing, "Ctrl+S save   j/k move   h/l option   i edit   Esc cancel")
 
 	// Build full-height box with scroll.
 	innerH := max(0, m.height-2)
@@ -673,7 +648,6 @@ func (m *groupFormModel) View() string {
 	start, end := formScrollWindow(len(lines), visibleH, focusLine)
 	visible := lines[start:end]
 
-	out := make([]string, 0, m.height)
 	title := "Create Group"
 	if m.index >= 0 {
 		name := strings.TrimSpace(m.group.Name)
@@ -688,19 +662,10 @@ func (m *groupFormModel) View() string {
 	} else {
 		title = breadcrumbTitle(m.parentCrumb, "Create Group")
 	}
-	out = append(out, boxTitleTop(m.width, title))
-	for _, ln := range visible {
-		out = append(out, boxLine(m.width, padVisible(ln, innerW)))
-	}
-	fill := visibleH - len(visible)
-	for i := 0; i < fill; i++ {
-		out = append(out, boxLine(m.width, strings.Repeat(" ", innerW)))
-	}
+
+	toastStr := ""
 	if !m.toast.empty() {
-		out = append(out, boxLine(m.width, padVisible(renderToast(m.toast), innerW)))
+		toastStr = renderToast(m.toast)
 	}
-	out = append(out, boxSep(m.width))
-	out = append(out, boxLine(m.width, padVisible(footerStyle.Render(footer), innerW)))
-	out = append(out, boxBottom(m.width))
-	return strings.Join(out, "\n")
+	return renderFormBox(m.width, title, visible, visibleH, toastStr, footer)
 }
