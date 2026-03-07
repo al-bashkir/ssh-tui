@@ -33,14 +33,15 @@ func (d groupsDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 		fmt.Fprint(w, item.FilterValue())
 		return
 	}
-	fmt.Fprint(w, renderGroupRow(m.Width(), index == m.Index(), row.name, row.hostCount, row.hasCfg))
+	fmt.Fprint(w, renderGroupRow(m.Width(), index == m.Index(), row.name, row.hostCount, row.hasCfg, row.matchedIndexes))
 }
 
 type groupRow struct {
-	index     int
-	name      string
-	hostCount int
-	hasCfg    bool
+	index          int
+	name           string
+	hostCount      int
+	hasCfg         bool
+	matchedIndexes []int
 }
 
 func (i groupRow) Title() string       { return i.name }
@@ -627,7 +628,9 @@ func (m *groupsModel) applyFilter(query string) {
 		matches := fuzzy.Find(query, names)
 		rows = make([]groupRow, 0, len(matches))
 		for _, mt := range matches {
-			rows = append(rows, m.allRows[mt.Index])
+			r := m.allRows[mt.Index]
+			r.matchedIndexes = mt.MatchedIndexes
+			rows = append(rows, r)
 		}
 	}
 	m.setRows(rows)

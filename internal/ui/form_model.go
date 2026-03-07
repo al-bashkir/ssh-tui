@@ -5,6 +5,9 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -55,12 +58,13 @@ type formModel struct {
 	width  int
 	height int
 
-	labelWidth  int // label column width (chars)
-	fieldIndent int // indent for fields under section headers
+	labelWidth    int  // label column width (chars)
+	fieldIndent   int  // indent for fields under section headers
+	showFieldHelp bool // show helper text below focused fields
 }
 
 // newFormModel creates a formModel from a schema and initial values.
-func newFormModel(schema formSchema, values map[string]string, labelWidth int) formModel {
+func newFormModel(schema formSchema, values map[string]string, labelWidth int, showFieldHelp bool) formModel {
 	originals := make(map[string]string, len(values))
 	for k, v := range values {
 		originals[k] = v
@@ -73,6 +77,7 @@ func newFormModel(schema formSchema, values map[string]string, labelWidth int) f
 		validationErrs: make(map[string]string),
 		labelWidth:     labelWidth,
 		fieldIndent:    2,
+		showFieldHelp:  showFieldHelp,
 	}
 
 	// Create text inputs for text/number fields.
@@ -487,6 +492,64 @@ func (m *formModel) pickerView() string {
 	return m.picker.View(m.width)
 }
 
+// overlayPickerOnVisible renders the picker popup on top of visible content
+// lines, positioned as a dropdown near the focused field.
+// When there is not enough room below the field the popup flips above it.
+// The overlay is transparent: background content to the left and right of the
+// popup box remains visible.
+// focusRow is the row index of the focused field within the visible slice.
+func (m *formModel) overlayPickerOnVisible(visible []string, focusRow, innerW int) []string {
+	if m.picker == nil {
+		return visible
+	}
+
+	// Limit popup width to the value area.
+	popupMaxW := innerW - m.fieldIndent - m.labelWidth
+	if popupMaxW < 20 {
+		popupMaxW = min(innerW, 20)
+	}
+	popup := m.picker.View(popupMaxW)
+	popupLines := strings.Split(strings.TrimRight(popup, "\n"), "\n")
+
+	// Decide direction: prefer below, flip above when not enough room.
+	roomBelow := len(visible) - focusRow - 1
+	roomAbove := focusRow
+
+	startRow := focusRow + 1 // below by default
+	if len(popupLines) > roomBelow && roomAbove > roomBelow {
+		// Flip above: place popup so its last line is the row above focusRow.
+		startRow = focusRow - len(popupLines)
+	}
+
+	startCol := m.fieldIndent + m.labelWidth + 1
+
+	result := make([]string, len(visible))
+	copy(result, visible)
+
+	for i, pLine := range popupLines {
+		row := startRow + i
+		if row < 0 || row >= len(result) {
+			continue
+		}
+		bg := result[row]
+		popupW := lipgloss.Width(pLine)
+
+		// Left: ANSI-aware truncation to startCol columns.
+		left := ansi.Truncate(bg, startCol, "")
+		// Pad if background line is shorter than startCol.
+		if lw := lipgloss.Width(left); lw < startCol {
+			left += strings.Repeat(" ", startCol-lw)
+		}
+
+		// Right: everything past startCol + popupW.
+		right := ansi.TruncateLeft(bg, startCol+popupW, "")
+
+		result[row] = left + pLine + right
+	}
+
+	return result
+}
+
 // ---------------------------------------------------------------------------
 // Resize
 // ---------------------------------------------------------------------------
@@ -522,37 +585,38 @@ func (m *formModel) positionInfo() string {
 }
 
 // footerHints returns context-sensitive key hints for the footer.
+// Format: "key action  key action" (double-space separated, for styledFooter).
 func (m *formModel) footerHints() string {
 	if m.picker != nil {
-		return "Enter select   j/k move   Esc cancel"
+		return "⏎ select  Esc cancel"
 	}
 	if m.editing {
-		return "Ctrl+S save   Esc done"
+		return "Ctrl+S save  Esc done"
 	}
 	fd := m.focusedField()
 	if fd == nil {
-		return "Ctrl+S save   j/k nav   Esc back"
+		return "Ctrl+S save  j/k nav  Esc back"
 	}
 	switch fd.Kind {
 	case fieldText, fieldNumber:
-		return "Ctrl+S save   j/k nav   i edit   Esc back"
+		return "Ctrl+S save  j/k nav  i edit  Esc back"
 	case fieldPicker:
-		return "Ctrl+S save   j/k nav   Enter choose   Esc back"
+		return "Ctrl+S save  j/k nav  ⏎ choose  Esc back"
 	case fieldToggle:
-		return "Ctrl+S save   j/k nav   h/l option   Esc back"
+		return "Ctrl+S save  j/k nav  h/l option  Esc back"
 	case fieldSubModal:
-		return "Ctrl+S save   j/k nav   Enter select   Esc back"
+		return "Ctrl+S save  j/k nav  ⏎ select  Esc back"
 	}
-	return "Ctrl+S save   j/k nav   Esc back"
+	return "Ctrl+S save  j/k nav  Esc back"
 }
 
 // renderFooter returns the styled footer line.
 func (m *formModel) renderFooter() string {
 	pos := m.positionInfo()
 	if m.editing {
-		return footerStyle.Render(pos) + "  " + headerStyle.Render("INSERT") + "  " + footerStyle.Render("Ctrl+S save   Esc done")
+		return footerStyle.Render(pos) + "  " + headerStyle.Render("INSERT") + "  " + styledFooter("Ctrl+S save  Esc done")
 	}
-	return footerStyle.Render(pos + "  " + m.footerHints())
+	return footerStyle.Render(pos) + "  " + styledFooter(m.footerHints())
 }
 
 // ---------------------------------------------------------------------------

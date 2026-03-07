@@ -107,9 +107,6 @@ func (p *optionPickerPopup) View(maxW int) string {
 		lines = append(lines, focusedBoxLine(totalW, text))
 	}
 
-	footer := footerStyle.Render("Enter select   Esc cancel")
-	lines = append(lines, focusedBoxSep(totalW))
-	lines = append(lines, focusedBoxLine(totalW, padVisible(footer, innerW)))
 	lines = append(lines, focusedBoxBottom(totalW))
 
 	return strings.Join(lines, "\n")

@@ -16,8 +16,9 @@ import (
 )
 
 type groupPickRow struct {
-	index int
-	name  string
+	index          int
+	name           string
+	matchedIndexes []int
 }
 
 func (i groupPickRow) Title() string       { return i.name }
@@ -36,7 +37,7 @@ func (d groupPickerDelegate) Render(w io.Writer, m list.Model, index int, item l
 		fmt.Fprint(w, item.FilterValue())
 		return
 	}
-	fmt.Fprint(w, renderSimpleRow(m.Width(), index == m.Index(), row.name))
+	fmt.Fprint(w, renderSimpleRow(m.Width(), index == m.Index(), row.name, row.matchedIndexes))
 }
 
 type groupPickerModel struct {
@@ -326,7 +327,7 @@ func (m *groupPickerModel) View() string {
 	bodyParts = append(bodyParts, searchLine+"\n"+sep+"\n"+listView+"\n"+sep)
 	body := strings.TrimRight(strings.Join(bodyParts, "\n"), "\n")
 
-	return renderFrame(m.width, m.height, breadcrumbTitle(m.parentCrumb, "Select group"), "", body, m.statusLine())
+	return renderFocusedFrame(m.width, m.height, breadcrumbTitle(m.parentCrumb, "Select group"), "", body, m.statusLine())
 }
 
 func (m *groupPickerModel) helpKeys() helpMap {
@@ -412,6 +413,7 @@ func (m *groupPickerModel) applyFilter(query string) {
 	if query == "" {
 		items := make([]list.Item, len(m.all))
 		for i, r := range m.all {
+			r.matchedIndexes = nil
 			items[i] = r
 		}
 		m.list.SetItems(items)
@@ -424,7 +426,9 @@ func (m *groupPickerModel) applyFilter(query string) {
 	matches := fuzzy.Find(query, m.names)
 	items := make([]list.Item, len(matches))
 	for i, mt := range matches {
-		items[i] = m.all[mt.Index]
+		r := m.all[mt.Index]
+		r.matchedIndexes = mt.MatchedIndexes
+		items[i] = r
 	}
 	m.list.SetItems(items)
 	if len(items) > 0 {

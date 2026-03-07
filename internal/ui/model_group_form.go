@@ -179,7 +179,7 @@ func newGroupFormModel(index int, g config.Group, defs config.Defaults, confirmQ
 	}
 
 	values := groupToValues(g)
-	fm := newFormModel(groupSchema(defs), values, modalFormLabelWidth)
+	fm := newFormModel(groupSchema(defs), values, modalFormLabelWidth, defs.ShowFieldHelp)
 
 	return &groupFormModel{
 		form:               fm,
@@ -307,9 +307,6 @@ func (m *groupFormModel) View() string {
 	if m.borderPicker != nil {
 		return placeCentered(m.width, m.height, m.borderPicker.View())
 	}
-	if pv := m.form.pickerView(); pv != "" {
-		return placeCentered(m.width, m.height, pv)
-	}
 	if m.width <= 0 || m.height <= 0 {
 		return ""
 	}
@@ -334,6 +331,12 @@ func (m *groupFormModel) View() string {
 	}
 	start, end := formScrollWindow(len(lines), visibleH, focusLine)
 	visible := lines[start:end]
+
+	// Overlay picker popup as a dropdown below the focused field.
+	if m.form.picker != nil {
+		focusRow := focusLine - start
+		visible = m.form.overlayPickerOnVisible(visible, focusRow, innerW)
+	}
 
 	// Title / breadcrumb.
 	title := "Create Group"

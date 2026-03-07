@@ -28,7 +28,7 @@ func helpContent(title string, h help.Model, keys helpMap, innerW int) string {
 		body = strings.TrimSpace(hh.View(keys))
 	}
 
-	footer := dim.Render("Esc or ? to close  j/k scroll")
+	footer := styledFooter("Esc/? close  j/k scroll")
 	return header + "\n\n" + body + "\n\n" + footer
 }
 

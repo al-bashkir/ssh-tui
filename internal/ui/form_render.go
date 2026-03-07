@@ -131,7 +131,7 @@ func (m *formModel) renderFieldLines(fd *fieldDef, focused bool, innerW, fieldW 
 		helperPrefix := strings.Repeat(" ", m.fieldIndent)
 		if errMsg := m.validationErrs[fd.Key]; errMsg != "" {
 			lines = append(lines, statusErr.Render(helperPrefix+"╰ "+errMsg))
-		} else if fd.Helper != "" {
+		} else if fd.Helper != "" && m.showFieldHelp {
 			lines = append(lines, hintStyle.Render(helperPrefix+"╰ "+fd.Helper))
 		}
 	}

@@ -221,6 +221,11 @@ var (
 			BorderForeground(cFrameBorder).
 			Padding(0, 1)
 
+	focusedFrameStyle = lipgloss.NewStyle().
+				Border(lipgloss.NormalBorder()).
+				BorderForeground(cFocusedBorder).
+				Padding(0, 1)
+
 	headerStyle = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
 	footerStyle = lipgloss.NewStyle().Foreground(cMuted)
 
@@ -253,7 +258,7 @@ var (
 	// Help overlay (referenced in help_modal.go).
 	helpBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).
-			BorderForeground(cFrameBorder).
+			BorderForeground(cFocusedBorder).
 			Padding(1, 2)
 	helpTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
 
@@ -271,11 +276,15 @@ func SetAccentColor(name string) {
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(cFrameBorder).
 		Padding(0, 1)
+	focusedFrameStyle = lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(cFocusedBorder).
+		Padding(0, 1)
 	tabBoxBorderStyle = lipgloss.NewStyle().Foreground(cFrameBorder)
 	tabBoxPadStyle = lipgloss.NewStyle()
 	helpBoxStyle = lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
-		BorderForeground(cFrameBorder).
+		BorderForeground(cFocusedBorder).
 		Padding(1, 2)
 
 	name = strings.ToLower(strings.TrimSpace(name))
@@ -369,6 +378,15 @@ func rebuildAllStyles() {
 	}
 	frameStyle = fs
 
+	ffs := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(cFocusedBorder).
+		Padding(0, 1)
+	if hasBG {
+		ffs = ffs.Background(bg)
+	}
+	focusedFrameStyle = ffs
+
 	// Header / footer text.
 	headerStyle = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
 	footerStyle = lipgloss.NewStyle().Foreground(cMuted)
@@ -419,7 +437,7 @@ func rebuildAllStyles() {
 	// Help overlay.
 	hs := lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
-		BorderForeground(cFrameBorder).
+		BorderForeground(cFocusedBorder).
 		Padding(1, 2)
 	if hasBG {
 		hs = hs.Background(bg)
@@ -546,6 +564,40 @@ func renderFrame(w, h int, title string, headerRight string, body string, footer
 		content = strings.TrimRight(content, "\n") + "\n" + foot
 	}
 	box := frameStyle.Width(w).Height(h).Render(content)
+	return withThemeBG(box)
+}
+
+// renderFocusedFrame is like renderFrame but uses focusedFrameStyle (cFocusedBorder).
+// Used for modal overlays that should stand out from the background tab box.
+func renderFocusedFrame(w, h int, title string, headerRight string, body string, footer string) string {
+	if w <= 0 || h <= 0 {
+		out := strings.TrimSpace(title)
+		if out != "" {
+			header := out
+			if strings.TrimSpace(headerRight) != "" {
+				header = header + " " + strings.TrimSpace(headerRight)
+			}
+			out = headerStyle.Render(header) + "\n"
+		}
+		out += strings.TrimSpace(body)
+		if strings.TrimSpace(footer) != "" {
+			out += "\n" + footer
+		}
+		return strings.TrimSpace(out)
+	}
+
+	innerW, _ := frameInnerSize(w, h)
+	head := headerStyle.Render(joinHeader(innerW, title, headerRight))
+	foot := ""
+	if strings.TrimSpace(footer) != "" {
+		foot = footer
+	}
+
+	content := strings.TrimRight(head+"\n"+body, "\n")
+	if foot != "" {
+		content = strings.TrimRight(content, "\n") + "\n" + foot
+	}
+	box := focusedFrameStyle.Width(w).Height(h).Render(content)
 	return withThemeBG(box)
 }
 

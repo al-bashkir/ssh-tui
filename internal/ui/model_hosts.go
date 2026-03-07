@@ -29,10 +29,11 @@ const (
 )
 
 type hostRow struct {
-	host     string
-	selected bool
-	hasCfg   bool
-	hidden   bool
+	host           string
+	selected       bool
+	hasCfg         bool
+	hidden         bool
+	matchedIndexes []int
 }
 
 func (i hostRow) Title() string       { return i.host }
@@ -51,7 +52,7 @@ func (d hostDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 		fmt.Fprint(w, item.FilterValue())
 		return
 	}
-	fmt.Fprint(w, renderHostLikeRow(m.Width(), index == m.Index(), row.selected, row.host, row.hasCfg, row.hidden))
+	fmt.Fprint(w, renderHostLikeRow(m.Width(), index == m.Index(), row.selected, row.host, row.hasCfg, row.hidden, row.matchedIndexes))
 }
 
 type knownHostsReloadMsg struct {
@@ -65,11 +66,12 @@ type hostsModel struct {
 	width  int
 	height int
 
-	allHosts []string
-	filtered []string
-	selected map[string]bool
-	keymap   keyMap
-	help     help.Model
+	allHosts   []string
+	filtered   []string
+	selected   map[string]bool
+	matchIdxes map[string][]int // fuzzy match indexes per host
+	keymap     keyMap
+	help       help.Model
 
 	list   list.Model
 	search textinput.Model
@@ -473,13 +475,18 @@ func (m *hostsModel) applyFilter(query string) {
 
 	query = strings.TrimSpace(query)
 	var filtered []string
+	m.matchIdxes = nil
 	if query == "" {
 		filtered = append([]string(nil), m.allHosts...)
 	} else {
 		matches := fuzzy.Find(query, m.allHosts)
 		filtered = make([]string, 0, len(matches))
+		m.matchIdxes = make(map[string][]int, len(matches))
 		for _, match := range matches {
 			filtered = append(filtered, match.Str)
+			if len(match.MatchedIndexes) > 0 {
+				m.matchIdxes[match.Str] = match.MatchedIndexes
+			}
 		}
 	}
 	if !m.showHidden {
@@ -546,7 +553,7 @@ func (m *hostsModel) setListItems(hosts []string) {
 	for _, h := range hosts {
 		_, ok := hostConfigFor(m.opts.Inventory, h)
 		hidden := isHostHidden(m.opts.Inventory, h)
-		items = append(items, hostRow{host: h, selected: m.selected[h], hasCfg: ok, hidden: hidden})
+		items = append(items, hostRow{host: h, selected: m.selected[h], hasCfg: ok, hidden: hidden, matchedIndexes: m.matchIdxes[h]})
 	}
 	m.list.SetItems(items)
 }
