@@ -60,7 +60,16 @@ func settingsSchema() formSchema {
 					Helper:  "Application color theme"},
 				{Key: "accent", Label: "Accent color", Kind: fieldPicker,
 					Options: opts("default", "blue", "cyan", "green", "amber", "red", "magenta"),
-					Helper:  "UI accent color (overridden when a colorscheme is active)"},
+					Helper:  "UI accent color (overridden when a colorscheme is active)",
+					DisabledWhen: func(values map[string]string) string {
+						if cs := values["colorscheme"]; cs != "" && cs != "default" {
+							return "overridden by " + cs + " theme"
+						}
+						return ""
+					}},
+				{Key: "show_field_help", Label: "Field help", Kind: fieldToggle,
+					Options: opts("yes", "no"), Default: "yes",
+					Helper: "Show helper text below focused form fields"},
 			}},
 			{Key: "tmux", Label: "Tmux", Fields: []fieldDef{
 				{Key: "tmux", Label: "Tmux mode", Kind: fieldPicker,
@@ -85,7 +94,7 @@ func settingsSchema() formSchema {
 					Validate: validateNonNegativeInt},
 			}},
 			{Key: "panes", Label: "Panes", Fields: []fieldDef{
-				{Key: "pane_split", Label: "Split direction", Kind: fieldPicker,
+				{Key: "pane_split", Label: "Split direction", Kind: fieldToggle,
 					Options: opts("horizontal", "vertical"),
 					Helper:  "Direction for splitting tmux panes"},
 				{Key: "pane_layout", Label: "Layout", Kind: fieldPicker,
@@ -119,6 +128,10 @@ func defaultsToValues(d config.Defaults) map[string]string {
 	if d.ConfirmQuit {
 		confirmQuit = "yes"
 	}
+	showFieldHelp := "no"
+	if d.ShowFieldHelp {
+		showFieldHelp = "yes"
+	}
 	portStr := ""
 	if d.Port != 0 {
 		portStr = strconv.Itoa(d.Port)
@@ -139,6 +152,7 @@ func defaultsToValues(d config.Defaults) map[string]string {
 		"open_mode":        d.OpenMode,
 		"session":          strings.TrimSpace(d.TmuxSession),
 		"confirm_quit":     confirmQuit,
+		"show_field_help":  showFieldHelp,
 		"threshold":        threshStr,
 		"pane_split":       d.PaneSplit,
 		"pane_layout":      d.PaneLayout,
@@ -167,6 +181,7 @@ func applySettingsValues(values map[string]string, base config.Defaults) (config
 
 	d.LoadKnownHosts = values["load_known_hosts"] != "no"
 	d.ConfirmQuit = values["confirm_quit"] == "yes"
+	d.ShowFieldHelp = values["show_field_help"] != "no"
 
 	// Port.
 	portStr := strings.TrimSpace(values["port"])
@@ -267,7 +282,7 @@ func (m *defaultsFormModel) refreshAccentStyles() {
 
 func newDefaultsFormModel(d config.Defaults, confirmQuitEnabled bool) *defaultsFormModel {
 	values := defaultsToValues(d)
-	fm := newFormModel(settingsSchema(), values, defaultsFormLabelWidth)
+	fm := newFormModel(settingsSchema(), values, defaultsFormLabelWidth, d.ShowFieldHelp)
 
 	return &defaultsFormModel{
 		form:               fm,
@@ -346,8 +361,8 @@ func (m *defaultsFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// In insert mode, delegate everything to the form.
-		if m.form.editing {
+		// In insert mode or picker popup, delegate everything to the form.
+		if m.form.editing || m.form.picker != nil {
 			handled, cmd := m.form.handleKey(msg)
 			if handled {
 				return m, cmd
@@ -402,6 +417,8 @@ func (m *defaultsFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Generic form key handling.
 		handled, cmd := m.form.handleKey(msg)
 		if handled {
+			// Live-preview: sync showFieldHelp toggle.
+			m.form.showFieldHelp = m.form.values["show_field_help"] != "no"
 			return m, cmd
 		}
 	}
@@ -450,6 +467,12 @@ func (m *defaultsFormModel) View() string {
 	// Scroll so focused field is visible.
 	start, end := formScrollWindow(len(lines), visibleH, focusLine)
 	visible := lines[start:end]
+
+	// Overlay picker popup as a dropdown below the focused field.
+	if m.form.picker != nil {
+		focusRow := focusLine - start
+		visible = m.form.overlayPickerOnVisible(visible, focusRow, innerW)
+	}
 
 	contentLines := make([]string, 0, contentH)
 	contentLines = append(contentLines, visible...)

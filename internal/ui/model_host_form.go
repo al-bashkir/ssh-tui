@@ -126,7 +126,7 @@ func (m *hostFormModel) refreshAccentStyles() {
 
 func newHostFormModel(index int, h config.Host, defs config.Defaults, confirmQuitEnabled bool) *hostFormModel {
 	values := hostToValues(h)
-	fm := newFormModel(hostSchema(defs), values, modalFormLabelWidth)
+	fm := newFormModel(hostSchema(defs), values, modalFormLabelWidth, defs.ShowFieldHelp)
 
 	return &hostFormModel{
 		form:               fm,

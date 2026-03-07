@@ -64,6 +64,88 @@ func boxSep(w int) string {
 	return tabBoxBorderStyle.Render("├" + strings.Repeat("─", w-2) + "┤")
 }
 
+// ---------------------------------------------------------------------------
+// Focused box variants — for modals/popups using cFocusedBorder.
+// ---------------------------------------------------------------------------
+
+func focusedBoxTop(w int) string {
+	if w <= 1 {
+		return ""
+	}
+	if w == 2 {
+		return focusedBoxBorderStyle.Render("┌┐")
+	}
+	return focusedBoxBorderStyle.Render("┌" + strings.Repeat("─", w-2) + "┐")
+}
+
+func focusedBoxTitleTop(w int, title string) string {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return focusedBoxTop(w)
+	}
+	if w <= 1 {
+		return ""
+	}
+	if w == 2 {
+		return focusedBoxBorderStyle.Render("┌┐")
+	}
+	innerW := w - 2
+	seg := " " + title + " "
+	segW := lipgloss.Width(seg)
+	if segW > innerW {
+		seg = " " + truncateTail(title, max(0, innerW-2)) + " "
+		segW = lipgloss.Width(seg)
+	}
+	fill := innerW - segW
+	if fill < 0 {
+		fill = 0
+	}
+	return focusedBoxBorderStyle.Render("┌") + seg + focusedBoxBorderStyle.Render(strings.Repeat("─", fill)+"┐")
+}
+
+func focusedBoxBottom(w int) string {
+	if w <= 1 {
+		return ""
+	}
+	if w == 2 {
+		return focusedBoxBorderStyle.Render("└┘")
+	}
+	return focusedBoxBorderStyle.Render("└" + strings.Repeat("─", w-2) + "┘")
+}
+
+func focusedBoxSep(w int) string {
+	if w <= 1 {
+		return ""
+	}
+	if w == 2 {
+		return focusedBoxBorderStyle.Render("├┤")
+	}
+	return focusedBoxBorderStyle.Render("├" + strings.Repeat("─", w-2) + "┤")
+}
+
+func focusedBoxLine(w int, content string) string {
+	if w <= 1 {
+		return ""
+	}
+	border := focusedBoxBorderStyle.Render("│")
+	if w == 2 {
+		return border + border
+	}
+	innerW := w - 2
+	content = strings.TrimRight(content, "\n")
+	cw := lipgloss.Width(content)
+	if cw > innerW {
+		content = lipgloss.NewStyle().MaxWidth(innerW).Render(content)
+		cw = lipgloss.Width(content)
+	}
+	pad := innerW - cw
+	if pad < 0 {
+		pad = 0
+	}
+	padding := tabBoxPadStyle.Render(strings.Repeat(" ", pad))
+	return border + withThemeBG(content+padding) + border
+}
+
 func boxLine(w int, content string) string {
 	if w <= 1 {
 		return ""

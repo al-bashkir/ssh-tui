@@ -47,7 +47,7 @@ func (d paneBorderFormatsDelegate) Render(w io.Writer, m list.Model, index int, 
 	if strings.TrimSpace(row.value) != "" {
 		text = row.label + "  " + row.value
 	}
-	fmt.Fprint(w, renderSimpleRow(m.Width(), index == m.Index(), text))
+	fmt.Fprint(w, renderSimpleRow(m.Width(), index == m.Index(), text, nil))
 }
 
 type paneBorderFormatsModel struct {
@@ -324,14 +324,14 @@ func (m *paneBorderFormatsModel) View() string {
 		headerRight = renderToast(toast{text: truncateTail(m.addToast.text, 28), level: m.addToast.level})
 	}
 
-	footer := "Enter select  Esc back"
+	footer := "⏎ select  Esc back"
 	if m.confirmDel {
-		footer = "y/Enter delete  n/Esc cancel"
+		footer = "y/⏎ delete  n/Esc cancel"
 	} else if m.adding {
-		footer = "Enter add  Esc cancel"
+		footer = "⏎ add  Esc cancel"
 	} else if m.allowEdit {
-		footer = "Enter select  a add  d delete  Esc back"
+		footer = "⏎ select  a add  d delete  Esc back"
 	}
 
-	return renderFrame(m.width, m.height, breadcrumbTitle(m.parentCrumb, "Border formats"), headerRight, strings.TrimRight(body.String(), "\n"), footerStyle.Render(footer))
+	return renderFocusedFrame(m.width, m.height, breadcrumbTitle(m.parentCrumb, "Border formats"), headerRight, strings.TrimRight(body.String(), "\n"), styledFooter(footer))
 }

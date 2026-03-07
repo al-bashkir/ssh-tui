@@ -29,6 +29,10 @@ type fieldDef struct {
 	CharLimit   int                // max input chars (0 = use default 256)
 	Narrow      bool               // use narrow field width (e.g. Port)
 	Validate    func(string) error // optional per-field validation
+
+	// DisabledWhen returns a non-empty message when the field should be
+	// rendered as disabled (e.g. "overridden by theme"). nil = always enabled.
+	DisabledWhen func(values map[string]string) string
 }
 
 // isTextField returns true when the field uses a textinput.Model.

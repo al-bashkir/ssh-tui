@@ -99,12 +99,12 @@ func (m *customHostModel) View() string {
 	var b strings.Builder
 	b.WriteString(m.input.View())
 	b.WriteString("\n")
-	b.WriteString(footerStyle.Render("Enter connect  Ctrl+a add to group  Esc cancel"))
+	b.WriteString(styledFooter("⏎ connect  Ctrl+a add to group  Esc cancel"))
 
 	footer := ""
 	if !m.toast.empty() {
 		footer = renderToast(m.toast)
 	}
 
-	return renderFrame(m.width, m.height, title, "", strings.TrimRight(b.String(), "\n"), footer)
+	return renderFocusedFrame(m.width, m.height, title, "", strings.TrimRight(b.String(), "\n"), footer)
 }

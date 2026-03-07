@@ -18,8 +18,8 @@ func renderCmdPromptModal(totalW, totalH int, parentCrumb, description string, c
 	b.WriteString("\n\n")
 	b.WriteString(cmdInput.View())
 	b.WriteString("\n")
-	b.WriteString(footerStyle.Render("Enter connect  Esc cancel"))
-	box := renderFrame(mw, mh, breadcrumbTitle(parentCrumb, "Command"), "", strings.TrimRight(b.String(), "\n"), "")
+	b.WriteString(styledFooter("⏎ connect  Esc cancel"))
+	box := renderFocusedFrame(mw, mh, breadcrumbTitle(parentCrumb, "Command"), "", strings.TrimRight(b.String(), "\n"), "")
 	return placeCentered(totalW, totalH, box)
 }
 

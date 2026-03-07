@@ -25,10 +25,12 @@ var (
 	cRowActiveBG = lipgloss.AdaptiveColor{Light: "253", Dark: "238"}
 	cRowActiveFG = lipgloss.AdaptiveColor{Light: "0", Dark: "255"}
 
-	// Vivid per-accent bg/fg for form segment focus (option pickers).
-	defaultSegFocusedBG = lipgloss.AdaptiveColor{Light: "153", Dark: "24"}
-	cSegFocusedBG       = defaultSegFocusedBG
-	cSegFocusedFG       = lipgloss.AdaptiveColor{Light: "17", Dark: "231"}
+	// Extended color roles.
+	cFocusedBorder = lipgloss.AdaptiveColor{Light: "25", Dark: "39"}   // = accent by default
+	cDisabled      = lipgloss.AdaptiveColor{Light: "248", Dark: "240"} // dimmer than muted
+	cHint          = lipgloss.AdaptiveColor{Light: "245", Dark: "245"} // between muted and disabled
+	cSecondary     = lipgloss.AdaptiveColor{Light: "67", Dark: "67"}   // secondary accent
+	cSurface       = lipgloss.AdaptiveColor{Light: "254", Dark: "236"} // elevated bg
 
 	// cBackground is the hex background color for the active colorscheme.
 	// Empty string means no override — terminal default is used.
@@ -43,6 +45,9 @@ var (
 // Rebuilt by applyScheme and SetAccentColor.
 var tabBoxBorderStyle = lipgloss.NewStyle().Foreground(cFrameBorder)
 
+// focusedBoxBorderStyle styles box-drawing characters for focused modals/popups.
+var focusedBoxBorderStyle = lipgloss.NewStyle().Foreground(cFocusedBorder)
+
 // tabBoxPadStyle fills interior line padding with the theme background.
 // Rebuilt by applyScheme and SetAccentColor.
 var tabBoxPadStyle = lipgloss.NewStyle()
@@ -51,18 +56,23 @@ var tabBoxPadStyle = lipgloss.NewStyle()
 // Background is an optional hex color applied to modal/frame backgrounds;
 // empty string means use terminal default (no override).
 type colorScheme struct {
-	Accent       lipgloss.AdaptiveColor
-	SegFocusedBG lipgloss.AdaptiveColor
-	SegFocusedFG lipgloss.AdaptiveColor
-	Muted        lipgloss.AdaptiveColor
-	OK           lipgloss.AdaptiveColor
-	Warn         lipgloss.AdaptiveColor
-	Err          lipgloss.AdaptiveColor
-	FrameBorder  lipgloss.AdaptiveColor
-	SearchDim    lipgloss.AdaptiveColor
-	RowActiveBG  lipgloss.AdaptiveColor
-	RowActiveFG  lipgloss.AdaptiveColor
-	Background   string // hex color for frame/modal background; "" = terminal default
+	Accent      lipgloss.AdaptiveColor
+	Muted       lipgloss.AdaptiveColor
+	OK          lipgloss.AdaptiveColor
+	Warn        lipgloss.AdaptiveColor
+	Err         lipgloss.AdaptiveColor
+	FrameBorder lipgloss.AdaptiveColor
+	SearchDim   lipgloss.AdaptiveColor
+	RowActiveBG lipgloss.AdaptiveColor
+	RowActiveFG lipgloss.AdaptiveColor
+	Background  string // hex color for frame/modal background; "" = terminal default
+
+	// Extended roles.
+	FocusedBorder lipgloss.AdaptiveColor // border of focused panel/modal
+	Disabled      lipgloss.AdaptiveColor // disabled/unavailable elements
+	Hint          lipgloss.AdaptiveColor // helper/placeholder text
+	Secondary     lipgloss.AdaptiveColor // secondary accent (section headers, breadcrumbs)
+	Surface       lipgloss.AdaptiveColor // elevated background (modals, cards)
 }
 
 // themeColor creates an AdaptiveColor from a single truecolor hex value.
@@ -77,93 +87,111 @@ func themeColor(hex string) lipgloss.AdaptiveColor {
 var builtinColorSchemes = map[string]colorScheme{
 	"default": {
 		// Adaptive ANSI 256 codes — no background override.
-		Accent:       lipgloss.AdaptiveColor{Light: "25", Dark: "39"},
-		SegFocusedBG: lipgloss.AdaptiveColor{Light: "153", Dark: "24"},
-		SegFocusedFG: lipgloss.AdaptiveColor{Light: "17", Dark: "231"},
-		Muted:        lipgloss.AdaptiveColor{Light: "242", Dark: "242"},
-		OK:           lipgloss.AdaptiveColor{Light: "28", Dark: "35"},
-		Warn:         lipgloss.AdaptiveColor{Light: "166", Dark: "214"},
-		Err:          lipgloss.AdaptiveColor{Light: "160", Dark: "203"},
-		FrameBorder:  lipgloss.AdaptiveColor{Light: "250", Dark: "238"},
-		SearchDim:    lipgloss.AdaptiveColor{Light: "247", Dark: "246"},
-		RowActiveBG:  lipgloss.AdaptiveColor{Light: "253", Dark: "238"},
-		RowActiveFG:  lipgloss.AdaptiveColor{Light: "0", Dark: "255"},
-		Background:   "",
+		Accent:        lipgloss.AdaptiveColor{Light: "25", Dark: "39"},
+		Muted:         lipgloss.AdaptiveColor{Light: "242", Dark: "242"},
+		OK:            lipgloss.AdaptiveColor{Light: "28", Dark: "35"},
+		Warn:          lipgloss.AdaptiveColor{Light: "166", Dark: "214"},
+		Err:           lipgloss.AdaptiveColor{Light: "160", Dark: "203"},
+		FrameBorder:   lipgloss.AdaptiveColor{Light: "250", Dark: "238"},
+		SearchDim:     lipgloss.AdaptiveColor{Light: "247", Dark: "246"},
+		RowActiveBG:   lipgloss.AdaptiveColor{Light: "253", Dark: "238"},
+		RowActiveFG:   lipgloss.AdaptiveColor{Light: "0", Dark: "255"},
+		Background:    "",
+		FocusedBorder: lipgloss.AdaptiveColor{Light: "25", Dark: "39"},   // = accent
+		Disabled:      lipgloss.AdaptiveColor{Light: "248", Dark: "240"}, // lighter gray
+		Hint:          lipgloss.AdaptiveColor{Light: "245", Dark: "245"}, // mid gray
+		Secondary:     lipgloss.AdaptiveColor{Light: "67", Dark: "67"},   // steel blue
+		Surface:       lipgloss.AdaptiveColor{Light: "254", Dark: "236"}, // raised bg
 	},
 	// Dracula — https://draculatheme.com/contribute
 	"dracula": {
-		Accent:       themeColor("#bd93f9"), // purple
-		SegFocusedBG: themeColor("#44475a"), // current line / selection
-		SegFocusedFG: themeColor("#f8f8f2"), // foreground
-		Muted:        themeColor("#6272a4"), // comment
-		OK:           themeColor("#50fa7b"), // green
-		Warn:         themeColor("#ffb86c"), // orange
-		Err:          themeColor("#ff5555"), // red
-		FrameBorder:  themeColor("#44475a"), // current line
-		SearchDim:    themeColor("#6272a4"), // comment
-		RowActiveBG:  themeColor("#44475a"), // selection
-		RowActiveFG:  themeColor("#f8f8f2"), // foreground
-		Background:   "#282a36",             // background
+		Accent:        themeColor("#bd93f9"), // purple
+		Muted:         themeColor("#6272a4"), // comment
+		OK:            themeColor("#50fa7b"), // green
+		Warn:          themeColor("#ffb86c"), // orange
+		Err:           themeColor("#ff5555"), // red
+		FrameBorder:   themeColor("#44475a"), // current line
+		SearchDim:     themeColor("#6272a4"), // comment
+		RowActiveBG:   themeColor("#44475a"), // selection
+		RowActiveFG:   themeColor("#f8f8f2"), // foreground
+		Background:    "#282a36",             // background
+		FocusedBorder: themeColor("#bd93f9"), // purple (= accent)
+		Disabled:      themeColor("#383a59"), // darker than current line
+		Hint:          themeColor("#6272a4"), // comment
+		Secondary:     themeColor("#ff79c6"), // pink
+		Surface:       themeColor("#44475a"), // current line
 	},
 	// Nord — https://www.nordtheme.com/docs/colors-and-palettes
 	"nord": {
-		Accent:       themeColor("#88c0d0"), // nord8 — frost teal
-		SegFocusedBG: themeColor("#434c5e"), // nord2 — polar night
-		SegFocusedFG: themeColor("#eceff4"), // nord6 — snow storm
-		Muted:        themeColor("#4c566a"), // nord3 — polar night (dim)
-		OK:           themeColor("#a3be8c"), // nord14 — aurora green
-		Warn:         themeColor("#ebcb8b"), // nord13 — aurora yellow
-		Err:          themeColor("#bf616a"), // nord11 — aurora red
-		FrameBorder:  themeColor("#3b4252"), // nord1 — polar night
-		SearchDim:    themeColor("#4c566a"), // nord3
-		RowActiveBG:  themeColor("#434c5e"), // nord2 — selection
-		RowActiveFG:  themeColor("#eceff4"), // nord6
-		Background:   "#2e3440",             // nord0 — polar night base
+		Accent:        themeColor("#88c0d0"), // nord8 — frost teal
+		Muted:         themeColor("#4c566a"), // nord3 — polar night (dim)
+		OK:            themeColor("#a3be8c"), // nord14 — aurora green
+		Warn:          themeColor("#ebcb8b"), // nord13 — aurora yellow
+		Err:           themeColor("#bf616a"), // nord11 — aurora red
+		FrameBorder:   themeColor("#3b4252"), // nord1 — polar night
+		SearchDim:     themeColor("#4c566a"), // nord3
+		RowActiveBG:   themeColor("#434c5e"), // nord2 — selection
+		RowActiveFG:   themeColor("#eceff4"), // nord6
+		Background:    "#2e3440",             // nord0 — polar night base
+		FocusedBorder: themeColor("#88c0d0"), // frost teal (= accent)
+		Disabled:      themeColor("#434c5e"), // nord2
+		Hint:          themeColor("#4c566a"), // nord3
+		Secondary:     themeColor("#81a1c1"), // nord9 — frost light
+		Surface:       themeColor("#3b4252"), // nord1
 	},
 	// Gruvbox dark — https://github.com/morhetz/gruvbox
 	"gruvbox": {
-		Accent:       themeColor("#fe8019"), // bright orange
-		SegFocusedBG: themeColor("#665c54"), // bg3 — dark selection
-		SegFocusedFG: themeColor("#ebdbb2"), // fg — warm light
-		Muted:        themeColor("#928374"), // gray
-		OK:           themeColor("#b8bb26"), // bright green
-		Warn:         themeColor("#fabd2f"), // bright yellow
-		Err:          themeColor("#fb4934"), // bright red
-		FrameBorder:  themeColor("#504945"), // bg2 — warm mid-dark
-		SearchDim:    themeColor("#928374"), // gray
-		RowActiveBG:  themeColor("#665c54"), // bg3 — selection
-		RowActiveFG:  themeColor("#ebdbb2"), // fg
-		Background:   "#282828",             // bg
+		Accent:        themeColor("#fe8019"), // bright orange
+		Muted:         themeColor("#928374"), // gray
+		OK:            themeColor("#b8bb26"), // bright green
+		Warn:          themeColor("#fabd2f"), // bright yellow
+		Err:           themeColor("#fb4934"), // bright red
+		FrameBorder:   themeColor("#504945"), // bg2 — warm mid-dark
+		SearchDim:     themeColor("#928374"), // gray
+		RowActiveBG:   themeColor("#665c54"), // bg3 — selection
+		RowActiveFG:   themeColor("#ebdbb2"), // fg
+		Background:    "#282828",             // bg
+		FocusedBorder: themeColor("#fe8019"), // bright orange (= accent)
+		Disabled:      themeColor("#504945"), // bg2
+		Hint:          themeColor("#665c54"), // bg3
+		Secondary:     themeColor("#fabd2f"), // bright yellow
+		Surface:       themeColor("#3c3836"), // bg1
 	},
 	// Catppuccin Mocha — https://github.com/catppuccin/catppuccin
 	"catppuccin": {
-		Accent:       themeColor("#cba4f7"), // mauve
-		SegFocusedBG: themeColor("#585b70"), // overlay2 / selection
-		SegFocusedFG: themeColor("#cdd6f4"), // text
-		Muted:        themeColor("#6c7086"), // overlay0
-		OK:           themeColor("#a6e3a1"), // green
-		Warn:         themeColor("#f9e2af"), // yellow
-		Err:          themeColor("#f38ba8"), // red
-		FrameBorder:  themeColor("#45475a"), // surface1 — border
-		SearchDim:    themeColor("#585b70"), // overlay2
-		RowActiveBG:  themeColor("#585b70"), // overlay2 — selection
-		RowActiveFG:  themeColor("#cdd6f4"), // text
-		Background:   "#1e1e2e",             // base
+		Accent:        themeColor("#cba6f7"), // mauve
+		Muted:         themeColor("#6c7086"), // overlay0
+		OK:            themeColor("#a6e3a1"), // green
+		Warn:          themeColor("#f9e2af"), // yellow
+		Err:           themeColor("#f38ba8"), // red
+		FrameBorder:   themeColor("#45475a"), // surface1 — border
+		SearchDim:     themeColor("#585b70"), // overlay2
+		RowActiveBG:   themeColor("#585b70"), // overlay2 — selection
+		RowActiveFG:   themeColor("#cdd6f4"), // text
+		Background:    "#1e1e2e",             // base
+		FocusedBorder: themeColor("#cba6f7"), // mauve (= accent)
+		Disabled:      themeColor("#313244"), // surface0
+		Hint:          themeColor("#6c7086"), // overlay0
+		Secondary:     themeColor("#b4befe"), // lavender
+		Surface:       themeColor("#313244"), // surface0
 	},
 	// Kanagawa Wave — https://github.com/rebelot/kanagawa.nvim
 	"kanagawa": {
-		Accent:       themeColor("#7e9cd8"), // crystalBlue
-		SegFocusedBG: themeColor("#223249"), // waveBlue1 — selection
-		SegFocusedFG: themeColor("#dcd7ba"), // fujiWhite
-		Muted:        themeColor("#727169"), // fujiGray
-		OK:           themeColor("#98bb6c"), // springGreen
-		Warn:         themeColor("#ffa066"), // surimiOrange
-		Err:          themeColor("#e46876"), // peachRed
-		FrameBorder:  themeColor("#2a2a37"), // bg_p1
-		SearchDim:    themeColor("#727169"), // fujiGray
-		RowActiveBG:  themeColor("#223249"), // waveBlue1 — selection
-		RowActiveFG:  themeColor("#dcd7ba"), // fujiWhite
-		Background:   "#1f1f28",             // sumInk2 / base bg
+		Accent:        themeColor("#7e9cd8"), // crystalBlue
+		Muted:         themeColor("#727169"), // fujiGray
+		OK:            themeColor("#98bb6c"), // springGreen
+		Warn:          themeColor("#ffa066"), // surimiOrange
+		Err:           themeColor("#e46876"), // peachRed
+		FrameBorder:   themeColor("#2a2a37"), // bg_p1
+		SearchDim:     themeColor("#727169"), // fujiGray
+		RowActiveBG:   themeColor("#223249"), // waveBlue1 — selection
+		RowActiveFG:   themeColor("#dcd7ba"), // fujiWhite
+		Background:    "#1f1f28",             // sumiInk2 / base bg
+		FocusedBorder: themeColor("#7e9cd8"), // crystalBlue (= accent)
+		Disabled:      themeColor("#363646"), // sumiInk3
+		Hint:          themeColor("#54546d"), // sumiInk4
+		Secondary:     themeColor("#938aa9"), // springViolet1
+		Surface:       themeColor("#2a2a37"), // sumiInk2+
 	},
 }
 
@@ -177,27 +205,26 @@ var accentPresets = map[string]lipgloss.AdaptiveColor{
 	"magenta": {Light: "127", Dark: "213"},
 }
 
-// segFocusedBGPreset maps accent names to vivid backgrounds for form option pickers.
-var segFocusedBGPreset = map[string]lipgloss.AdaptiveColor{
-	"default": {Light: "153", Dark: "24"},
-	"blue":    {Light: "153", Dark: "24"},
-	"cyan":    {Light: "159", Dark: "30"},
-	"green":   {Light: "157", Dark: "22"},
-	"amber":   {Light: "229", Dark: "94"},
-	"red":     {Light: "224", Dark: "88"},
-	"magenta": {Light: "225", Dark: "90"},
-}
-
 var (
 	statusOK   = lipgloss.NewStyle().Foreground(cOK)
 	statusWarn = lipgloss.NewStyle().Foreground(cWarn)
 	statusErr  = lipgloss.NewStyle().Foreground(cErr)
 	dim        = lipgloss.NewStyle().Foreground(cMuted)
 
+	// Extended style tokens.
+	hintStyle      = lipgloss.NewStyle().Foreground(cHint).Italic(true)
+	secondaryStyle = lipgloss.NewStyle().Foreground(cSecondary)
+	disabledStyle  = lipgloss.NewStyle().Foreground(cDisabled).Italic(true)
+
 	frameStyle = lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).
 			BorderForeground(cFrameBorder).
 			Padding(0, 1)
+
+	focusedFrameStyle = lipgloss.NewStyle().
+				Border(lipgloss.NormalBorder()).
+				BorderForeground(cFocusedBorder).
+				Padding(0, 1)
 
 	headerStyle = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
 	footerStyle = lipgloss.NewStyle().Foreground(cMuted)
@@ -207,9 +234,6 @@ var (
 
 	// Active list row: solid background + foreground + bold — no inner styles allowed.
 	rowActiveStyle = lipgloss.NewStyle().Background(cRowActiveBG).Foreground(cRowActiveFG).Bold(true)
-
-	// Form option picker focus: vivid accent background (unchanged from original behavior).
-	segFocusedStyle = lipgloss.NewStyle().Background(cSegFocusedBG).Foreground(cSegFocusedFG).Bold(true)
 
 	badgeCfgStyle   = lipgloss.NewStyle().Foreground(cAccent).Background(lipgloss.AdaptiveColor{Light: "254", Dark: "235"}).Padding(0, 1).Bold(true)
 	badgeCountStyle = lipgloss.NewStyle().Foreground(cMuted).Background(lipgloss.AdaptiveColor{Light: "254", Dark: "236"}).Padding(0, 1)
@@ -234,7 +258,7 @@ var (
 	// Help overlay (referenced in help_modal.go).
 	helpBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).
-			BorderForeground(cFrameBorder).
+			BorderForeground(cFocusedBorder).
 			Padding(1, 2)
 	helpTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
 
@@ -252,11 +276,15 @@ func SetAccentColor(name string) {
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(cFrameBorder).
 		Padding(0, 1)
+	focusedFrameStyle = lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(cFocusedBorder).
+		Padding(0, 1)
 	tabBoxBorderStyle = lipgloss.NewStyle().Foreground(cFrameBorder)
 	tabBoxPadStyle = lipgloss.NewStyle()
 	helpBoxStyle = lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
-		BorderForeground(cFrameBorder).
+		BorderForeground(cFocusedBorder).
 		Padding(1, 2)
 
 	name = strings.ToLower(strings.TrimSpace(name))
@@ -269,15 +297,12 @@ func SetAccentColor(name string) {
 		cAccent = lipgloss.AdaptiveColor{Light: name, Dark: name}
 	}
 
-	bgKey := name
-	if bgKey == "" {
-		bgKey = "default"
-	}
-	if v, ok := segFocusedBGPreset[bgKey]; ok {
-		cSegFocusedBG = v
-	} else {
-		cSegFocusedBG = cAccent
-	}
+	// Reset extended roles to defaults (no theme).
+	cFocusedBorder = cAccent
+	cDisabled = lipgloss.AdaptiveColor{Light: "248", Dark: "240"}
+	cHint = lipgloss.AdaptiveColor{Light: "245", Dark: "245"}
+	cSecondary = lipgloss.AdaptiveColor{Light: "67", Dark: "67"}
+	cSurface = lipgloss.AdaptiveColor{Light: "254", Dark: "236"}
 
 	rebuildAllStyles()
 }
@@ -300,8 +325,6 @@ func ApplyColorScheme(scheme, accentColor string) {
 // applyScheme mutates all global color vars from cs, then calls rebuildAllStyles.
 func applyScheme(cs colorScheme) {
 	cAccent = cs.Accent
-	cSegFocusedBG = cs.SegFocusedBG
-	cSegFocusedFG = cs.SegFocusedFG
 	cMuted = cs.Muted
 	cOK = cs.OK
 	cWarn = cs.Warn
@@ -312,6 +335,13 @@ func applyScheme(cs colorScheme) {
 	cRowActiveFG = cs.RowActiveFG
 	cBackground = cs.Background
 	bgANSICode = hexToANSIBG(cs.Background)
+
+	// Extended roles.
+	cFocusedBorder = cs.FocusedBorder
+	cDisabled = cs.Disabled
+	cHint = cs.Hint
+	cSecondary = cs.Secondary
+	cSurface = cs.Surface
 
 	rebuildAllStyles()
 }
@@ -332,6 +362,12 @@ func rebuildAllStyles() {
 	statusErr = lipgloss.NewStyle().Foreground(cErr)
 	dim = lipgloss.NewStyle().Foreground(cMuted)
 
+	// Extended tokens.
+	hintStyle = lipgloss.NewStyle().Foreground(cHint).Italic(true)
+	secondaryStyle = lipgloss.NewStyle().Foreground(cSecondary)
+	disabledStyle = lipgloss.NewStyle().Foreground(cDisabled).Italic(true)
+	underlineFill = lipgloss.NewStyle().Foreground(cFrameBorder)
+
 	// Frame / modal chrome.
 	fs := lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
@@ -341,6 +377,15 @@ func rebuildAllStyles() {
 		fs = fs.Background(bg)
 	}
 	frameStyle = fs
+
+	ffs := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(cFocusedBorder).
+		Padding(0, 1)
+	if hasBG {
+		ffs = ffs.Background(bg)
+	}
+	focusedFrameStyle = ffs
 
 	// Header / footer text.
 	headerStyle = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
@@ -352,9 +397,6 @@ func rebuildAllStyles() {
 
 	// Active list row highlight.
 	rowActiveStyle = lipgloss.NewStyle().Background(cRowActiveBG).Foreground(cRowActiveFG).Bold(true)
-
-	// Form segment focus.
-	segFocusedStyle = lipgloss.NewStyle().Background(cSegFocusedBG).Foreground(cSegFocusedFG).Bold(true)
 
 	// Badge pills.
 	badgeCfgStyle = lipgloss.NewStyle().
@@ -384,16 +426,18 @@ func rebuildAllStyles() {
 	// Tab box chrome.
 	if hasBG {
 		tabBoxBorderStyle = lipgloss.NewStyle().Foreground(cFrameBorder).Background(bg)
+		focusedBoxBorderStyle = lipgloss.NewStyle().Foreground(cFocusedBorder).Background(bg)
 		tabBoxPadStyle = lipgloss.NewStyle().Background(bg)
 	} else {
 		tabBoxBorderStyle = lipgloss.NewStyle().Foreground(cFrameBorder)
+		focusedBoxBorderStyle = lipgloss.NewStyle().Foreground(cFocusedBorder)
 		tabBoxPadStyle = lipgloss.NewStyle()
 	}
 
 	// Help overlay.
 	hs := lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
-		BorderForeground(cFrameBorder).
+		BorderForeground(cFocusedBorder).
 		Padding(1, 2)
 	if hasBG {
 		hs = hs.Background(bg)
@@ -523,10 +567,45 @@ func renderFrame(w, h int, title string, headerRight string, body string, footer
 	return withThemeBG(box)
 }
 
+// renderFocusedFrame is like renderFrame but uses focusedFrameStyle (cFocusedBorder).
+// Used for modal overlays that should stand out from the background tab box.
+func renderFocusedFrame(w, h int, title string, headerRight string, body string, footer string) string {
+	if w <= 0 || h <= 0 {
+		out := strings.TrimSpace(title)
+		if out != "" {
+			header := out
+			if strings.TrimSpace(headerRight) != "" {
+				header = header + " " + strings.TrimSpace(headerRight)
+			}
+			out = headerStyle.Render(header) + "\n"
+		}
+		out += strings.TrimSpace(body)
+		if strings.TrimSpace(footer) != "" {
+			out += "\n" + footer
+		}
+		return strings.TrimSpace(out)
+	}
+
+	innerW, _ := frameInnerSize(w, h)
+	head := headerStyle.Render(joinHeader(innerW, title, headerRight))
+	foot := ""
+	if strings.TrimSpace(footer) != "" {
+		foot = footer
+	}
+
+	content := strings.TrimRight(head+"\n"+body, "\n")
+	if foot != "" {
+		content = strings.TrimRight(content, "\n") + "\n" + foot
+	}
+	box := focusedFrameStyle.Width(w).Height(h).Render(content)
+	return withThemeBG(box)
+}
+
 func configureSearch(m *textinput.Model) {
 	m.PromptStyle = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
 	m.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "0", Dark: "255"})
 	m.Cursor.Style = lipgloss.NewStyle().Foreground(cAccent)
+	m.PlaceholderStyle = lipgloss.NewStyle().Foreground(cHint).Italic(true)
 }
 
 func setSearchFocused(m *textinput.Model, focused bool) {
@@ -562,7 +641,7 @@ func styledFooter(raw string) string {
 				continue
 			}
 			if p == "·" {
-				styled = append(styled, dim.Render("·"))
+				styled = append(styled, hintStyle.Render("·"))
 				continue
 			}
 			idx := strings.IndexByte(p, ' ')
@@ -572,7 +651,7 @@ func styledFooter(raw string) string {
 			}
 			k := p[:idx]
 			a := p[idx:] // includes leading space
-			styled = append(styled, footerKeyStyle.Render(k)+dim.Render(a))
+			styled = append(styled, footerKeyStyle.Render(k)+hintStyle.Render(a))
 		}
 		out = append(out, strings.Join(styled, "  "))
 	}
@@ -646,7 +725,7 @@ func formSection(label string, width int) string {
 	if fill < 0 {
 		fill = 0
 	}
-	return dim.Render(seg + strings.Repeat("─", fill))
+	return secondaryStyle.Render(seg + strings.Repeat("─", fill))
 }
 
 // statusDot returns a colored dot for status display.

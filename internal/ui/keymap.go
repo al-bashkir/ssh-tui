@@ -42,8 +42,8 @@ func defaultKeyMap() keyMap {
 			key.WithHelp("?", "help"),
 		),
 		FocusSearch: key.NewBinding(
-			key.WithKeys("ctrl+f"),
-			key.WithHelp("ctrl+f", "search"),
+			key.WithKeys("ctrl+f", "/"),
+			key.WithHelp("ctrl+f /", "search"),
 		),
 		ToggleFocus: key.NewBinding(
 			key.WithKeys("tab"),

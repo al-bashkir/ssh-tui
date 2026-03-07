@@ -7,6 +7,56 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// highlightMatches renders matched character positions in accent style.
+// positions contains rune indexes that matched a fuzzy search query.
+// The result is the same string with matched chars styled.
+func highlightMatches(s string, positions []int, active bool) string {
+	if len(positions) == 0 {
+		return s
+	}
+
+	matchSet := make(map[int]bool, len(positions))
+	for _, p := range positions {
+		matchSet[p] = true
+	}
+
+	runes := []rune(s)
+	var sb strings.Builder
+	sb.Grow(len(s) * 2) // rough estimate
+
+	style := checkedStyle // accent bold
+	if active {
+		style = lipgloss.NewStyle().Underline(true)
+	}
+
+	run := false
+	runStart := 0
+	for i := 0; i <= len(runes); i++ {
+		inMatch := i < len(runes) && matchSet[i]
+		if inMatch && !run {
+			// Flush normal text.
+			if i > runStart {
+				sb.WriteString(string(runes[runStart:i]))
+			}
+			run = true
+			runStart = i
+		} else if !inMatch && run {
+			// Flush matched text.
+			sb.WriteString(style.Render(string(runes[runStart:i])))
+			run = false
+			runStart = i
+		}
+	}
+	// Flush remaining.
+	if run {
+		sb.WriteString(style.Render(string(runes[runStart:])))
+	} else if runStart < len(runes) {
+		sb.WriteString(string(runes[runStart:]))
+	}
+
+	return sb.String()
+}
+
 func truncateTail(s string, max int) string {
 	if max <= 0 {
 		return ""
@@ -59,7 +109,7 @@ func badgePlain(text string) string {
 	return " " + text + " "
 }
 
-func renderHostLikeRow(width int, active bool, selected bool, host string, hasCfg bool, hidden bool) string {
+func renderHostLikeRow(width int, active bool, selected bool, host string, hasCfg bool, hidden bool, matchedIndexes []int) string {
 	cur := " "
 	if active {
 		// Plain cursor — no inner ANSI so rowActiveStyle background fills uniformly.
@@ -109,8 +159,10 @@ func renderHostLikeRow(width int, active bool, selected bool, host string, hasCf
 
 	// For hidden hosts, prepend ⊘ prefix to the display string.
 	displayHost := host
+	hiddenPrefix := 0
 	if hidden {
 		displayHost = "⊘ " + host
+		hiddenPrefix = 2 // offset matched indexes by the prefix length
 	}
 
 	hostStr := displayHost
@@ -119,6 +171,22 @@ func renderHostLikeRow(width int, active bool, selected bool, host string, hasCf
 			hostStr = truncateTail(displayHost, hostAvail)
 		} else {
 			hostStr = truncateFade(displayHost, hostAvail)
+		}
+	}
+
+	// Apply search match highlighting (before dim/active styling).
+	if len(matchedIndexes) > 0 && !hidden {
+		visibleLen := len([]rune(hostStr))
+		// Adjust indexes for hidden prefix offset.
+		adjusted := make([]int, 0, len(matchedIndexes))
+		for _, idx := range matchedIndexes {
+			ai := idx + hiddenPrefix
+			if ai >= 0 && ai < visibleLen {
+				adjusted = append(adjusted, ai)
+			}
+		}
+		if len(adjusted) > 0 {
+			hostStr = highlightMatches(hostStr, adjusted, active)
 		}
 	}
 
@@ -141,7 +209,7 @@ func renderHostLikeRow(width int, active bool, selected bool, host string, hasCf
 	return line
 }
 
-func renderSimpleRow(width int, active bool, text string) string {
+func renderSimpleRow(width int, active bool, text string, matchedIndexes []int) string {
 	cur := " "
 	if active {
 		cur = "▸"
@@ -156,6 +224,18 @@ func renderSimpleRow(width int, active bool, text string) string {
 			text = truncateTail(text, avail)
 		} else {
 			text = truncateFade(text, avail)
+		}
+		if len(matchedIndexes) > 0 {
+			visibleLen := len([]rune(text))
+			filtered := make([]int, 0, len(matchedIndexes))
+			for _, idx := range matchedIndexes {
+				if idx >= 0 && idx < visibleLen {
+					filtered = append(filtered, idx)
+				}
+			}
+			if len(filtered) > 0 {
+				text = highlightMatches(text, filtered, active)
+			}
 		}
 		line := prefix + text
 		if active {
@@ -175,7 +255,7 @@ func renderSimpleRow(width int, active bool, text string) string {
 	return line
 }
 
-func renderGroupRow(width int, active bool, name string, hostCount int, _ bool) string {
+func renderGroupRow(width int, active bool, name string, hostCount int, _ bool, matchedIndexes []int) string {
 	cur := " "
 	if active {
 		cur = "▸"
@@ -213,6 +293,18 @@ func renderGroupRow(width int, active bool, name string, hostCount int, _ bool) 
 			name = truncateTail(name, availName)
 		} else {
 			name = truncateFade(name, availName)
+		}
+		if len(matchedIndexes) > 0 {
+			visibleLen := len([]rune(name))
+			filtered := make([]int, 0, len(matchedIndexes))
+			for _, idx := range matchedIndexes {
+				if idx >= 0 && idx < visibleLen {
+					filtered = append(filtered, idx)
+				}
+			}
+			if len(filtered) > 0 {
+				name = highlightMatches(name, filtered, active)
+			}
 		}
 		line := prefix + name + suffix
 		if active {

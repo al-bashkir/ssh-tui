@@ -2,8 +2,6 @@ package ui
 
 import (
 	"strings"
-
-	"github.com/charmbracelet/lipgloss"
 )
 
 // ---------------------------------------------------------------------------
@@ -43,10 +41,21 @@ func (m *formModel) renderFormContent(innerW int) ([]string, int) {
 // ---------------------------------------------------------------------------
 
 // renderFieldLines renders a single field as one or more lines.
-// Multi-option pickers may wrap to additional continuation lines.
 // The focused field gets a helper text line appended.
 func (m *formModel) renderFieldLines(fd *fieldDef, focused bool, innerW, fieldW int) []string {
 	var lines []string
+
+	// Check disabled state.
+	disabledReason := m.isFieldDisabled(fd)
+	disabled := disabledReason != ""
+
+	// Disabled fields cannot be focused (navigation skips them),
+	// but guard defensively.
+	if disabled {
+		focused = false
+	}
+
+	dirty := m.originals[fd.Key] != m.values[fd.Key]
 
 	indent := strings.Repeat(" ", m.fieldIndent)
 	prefix := indent
@@ -60,6 +69,23 @@ func (m *formModel) renderFieldLines(fd *fieldDef, focused bool, innerW, fieldW 
 		} else {
 			prefix = ">"
 		}
+	} else if dirty && m.fieldIndent >= 1 {
+		// Show modified indicator on unfocused dirty fields.
+		prefix = statusWarn.Render("•") + strings.Repeat(" ", m.fieldIndent-1)
+	}
+
+	// Disabled fields: render label + value entirely in disabledStyle.
+	if disabled {
+		labelStr := disabledStyle.Render(padVisible(fd.Label+":", m.labelWidth))
+		val := strings.TrimSpace(m.values[fd.Key])
+		if val == "" {
+			val = "default"
+		}
+		lines = append(lines, prefix+labelStr+" "+disabledStyle.Render(val))
+		// Show disable reason below.
+		helperPrefix := strings.Repeat(" ", m.fieldIndent)
+		lines = append(lines, disabledStyle.Render(helperPrefix+"╰ "+disabledReason))
+		return lines
 	}
 
 	labelStr := formLabel(fd.Label+":", m.labelWidth, focused)
@@ -77,17 +103,13 @@ func (m *formModel) renderFieldLines(fd *fieldDef, focused bool, innerW, fieldW 
 			lines = append(lines, prefix+labelStr+" "+underlineText(m.values[fd.Key], focused, w))
 		}
 
-	case fieldPicker, fieldToggle:
+	case fieldToggle:
 		cur := strings.TrimSpace(m.values[fd.Key])
-		segLines := renderPickerLines(fd.Options, cur, focused, fieldW)
-		if len(segLines) > 0 {
-			lines = append(lines, prefix+labelStr+" "+segLines[0])
-			// Continuation lines aligned to the value column.
-			contIndent := strings.Repeat(" ", m.fieldIndent+m.labelWidth+1)
-			for _, sl := range segLines[1:] {
-				lines = append(lines, contIndent+sl)
-			}
-		}
+		lines = append(lines, prefix+labelStr+" "+renderCycleToggle(fd.Options, cur, focused, fieldW))
+
+	case fieldPicker:
+		cur := strings.TrimSpace(m.values[fd.Key])
+		lines = append(lines, prefix+labelStr+" "+renderPickerInline(fd.Options, cur, focused, fieldW))
 
 	case fieldSubModal:
 		val := strings.TrimSpace(m.values[fd.Key])
@@ -104,60 +126,64 @@ func (m *formModel) renderFieldLines(fd *fieldDef, focused bool, innerW, fieldW 
 		lines = append(lines, prefix+labelStr+" "+rendered)
 	}
 
-	// Helper text below focused field.
-	if focused && fd.Helper != "" {
+	// Validation error or helper text below focused field.
+	if focused {
 		helperPrefix := strings.Repeat(" ", m.fieldIndent)
-		lines = append(lines, dim.Render(helperPrefix+"╰ "+fd.Helper))
+		if errMsg := m.validationErrs[fd.Key]; errMsg != "" {
+			lines = append(lines, statusErr.Render(helperPrefix+"╰ "+errMsg))
+		} else if fd.Helper != "" && m.showFieldHelp {
+			lines = append(lines, hintStyle.Render(helperPrefix+"╰ "+fd.Helper))
+		}
 	}
 
 	return lines
 }
 
 // ---------------------------------------------------------------------------
-// Picker options rendering
+// Toggle rendering (compact cycle: ◂ val ▸)
 // ---------------------------------------------------------------------------
 
-// renderPickerLines renders picker/toggle options as segments, wrapping to
-// multiple lines when they exceed the available width.
-func renderPickerLines(options []fieldOption, cur string, focused bool, maxW int) []string {
-	if len(options) == 0 {
-		return nil
-	}
-
-	// Pre-render all segments and measure their visible widths.
-	segments := make([]string, len(options))
-	widths := make([]int, len(options))
-	for i, opt := range options {
-		segments[i] = formSegment(cur, opt.Value, opt.Display, focused)
-		widths[i] = lipgloss.Width(segments[i])
-	}
-
-	const sepW = 2 // "  " between options
-	sep := "  "
-
-	// Group segments into lines that fit within maxW.
-	var result []string
-	var line string
-	lineW := 0
-
-	for i, seg := range segments {
-		segWidth := widths[i]
-		if i > 0 && lineW+sepW+segWidth > maxW {
-			// Start a new line.
-			result = append(result, line)
-			line = seg
-			lineW = segWidth
-		} else if line == "" {
-			line = seg
-			lineW = segWidth
-		} else {
-			line += sep + seg
-			lineW += sepW + segWidth
+// renderCycleToggle renders a two-option toggle as "◂ display ▸".
+func renderCycleToggle(options []fieldOption, cur string, focused bool, maxW int) string {
+	display := cur
+	for _, opt := range options {
+		if strings.TrimSpace(opt.Value) == cur {
+			display = opt.Display
+			break
 		}
 	}
-	if line != "" {
-		result = append(result, line)
+
+	arrow := dim.Render("◂") + " " + display + " " + dim.Render("▸")
+	if focused {
+		arrow = checkedStyle.Render("◂") + " " + checkedStyle.Render(display) + " " + checkedStyle.Render("▸")
 	}
 
-	return result
+	return padVisible(arrow, maxW)
+}
+
+// ---------------------------------------------------------------------------
+// Picker inline rendering (value + ▾ indicator)
+// ---------------------------------------------------------------------------
+
+// renderPickerInline renders the current picker value with a dropdown
+// indicator. The actual option list is shown as a popup overlay.
+func renderPickerInline(options []fieldOption, cur string, focused bool, maxW int) string {
+	display := cur
+	for _, opt := range options {
+		if strings.TrimSpace(opt.Value) == cur {
+			display = opt.Display
+			break
+		}
+	}
+	if display == "" {
+		display = "default"
+	}
+
+	indicator := dim.Render(" ▾")
+	if focused {
+		display = checkedStyle.Render(display)
+	}
+
+	text := display + indicator
+	return padVisible(text, maxW)
 }

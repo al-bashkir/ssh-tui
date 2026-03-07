@@ -86,10 +86,10 @@ func (m *hostsModel) emptyStateView() string {
 	var defaultMsg string
 	if len(m.allHosts) == 0 {
 		divider := formSection("", 26)
-		hint1 := footerKeyStyle.Render("c") + dim.Render("          custom host")
-		hint3 := footerKeyStyle.Render("Ctrl+s") + dim.Render("     open settings")
+		hint1 := footerKeyStyle.Render("c") + hintStyle.Render("          custom host")
+		hint3 := footerKeyStyle.Render("Ctrl+s") + hintStyle.Render("     open settings")
 		if m.opts.Config.Defaults.LoadKnownHosts {
-			hint2 := footerKeyStyle.Render("r") + dim.Render("          reload known_hosts")
+			hint2 := footerKeyStyle.Render("r") + hintStyle.Render("          reload known_hosts")
 			defaultMsg = dim.Render("No hosts found.") + "\n" + divider + "\n" + hint1 + "\n" + hint2 + "\n" + hint3
 		} else {
 			note := dim.Render("(known_hosts loading is off)")

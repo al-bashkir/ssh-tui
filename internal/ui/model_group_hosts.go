@@ -21,9 +21,10 @@ import (
 )
 
 type groupHostRow struct {
-	host     string
-	selected bool
-	hasCfg   bool
+	host           string
+	selected       bool
+	hasCfg         bool
+	matchedIndexes []int
 }
 
 func (i groupHostRow) Title() string       { return i.host }
@@ -42,7 +43,7 @@ func (d groupHostsDelegate) Render(w io.Writer, m list.Model, index int, item li
 		fmt.Fprint(w, item.FilterValue())
 		return
 	}
-	fmt.Fprint(w, renderHostLikeRow(m.Width(), index == m.Index(), row.selected, row.host, row.hasCfg, false))
+	fmt.Fprint(w, renderHostLikeRow(m.Width(), index == m.Index(), row.selected, row.host, row.hasCfg, false, row.matchedIndexes))
 }
 
 type groupHostsModel struct {
@@ -54,9 +55,10 @@ type groupHostsModel struct {
 	groupIndex int
 	group      config.Group
 
-	allHosts []string
-	filtered []string
-	selected map[string]bool
+	allHosts   []string
+	filtered   []string
+	selected   map[string]bool
+	matchIdxes map[string][]int
 
 	list   list.Model
 	search textinput.Model
@@ -545,6 +547,39 @@ func (m *groupHostsModel) helpKeys() helpMap {
 			m.keymap.Help,
 			m.keymap.Quit,
 		}},
+		sections: []helpSection{
+			{title: "Navigation", keys: []key.Binding{
+				m.list.KeyMap.CursorUp,
+				m.list.KeyMap.CursorDown,
+				m.list.KeyMap.PrevPage,
+				m.list.KeyMap.NextPage,
+				m.keymap.FocusSearch,
+				m.keymap.ToggleFocus,
+				esc,
+			}},
+			{title: "Selection", keys: []key.Binding{
+				m.keymap.ToggleSel,
+				m.keymap.SelectAll,
+				m.keymap.ClearSel,
+			}},
+			{title: "Connection", keys: []key.Binding{
+				m.keymap.Connect,
+				m.keymap.ConnectSame,
+				m.keymap.ConnectCmd,
+				m.keymap.OneWindow,
+			}},
+			{title: "Editing", keys: []key.Binding{
+				m.keymap.AddHosts,
+				m.keymap.CustomHost,
+				m.keymap.HostConfig,
+				m.keymap.Copy,
+				remove,
+			}},
+			{title: "General", keys: []key.Binding{
+				m.keymap.Help,
+				m.keymap.Quit,
+			}},
+		},
 	}
 }
 
@@ -592,13 +627,18 @@ func (m *groupHostsModel) applyFilter(query string) {
 	}
 
 	query = strings.TrimSpace(query)
+	m.matchIdxes = nil
 	if query == "" {
 		m.filtered = append([]string(nil), m.allHosts...)
 	} else {
 		matches := fuzzy.Find(query, m.allHosts)
 		m.filtered = make([]string, 0, len(matches))
+		m.matchIdxes = make(map[string][]int, len(matches))
 		for _, match := range matches {
 			m.filtered = append(m.filtered, match.Str)
+			if len(match.MatchedIndexes) > 0 {
+				m.matchIdxes[match.Str] = match.MatchedIndexes
+			}
 		}
 	}
 	m.setListItems(m.filtered)
@@ -647,7 +687,7 @@ func (m *groupHostsModel) setListItems(hosts []string) {
 	items := make([]list.Item, 0, len(hosts))
 	for _, h := range hosts {
 		_, ok := hostConfigFor(m.opts.Inventory, h)
-		items = append(items, groupHostRow{host: h, selected: m.selected[h], hasCfg: ok})
+		items = append(items, groupHostRow{host: h, selected: m.selected[h], hasCfg: ok, matchedIndexes: m.matchIdxes[h]})
 	}
 	m.list.SetItems(items)
 }

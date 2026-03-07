@@ -27,13 +27,13 @@ func renderDeleteGroupConfirm(width, height int, name string, hostCount int) str
 // title is embedded in the top border; body and footer are indented 2 spaces.
 func renderConfirmBox(totalW int, title, body, footer string) string {
 	return strings.Join([]string{
-		boxTitleTop(totalW, title),
-		boxLine(totalW, ""),
-		boxLine(totalW, "  "+body),
-		boxLine(totalW, ""),
-		boxLine(totalW, "  "+footer),
-		boxLine(totalW, ""),
-		boxBottom(totalW),
+		focusedBoxTitleTop(totalW, title),
+		focusedBoxLine(totalW, ""),
+		focusedBoxLine(totalW, "  "+body),
+		focusedBoxLine(totalW, ""),
+		focusedBoxLine(totalW, "  "+footer),
+		focusedBoxLine(totalW, ""),
+		focusedBoxBottom(totalW),
 	}, "\n")
 }
 
@@ -45,8 +45,7 @@ func quitConfirmBox(maxWidth int) string {
 	boxW = min(quitConfirmMaxW, max(22, boxW-confirmDialogMargin))
 	title := confirmTitleStyle.Render("Quit?")
 	body := "Exit ssh-tui?"
-	footer := footerKeyStyle.Render("[y/\u21b5]") + dim.Render(" quit") +
-		"     " + footerKeyStyle.Render("[n/Esc]") + dim.Render(" cancel")
+	footer := styledFooter("y/⏎ quit  n/Esc cancel")
 	return renderConfirmBox(boxW+confirmDialogPadding, title, body, footer)
 }
 
@@ -62,8 +61,7 @@ func deleteGroupConfirmBox(maxWidth int, name string, hostCount int) string {
 	if name != "" {
 		body = fmt.Sprintf("Delete %q (%d)?", name, hostCount)
 	}
-	footer := footerKeyStyle.Render("[y/\u21b5]") + dim.Render(" delete") +
-		"     " + footerKeyStyle.Render("[n/Esc]") + dim.Render(" cancel")
+	footer := styledFooter("y/⏎ delete  n/Esc cancel")
 	return renderConfirmBox(boxW+confirmDialogPadding, title, body, footer)
 }
 
@@ -75,10 +73,9 @@ func connectConfirmBox(maxWidth int, count int, hostNames []string) string {
 	boxW = min(confirmDialogMaxW, max(24, boxW-confirmDialogMargin))
 	totalW := boxW + confirmDialogPadding
 	title := confirmTitleStyle.Render(fmt.Sprintf("Connect %d hosts?", count))
-	footer := footerKeyStyle.Render("[y/\u21b5]") + dim.Render(" connect") +
-		"     " + footerKeyStyle.Render("[n/Esc]") + dim.Render(" cancel")
+	footer := styledFooter("y/⏎ connect  n/Esc cancel")
 
-	parts := []string{boxTitleTop(totalW, title), boxLine(totalW, "")}
+	parts := []string{focusedBoxTitleTop(totalW, title), focusedBoxLine(totalW, "")}
 	shown := hostNames
 	extra := 0
 	if len(hostNames) > 4 {
@@ -90,12 +87,12 @@ func connectConfirmBox(maxWidth int, count int, hostNames []string) string {
 		if i == len(shown)-1 && extra > 0 {
 			line += fmt.Sprintf("    +%d more", extra)
 		}
-		parts = append(parts, boxLine(totalW, line))
+		parts = append(parts, focusedBoxLine(totalW, line))
 	}
-	parts = append(parts, boxLine(totalW, ""))
-	parts = append(parts, boxLine(totalW, "  "+footer))
-	parts = append(parts, boxLine(totalW, ""))
-	parts = append(parts, boxBottom(totalW))
+	parts = append(parts, focusedBoxLine(totalW, ""))
+	parts = append(parts, focusedBoxLine(totalW, "  "+footer))
+	parts = append(parts, focusedBoxLine(totalW, ""))
+	parts = append(parts, focusedBoxBottom(totalW))
 	return strings.Join(parts, "\n")
 }
 
@@ -108,10 +105,9 @@ func removeHostsConfirmBox(maxWidth int, hosts []string, groupName string) strin
 	totalW := boxW + confirmDialogPadding
 	count := len(hosts)
 	title := confirmTitleStyle.Render("Remove hosts?")
-	footer := footerKeyStyle.Render("[y/\u21b5]") + dim.Render(" remove") +
-		"     " + footerKeyStyle.Render("[n/Esc]") + dim.Render(" cancel")
+	footer := styledFooter("y/⏎ remove  n/Esc cancel")
 
-	parts := []string{boxTitleTop(totalW, title), boxLine(totalW, "")}
+	parts := []string{focusedBoxTitleTop(totalW, title), focusedBoxLine(totalW, "")}
 	shown := hosts
 	extra := 0
 	if count > 4 {
@@ -123,15 +119,15 @@ func removeHostsConfirmBox(maxWidth int, hosts []string, groupName string) strin
 		if i == len(shown)-1 && extra > 0 {
 			line += fmt.Sprintf("    +%d more", extra)
 		}
-		parts = append(parts, boxLine(totalW, line))
+		parts = append(parts, focusedBoxLine(totalW, line))
 	}
 	if groupName != "" {
-		parts = append(parts, boxLine(totalW, ""))
-		parts = append(parts, boxLine(totalW, dim.Render("  from ")+groupName))
+		parts = append(parts, focusedBoxLine(totalW, ""))
+		parts = append(parts, focusedBoxLine(totalW, dim.Render("  from ")+groupName))
 	}
-	parts = append(parts, boxLine(totalW, ""))
-	parts = append(parts, boxLine(totalW, "  "+footer))
-	parts = append(parts, boxLine(totalW, ""))
-	parts = append(parts, boxBottom(totalW))
+	parts = append(parts, focusedBoxLine(totalW, ""))
+	parts = append(parts, focusedBoxLine(totalW, "  "+footer))
+	parts = append(parts, focusedBoxLine(totalW, ""))
+	parts = append(parts, focusedBoxBottom(totalW))
 	return strings.Join(parts, "\n")
 }

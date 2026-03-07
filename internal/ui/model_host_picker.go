@@ -21,9 +21,10 @@ type hostPickerDoneMsg struct {
 }
 
 type pickerRow struct {
-	host     string
-	selected bool
-	hasCfg   bool
+	host           string
+	selected       bool
+	hasCfg         bool
+	matchedIndexes []int
 }
 
 func (i pickerRow) Title() string       { return i.host }
@@ -42,7 +43,7 @@ func (d pickerDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 		fmt.Fprint(w, item.FilterValue())
 		return
 	}
-	fmt.Fprint(w, renderHostLikeRow(m.Width(), index == m.Index(), row.selected, row.host, row.hasCfg, false))
+	fmt.Fprint(w, renderHostLikeRow(m.Width(), index == m.Index(), row.selected, row.host, row.hasCfg, false, row.matchedIndexes))
 }
 
 type hostPickerModel struct {
@@ -52,9 +53,10 @@ type hostPickerModel struct {
 	width  int
 	height int
 
-	allHosts []string
-	filtered []string
-	selected map[string]bool
+	allHosts   []string
+	filtered   []string
+	selected   map[string]bool
+	matchIdxes map[string][]int
 
 	list   list.Model
 	search textinput.Model
@@ -251,7 +253,7 @@ func (m *hostPickerModel) View() string {
 	searchLine := m.search.View()
 	listView := strings.TrimRight(m.list.View(), "\n")
 	body := strings.TrimRight(searchLine+"\n"+sep+"\n"+listView+"\n"+sep, "\n")
-	return renderFrame(m.width, m.height, breadcrumbTitle(m.parentCrumb, "Add hosts"), "", body, m.statusLine())
+	return renderFocusedFrame(m.width, m.height, breadcrumbTitle(m.parentCrumb, "Add hosts"), "", body, m.statusLine())
 }
 
 func (m *hostPickerModel) helpKeys() helpMap {
@@ -294,6 +296,27 @@ func (m *hostPickerModel) helpKeys() helpMap {
 			m.keymap.Help,
 			m.keymap.Quit,
 		}},
+		sections: []helpSection{
+			{title: "Navigation", keys: []key.Binding{
+				m.list.KeyMap.CursorUp,
+				m.list.KeyMap.CursorDown,
+				m.list.KeyMap.PrevPage,
+				m.list.KeyMap.NextPage,
+				m.keymap.FocusSearch,
+				m.keymap.ToggleFocus,
+			}},
+			{title: "Selection", keys: []key.Binding{
+				m.keymap.ToggleSel,
+				m.keymap.SelectAll,
+				m.keymap.ClearSel,
+				add,
+			}},
+			{title: "General", keys: []key.Binding{
+				esc,
+				m.keymap.Help,
+				m.keymap.Quit,
+			}},
+		},
 	}
 }
 
@@ -332,13 +355,18 @@ func (m *hostPickerModel) applyFilter(query string) {
 	}
 
 	query = strings.TrimSpace(query)
+	m.matchIdxes = nil
 	if query == "" {
 		m.filtered = append([]string(nil), m.allHosts...)
 	} else {
 		matches := fuzzy.Find(query, m.allHosts)
 		m.filtered = make([]string, 0, len(matches))
+		m.matchIdxes = make(map[string][]int, len(matches))
 		for _, match := range matches {
 			m.filtered = append(m.filtered, match.Str)
+			if len(match.MatchedIndexes) > 0 {
+				m.matchIdxes[match.Str] = match.MatchedIndexes
+			}
 		}
 	}
 	m.setListItems(m.filtered)
@@ -387,7 +415,7 @@ func (m *hostPickerModel) setListItems(hosts []string) {
 	items := make([]list.Item, 0, len(hosts))
 	for _, h := range hosts {
 		_, ok := hostConfigFor(m.opts.Inventory, h)
-		items = append(items, pickerRow{host: h, selected: m.selected[h], hasCfg: ok})
+		items = append(items, pickerRow{host: h, selected: m.selected[h], hasCfg: ok, matchedIndexes: m.matchIdxes[h]})
 	}
 	m.list.SetItems(items)
 }

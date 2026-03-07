@@ -12,17 +12,50 @@ import (
 
 // helpContent generates the rendered help text body (without the box).
 func helpContent(title string, h help.Model, keys helpMap, innerW int) string {
-	hh := h
-	hh.ShowAll = true
-	hh.Width = innerW
-	keyStyle := lipgloss.NewStyle().Foreground(cAccent).Bold(true)
-	hh.Styles.ShortKey = keyStyle
-	hh.Styles.FullKey = keyStyle
-
 	header := helpTitleStyle.Render(title + " keybindings")
-	body := strings.TrimSpace(hh.View(keys))
-	footer := dim.Render("Esc or ? to close  j/k scroll")
+
+	var body string
+	if len(keys.sections) > 0 {
+		body = renderHelpSections(keys.sections)
+	} else {
+		// Fallback to bubbles help renderer.
+		hh := h
+		hh.ShowAll = true
+		hh.Width = innerW
+		keyStyle := lipgloss.NewStyle().Foreground(cAccent).Bold(true)
+		hh.Styles.ShortKey = keyStyle
+		hh.Styles.FullKey = keyStyle
+		body = strings.TrimSpace(hh.View(keys))
+	}
+
+	footer := styledFooter("Esc/? close  j/k scroll")
 	return header + "\n\n" + body + "\n\n" + footer
+}
+
+// renderHelpSections renders keybindings grouped by named sections.
+func renderHelpSections(sections []helpSection) string {
+	keyStyle := lipgloss.NewStyle().Foreground(cAccent).Bold(true)
+	sectionStyle := secondaryStyle.Bold(true)
+
+	var sb strings.Builder
+	for i, sec := range sections {
+		if i > 0 {
+			sb.WriteByte('\n')
+		}
+		sb.WriteString(sectionStyle.Render(sec.title))
+		sb.WriteByte('\n')
+		for _, k := range sec.keys {
+			if !k.Enabled() {
+				continue
+			}
+			help := k.Help()
+			sb.WriteString("  ")
+			sb.WriteString(keyStyle.Render(help.Key))
+			sb.WriteString(hintStyle.Render("  " + help.Desc))
+			sb.WriteByte('\n')
+		}
+	}
+	return strings.TrimRight(sb.String(), "\n")
 }
 
 func helpBoxWidth(termW int) int {

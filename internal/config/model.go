@@ -72,6 +72,7 @@ type Defaults struct {
 	TmuxSession             string   `toml:"tmux_session"`        // session name
 	ConfirmQuit             bool     `toml:"confirm_quit"`
 	ConnectConfirmThreshold int      `toml:"connect_confirm_threshold"`
+	ShowFieldHelp           bool     `toml:"show_field_help"`
 }
 
 type Group struct {
@@ -113,6 +114,7 @@ func DefaultConfig() Config {
 			TmuxSession:             "ssh-tui",
 			ConfirmQuit:             false,
 			ConnectConfirmThreshold: 5,
+			ShowFieldHelp:           true,
 		},
 	}
 }

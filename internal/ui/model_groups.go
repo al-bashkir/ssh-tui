@@ -33,14 +33,15 @@ func (d groupsDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 		fmt.Fprint(w, item.FilterValue())
 		return
 	}
-	fmt.Fprint(w, renderGroupRow(m.Width(), index == m.Index(), row.name, row.hostCount, row.hasCfg))
+	fmt.Fprint(w, renderGroupRow(m.Width(), index == m.Index(), row.name, row.hostCount, row.hasCfg, row.matchedIndexes))
 }
 
 type groupRow struct {
-	index     int
-	name      string
-	hostCount int
-	hasCfg    bool
+	index          int
+	name           string
+	hostCount      int
+	hasCfg         bool
+	matchedIndexes []int
 }
 
 func (i groupRow) Title() string       { return i.name }
@@ -539,6 +540,37 @@ func (m *groupsModel) helpKeys() helpMap {
 			m.keymap.Help,
 			m.keymap.Quit,
 		}},
+		sections: []helpSection{
+			{title: "Navigation", keys: []key.Binding{
+				m.list.KeyMap.CursorUp,
+				m.list.KeyMap.CursorDown,
+				m.list.KeyMap.PrevPage,
+				m.list.KeyMap.NextPage,
+				m.keymap.FocusSearch,
+				m.keymap.ToggleFocus,
+				m.keymap.SwitchTab,
+				m.keymap.Esc,
+			}},
+			{title: "Connection", keys: []key.Binding{
+				openGroup,
+				m.keymap.ConnectAll,
+				m.keymap.ConnectCmd,
+				m.keymap.OneWindow,
+				m.keymap.CustomHost,
+			}},
+			{title: "Editing", keys: []key.Binding{
+				m.keymap.NewGroup,
+				m.keymap.EditGroup,
+				m.keymap.DeleteGroup,
+				m.keymap.AddHosts,
+				m.keymap.Copy,
+			}},
+			{title: "General", keys: []key.Binding{
+				m.keymap.Settings,
+				m.keymap.Help,
+				m.keymap.Quit,
+			}},
+		},
 	}
 }
 
@@ -596,7 +628,9 @@ func (m *groupsModel) applyFilter(query string) {
 		matches := fuzzy.Find(query, names)
 		rows = make([]groupRow, 0, len(matches))
 		for _, mt := range matches {
-			rows = append(rows, m.allRows[mt.Index])
+			r := m.allRows[mt.Index]
+			r.matchedIndexes = mt.MatchedIndexes
+			rows = append(rows, r)
 		}
 	}
 	m.setRows(rows)
