@@ -539,6 +539,37 @@ func (m *groupsModel) helpKeys() helpMap {
 			m.keymap.Help,
 			m.keymap.Quit,
 		}},
+		sections: []helpSection{
+			{title: "Navigation", keys: []key.Binding{
+				m.list.KeyMap.CursorUp,
+				m.list.KeyMap.CursorDown,
+				m.list.KeyMap.PrevPage,
+				m.list.KeyMap.NextPage,
+				m.keymap.FocusSearch,
+				m.keymap.ToggleFocus,
+				m.keymap.SwitchTab,
+				m.keymap.Esc,
+			}},
+			{title: "Connection", keys: []key.Binding{
+				openGroup,
+				m.keymap.ConnectAll,
+				m.keymap.ConnectCmd,
+				m.keymap.OneWindow,
+				m.keymap.CustomHost,
+			}},
+			{title: "Editing", keys: []key.Binding{
+				m.keymap.NewGroup,
+				m.keymap.EditGroup,
+				m.keymap.DeleteGroup,
+				m.keymap.AddHosts,
+				m.keymap.Copy,
+			}},
+			{title: "General", keys: []key.Binding{
+				m.keymap.Settings,
+				m.keymap.Help,
+				m.keymap.Quit,
+			}},
+		},
 	}
 }
 

@@ -60,7 +60,13 @@ func settingsSchema() formSchema {
 					Helper:  "Application color theme"},
 				{Key: "accent", Label: "Accent color", Kind: fieldPicker,
 					Options: opts("default", "blue", "cyan", "green", "amber", "red", "magenta"),
-					Helper:  "UI accent color (overridden when a colorscheme is active)"},
+					Helper:  "UI accent color (overridden when a colorscheme is active)",
+					DisabledWhen: func(values map[string]string) string {
+						if cs := values["colorscheme"]; cs != "" && cs != "default" {
+							return "overridden by " + cs + " theme"
+						}
+						return ""
+					}},
 			}},
 			{Key: "tmux", Label: "Tmux", Fields: []fieldDef{
 				{Key: "tmux", Label: "Tmux mode", Kind: fieldPicker,
@@ -85,7 +91,7 @@ func settingsSchema() formSchema {
 					Validate: validateNonNegativeInt},
 			}},
 			{Key: "panes", Label: "Panes", Fields: []fieldDef{
-				{Key: "pane_split", Label: "Split direction", Kind: fieldPicker,
+				{Key: "pane_split", Label: "Split direction", Kind: fieldToggle,
 					Options: opts("horizontal", "vertical"),
 					Helper:  "Direction for splitting tmux panes"},
 				{Key: "pane_layout", Label: "Layout", Kind: fieldPicker,
@@ -346,8 +352,8 @@ func (m *defaultsFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// In insert mode, delegate everything to the form.
-		if m.form.editing {
+		// In insert mode or picker popup, delegate everything to the form.
+		if m.form.editing || m.form.picker != nil {
 			handled, cmd := m.form.handleKey(msg)
 			if handled {
 				return m, cmd
@@ -419,6 +425,9 @@ func (m *defaultsFormModel) View() string {
 	}
 	if m.borderPicker != nil {
 		return placeCentered(m.width, m.height, m.borderPicker.View())
+	}
+	if pv := m.form.pickerView(); pv != "" {
+		return placeCentered(m.width, m.height, pv)
 	}
 
 	innerW := max(0, m.width-2)

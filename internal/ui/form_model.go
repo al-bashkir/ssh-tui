@@ -48,6 +48,10 @@ type formModel struct {
 
 	inputs []formTextInput // text inputs for text/number fields
 
+	picker *optionPickerPopup // non-nil when a picker popup is open
+
+	validationErrs map[string]string // per-field inline validation errors
+
 	width  int
 	height int
 
@@ -63,11 +67,12 @@ func newFormModel(schema formSchema, values map[string]string, labelWidth int) f
 	}
 
 	m := formModel{
-		schema:      schema,
-		values:      values,
-		originals:   originals,
-		labelWidth:  labelWidth,
-		fieldIndent: 2,
+		schema:         schema,
+		values:         values,
+		originals:      originals,
+		validationErrs: make(map[string]string),
+		labelWidth:     labelWidth,
+		fieldIndent:    2,
 	}
 
 	// Create text inputs for text/number fields.
@@ -93,9 +98,18 @@ func newFormModel(schema formSchema, values map[string]string, labelWidth int) f
 
 	m.rebuildItems()
 
-	// Focus the first field.
+	// Focus the first enabled field.
 	if len(m.items) > 0 {
 		m.focusIdx = 0
+		// Skip disabled fields.
+		for i := 0; i < len(m.items); i++ {
+			item := m.items[i]
+			fd := &m.schema.Sections[item.sectionIdx].Fields[item.fieldIdx]
+			if m.isFieldDisabled(fd) == "" {
+				m.focusIdx = i
+				break
+			}
+		}
 		m.applyFocusStyles()
 	}
 
@@ -191,6 +205,23 @@ func (m *formModel) focusedFieldKey() string {
 }
 
 // ---------------------------------------------------------------------------
+// Disabled field check
+// ---------------------------------------------------------------------------
+
+// isFieldDisabled returns the disable reason for a field, or "" if enabled.
+func (m *formModel) isFieldDisabled(fd *fieldDef) string {
+	if fd == nil || fd.DisabledWhen == nil {
+		return ""
+	}
+	return fd.DisabledWhen(m.values)
+}
+
+// isFocusedFieldDisabled returns true when the focused field is disabled.
+func (m *formModel) isFocusedFieldDisabled() bool {
+	return m.isFieldDisabled(m.focusedField()) != ""
+}
+
+// ---------------------------------------------------------------------------
 // Focus management
 // ---------------------------------------------------------------------------
 
@@ -225,19 +256,31 @@ func (m *formModel) blurAllInputs() {
 }
 
 // moveFocus moves focus by delta items (+1 down, -1 up), wrapping at edges.
+// Disabled fields are skipped; if all fields are disabled, focus stays put.
 func (m *formModel) moveFocus(delta int) {
 	n := len(m.items)
 	if n == 0 {
 		return
 	}
-	pos := m.focusIdx + delta
-	if pos < 0 {
-		pos = n - 1
+	pos := m.focusIdx
+	for step := 0; step < n; step++ {
+		pos += delta
+		if pos < 0 {
+			pos = n - 1
+		}
+		if pos >= n {
+			pos = 0
+		}
+		// Check if the candidate is enabled.
+		item := m.items[pos]
+		sec := &m.schema.Sections[item.sectionIdx]
+		fd := &sec.Fields[item.fieldIdx]
+		if m.isFieldDisabled(fd) == "" {
+			m.setFocusIdx(pos)
+			return
+		}
 	}
-	if pos >= n {
-		pos = 0
-	}
-	m.setFocusIdx(pos)
+	// All fields disabled — don't move.
 }
 
 // ---------------------------------------------------------------------------
@@ -267,6 +310,7 @@ func (m *formModel) exitEdit() {
 			m.values[fd.Key] = in.Value()
 			in.Blur()
 		}
+		m.validateField(fd)
 	}
 }
 
@@ -313,6 +357,7 @@ func (m *formModel) cycleValue(delta int) {
 		idx = 0
 	}
 	m.values[fd.Key] = fd.Options[idx].Value
+	m.validateField(fd)
 }
 
 // ---------------------------------------------------------------------------
@@ -322,6 +367,11 @@ func (m *formModel) cycleValue(delta int) {
 // handleKey processes a key message in the generic form.
 // Returns true if the key was consumed by the form.
 func (m *formModel) handleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
+	// Picker popup intercepts all keys while open.
+	if m.picker != nil {
+		return m.handlePickerKey(msg), nil
+	}
+
 	// Insert mode: route everything to the text input.
 	if m.editing {
 		switch msg.String() {
@@ -347,46 +397,44 @@ func (m *formModel) handleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		m.moveFocus(-1)
 		return true, nil
 	case "i":
-		if fd := m.focusedField(); fd != nil && fd.isTextField() {
+		if fd := m.focusedField(); fd != nil && fd.isTextField() && !m.isFocusedFieldDisabled() {
 			m.enterEdit()
 		}
 		return true, nil
-	case "enter":
-		if fd := m.focusedField(); fd != nil {
-			if fd.isTextField() {
+	case "enter", " ":
+		if fd := m.focusedField(); fd != nil && !m.isFocusedFieldDisabled() {
+			switch fd.Kind {
+			case fieldText, fieldNumber:
 				m.enterEdit()
 				return true, nil
-			}
-			if fd.Kind == fieldSubModal {
+			case fieldPicker:
+				m.openPicker()
+				return true, nil
+			case fieldToggle:
+				m.cycleValue(1)
+				return true, nil
+			case fieldSubModal:
 				return false, nil // wrapper handles sub-modal activation
 			}
 		}
 		m.moveFocus(1)
 		return true, nil
-	case " ":
-		if fd := m.focusedField(); fd != nil {
-			switch fd.Kind {
-			case fieldPicker, fieldToggle:
-				m.cycleValue(1)
-				return true, nil
-			case fieldSubModal:
-				return false, nil
-			}
-		}
-		return true, nil
 	case "h", "left":
-		if fd := m.focusedField(); fd != nil {
-			if fd.Kind == fieldPicker || fd.Kind == fieldToggle {
+		if fd := m.focusedField(); fd != nil && !m.isFocusedFieldDisabled() {
+			if fd.Kind == fieldToggle {
 				m.cycleValue(-1)
 				return true, nil
 			}
 		}
 		return true, nil
 	case "l", "right":
-		if fd := m.focusedField(); fd != nil {
+		if fd := m.focusedField(); fd != nil && !m.isFocusedFieldDisabled() {
 			switch fd.Kind {
-			case fieldPicker, fieldToggle:
+			case fieldToggle:
 				m.cycleValue(1)
+				return true, nil
+			case fieldPicker:
+				m.openPicker()
 				return true, nil
 			case fieldSubModal:
 				return false, nil
@@ -396,6 +444,47 @@ func (m *formModel) handleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	}
 
 	return false, nil
+}
+
+// ---------------------------------------------------------------------------
+// Picker popup
+// ---------------------------------------------------------------------------
+
+// openPicker creates and shows the option picker popup for the focused field.
+func (m *formModel) openPicker() {
+	fd := m.focusedField()
+	if fd == nil || fd.Kind != fieldPicker || len(fd.Options) == 0 {
+		return
+	}
+	m.picker = newOptionPickerPopup(fd.Key, fd.Label, m.values[fd.Key], fd.Options)
+}
+
+// handlePickerKey routes key events to the open picker popup.
+// Returns true (always consumed while popup is open).
+func (m *formModel) handlePickerKey(msg tea.KeyMsg) bool {
+	switch msg.String() {
+	case "j", "down":
+		m.picker.moveDown()
+	case "k", "up":
+		m.picker.moveUp()
+	case "enter":
+		m.values[m.picker.fieldKey] = m.picker.selected()
+		if fd := m.schema.fieldByKey(m.picker.fieldKey); fd != nil {
+			m.validateField(fd)
+		}
+		m.picker = nil
+	case "esc":
+		m.picker = nil
+	}
+	return true
+}
+
+// pickerView returns the rendered picker popup, or "" if no popup is open.
+func (m *formModel) pickerView() string {
+	if m.picker == nil {
+		return ""
+	}
+	return m.picker.View(m.width)
 }
 
 // ---------------------------------------------------------------------------
@@ -434,6 +523,9 @@ func (m *formModel) positionInfo() string {
 
 // footerHints returns context-sensitive key hints for the footer.
 func (m *formModel) footerHints() string {
+	if m.picker != nil {
+		return "Enter select   j/k move   Esc cancel"
+	}
 	if m.editing {
 		return "Ctrl+S save   Esc done"
 	}
@@ -444,7 +536,9 @@ func (m *formModel) footerHints() string {
 	switch fd.Kind {
 	case fieldText, fieldNumber:
 		return "Ctrl+S save   j/k nav   i edit   Esc back"
-	case fieldPicker, fieldToggle:
+	case fieldPicker:
+		return "Ctrl+S save   j/k nav   Enter choose   Esc back"
+	case fieldToggle:
 		return "Ctrl+S save   j/k nav   h/l option   Esc back"
 	case fieldSubModal:
 		return "Ctrl+S save   j/k nav   Enter select   Esc back"
@@ -464,6 +558,21 @@ func (m *formModel) renderFooter() string {
 // ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
+
+// validateField runs the validator for a single field and updates
+// validationErrs. Returns the error message, or "".
+func (m *formModel) validateField(fd *fieldDef) string {
+	if fd == nil || fd.Validate == nil {
+		delete(m.validationErrs, fd.Key)
+		return ""
+	}
+	if err := fd.Validate(m.values[fd.Key]); err != nil {
+		m.validationErrs[fd.Key] = err.Error()
+		return err.Error()
+	}
+	delete(m.validationErrs, fd.Key)
+	return ""
+}
 
 // validate runs all per-field validators and returns the first error.
 func (m *formModel) validate() error {

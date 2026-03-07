@@ -7,6 +7,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// underlineFill is the character used to fill the trailing space of form inputs.
+var underlineFill = lipgloss.NewStyle().Foreground(cFrameBorder)
+
 func underlineInput(in textinput.Model, focused bool, width int) string {
 	s := strings.TrimRight(in.View(), "\n")
 	if width <= 0 {
@@ -19,12 +22,7 @@ func underlineInput(in textinput.Model, focused bool, width int) string {
 	if pad <= 0 {
 		return s
 	}
-	fill := strings.Repeat("_", pad)
-	if focused {
-		fill = checkedStyle.Render(fill)
-	} else {
-		fill = dim.Render(fill)
-	}
+	fill := underlineFill.Render(strings.Repeat("─", pad))
 	return s + fill
 }
 
@@ -41,11 +39,11 @@ func underlineText(s string, focused bool, width int) string {
 		if focused {
 			return checkedStyle.Render(s)
 		}
-		return dim.Render(s)
+		return s
 	}
-	fill := strings.Repeat("_", pad)
+	fill := underlineFill.Render(strings.Repeat("─", pad))
 	if focused {
-		return checkedStyle.Render(s) + checkedStyle.Render(fill)
+		return checkedStyle.Render(s) + fill
 	}
-	return dim.Render(s) + dim.Render(fill)
+	return s + fill
 }

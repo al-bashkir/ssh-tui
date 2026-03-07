@@ -240,8 +240,8 @@ func (m *groupFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// In insert mode, delegate to form first.
-		if m.form.editing {
+		// In insert mode or picker popup, delegate to form first.
+		if m.form.editing || m.form.picker != nil {
 			handled, cmd := m.form.handleKey(msg)
 			if handled {
 				return m, cmd
@@ -306,6 +306,9 @@ func (m *groupFormModel) View() string {
 	}
 	if m.borderPicker != nil {
 		return placeCentered(m.width, m.height, m.borderPicker.View())
+	}
+	if pv := m.form.pickerView(); pv != "" {
+		return placeCentered(m.width, m.height, pv)
 	}
 	if m.width <= 0 || m.height <= 0 {
 		return ""

@@ -545,6 +545,39 @@ func (m *groupHostsModel) helpKeys() helpMap {
 			m.keymap.Help,
 			m.keymap.Quit,
 		}},
+		sections: []helpSection{
+			{title: "Navigation", keys: []key.Binding{
+				m.list.KeyMap.CursorUp,
+				m.list.KeyMap.CursorDown,
+				m.list.KeyMap.PrevPage,
+				m.list.KeyMap.NextPage,
+				m.keymap.FocusSearch,
+				m.keymap.ToggleFocus,
+				esc,
+			}},
+			{title: "Selection", keys: []key.Binding{
+				m.keymap.ToggleSel,
+				m.keymap.SelectAll,
+				m.keymap.ClearSel,
+			}},
+			{title: "Connection", keys: []key.Binding{
+				m.keymap.Connect,
+				m.keymap.ConnectSame,
+				m.keymap.ConnectCmd,
+				m.keymap.OneWindow,
+			}},
+			{title: "Editing", keys: []key.Binding{
+				m.keymap.AddHosts,
+				m.keymap.CustomHost,
+				m.keymap.HostConfig,
+				m.keymap.Copy,
+				remove,
+			}},
+			{title: "General", keys: []key.Binding{
+				m.keymap.Help,
+				m.keymap.Quit,
+			}},
+		},
 	}
 }
 
