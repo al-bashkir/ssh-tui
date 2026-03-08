@@ -79,13 +79,7 @@ func newGroupPickerModel(opts Options) *groupPickerModel {
 	l := list.New(items, groupPickerDelegate{}, 0, 0)
 	configureList(&l)
 
-	search := textinput.New()
-	search.Placeholder = "search"
-	search.Prompt = "/ "
-	search.CharLimit = 256
-	search.Width = 40
-	configureSearch(&search)
-	setSearchBarFocused(&search, false)
+	search := newSearchInput()
 
 	m := &groupPickerModel{
 		opts:     opts,
@@ -124,17 +118,8 @@ func (m *groupPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		if m.confirmQuit {
-			s := msg.String()
-			switch s {
-			case "y", "Y", "enter":
-				return m, tea.Quit
-			case "n", "N", "esc":
-				m.confirmQuit = false
-				return m, nil
-			default:
-				return m, nil
-			}
+		if handled, cmd := handleConfirmQuit(msg, &m.confirmQuit, &m.toast, nil, false); handled {
+			return m, cmd
 		}
 		if key.Matches(msg, m.keymap.Quit) {
 			if !m.opts.Config.Defaults.ConfirmQuit {
@@ -201,19 +186,7 @@ func (m *groupPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	var cmd tea.Cmd
-	if m.focus == focusSearch {
-		m.search, cmd = m.search.Update(msg)
-		cur := m.search.Value()
-		if cur != m.prevSearch {
-			m.applyFilter(cur)
-			m.prevSearch = cur
-		}
-		return m, cmd
-	}
-
-	m.list, cmd = m.list.Update(msg)
-	return m, cmd
+	return m, updateSearchOrList(m.focus, &m.search, &m.list, &m.prevSearch, msg, m.applyFilter)
 }
 
 // addingLines packs the pending host names into at most 2 lines, each fitting

@@ -96,13 +96,7 @@ func newGroupsModel(opts Options) *groupsModel {
 	l.Title = "Groups"
 	configureList(&l)
 
-	search := textinput.New()
-	search.Placeholder = "search"
-	search.Prompt = "/ "
-	search.CharLimit = 256
-	search.Width = 40
-	configureSearch(&search)
-	setSearchBarFocused(&search, false)
+	search := newSearchInput()
 
 	m := &groupsModel{
 		opts:     opts,
@@ -207,19 +201,8 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		if m.confirmQuit {
-			s := msg.String()
-			switch s {
-			case "y", "Y", "enter":
-				m.quitting = true
-				return m, tea.Quit
-			case "n", "N", "esc":
-				m.confirmQuit = false
-				m.toast = toast{}
-				return m, nil
-			default:
-				return m, nil
-			}
+		if handled, cmd := handleConfirmQuit(msg, &m.confirmQuit, &m.toast, &m.quitting, true); handled {
+			return m, cmd
 		}
 		if m.confirmDelete {
 			s := msg.String()
@@ -236,25 +219,8 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
-		if m.confirmConnect {
-			s := msg.String()
-			switch s {
-			case "y", "Y", "enter":
-				m.confirmConnect = false
-				fn := m.pendingConnectFn
-				m.pendingConnectFn = nil
-				if fn != nil {
-					return m, fn()
-				}
-				return m, nil
-			case "n", "N", "esc":
-				m.confirmConnect = false
-				m.pendingConnectFn = nil
-				m.toast = toast{}
-				return m, nil
-			default:
-				return m, nil
-			}
+		if handled, cmd := handleConfirmConnect(msg, &m.confirmConnect, &m.pendingConnectFn, &m.toast); handled {
+			return m, cmd
 		}
 
 		if key.Matches(msg, m.keymap.Quit) {
@@ -420,19 +386,7 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	var cmd tea.Cmd
-	if m.focus == focusSearch {
-		m.search, cmd = m.search.Update(msg)
-		cur := m.search.Value()
-		if cur != m.prevSearch {
-			m.applyFilter(cur)
-			m.prevSearch = cur
-		}
-		return m, cmd
-	}
-
-	m.list, cmd = m.list.Update(msg)
-	return m, cmd
+	return m, updateSearchOrList(m.focus, &m.search, &m.list, &m.prevSearch, msg, m.applyFilter)
 }
 
 func (m *groupsModel) View() string {
@@ -579,37 +533,6 @@ func (m *groupsModel) emptyStateView() string {
 		dim.Render("No groups yet.")+"\n"+dim.Render("n \u2014 create a new group"))
 }
 
-func (m *groupsModel) statusLine() string {
-	shown := len(m.list.Items())
-	total := len(m.allRows)
-	pg := ""
-	if m.list.Paginator.TotalPages > 1 {
-		pg = fmt.Sprintf("pg:%d/%d", m.list.Paginator.Page+1, m.list.Paginator.TotalPages)
-	}
-
-	q := strings.TrimSpace(m.search.Value())
-	searchInfo := "search"
-	if q != "" {
-		if len(q) > 40 {
-			q = q[:40] + "..."
-		}
-		searchInfo = "search: " + q
-	}
-
-	pos := ""
-	if shown > 0 {
-		pos = fmt.Sprintf("  %d of %d", m.list.Index()+1, shown)
-	}
-	left := fmt.Sprintf("groups: %d/%d", shown, total) + dim.Render(pos)
-	if pg != "" {
-		left += "  " + dim.Render(pg)
-	}
-	if !m.toast.empty() {
-		left += "  " + renderToast(m.toast)
-	}
-	return left + "  " + statusOK.Render(searchInfo)
-}
-
 func (m *groupsModel) applyFilter(query string) {
 	var prevName string
 	if row, ok := m.list.SelectedItem().(groupRow); ok {
@@ -709,44 +632,26 @@ func (m *groupsModel) connectAllCmd(oneWindow bool, remoteCmd string) tea.Cmd {
 
 func (m *groupsModel) doConnectAll(g config.Group, oneWindow bool, remoteCmd string) tea.Cmd {
 	defaults := m.opts.Config.Defaults
-	base := sshcmd.FromDefaults(defaults)
 	rc := strings.TrimSpace(remoteCmd)
 
-	tmuxSetting := defaults.Tmux
-	if strings.TrimSpace(g.Tmux) != "" {
-		tmuxSetting = g.Tmux
-	}
-	openModeSetting := defaults.OpenMode
-	if strings.TrimSpace(g.OpenMode) != "" {
-		openModeSetting = g.OpenMode
-	}
+	mode, inTmux := resolveConnectMode(defaults, &g)
 
-	inTmux := tmx.InTmux()
-	mode := tmx.ResolveOpenMode(tmuxSetting, openModeSetting, inTmux)
-
-	sshCmds := make([][]string, 0, len(g.Hosts))
-	for _, h := range g.Hosts {
-		s := base
-		if hc, ok := hostConfigFor(m.opts.Inventory, h); ok {
-			s = sshcmd.ApplyHost(s, hc)
+	sshCmds := buildSSHCommands(g.Hosts, defaults, m.opts.Inventory, &g, func(s *sshcmd.Settings) {
+		if rc == "" {
+			return
 		}
-		s = sshcmd.ApplyGroup(s, g)
-		if rc != "" {
-			s.ExtraArgs = ensureSSHForceTTY(s.ExtraArgs)
-			s.RemoteCommand = keepSessionOpenRemoteCmd(rc)
-		}
-		cmd, _ := sshcmd.BuildCommand(h, s)
-		sshCmds = append(sshCmds, cmd)
-	}
+		s.ExtraArgs = ensureSSHForceTTY(s.ExtraArgs)
+		s.RemoteCommand = keepSessionOpenRemoteCmd(rc)
+	})
 
 	if oneWindow {
 		return func() tea.Msg {
 			name := strings.TrimSpace(g.Name)
 			if name == "" {
-				name = windowName(g.Hosts[0])
+				name = tmx.WindowName(g.Hosts[0])
 			}
-			psOne := resolvePaneSettings(defaults, &g, len(sshCmds))
-			err := tmuxOpenOneWindow(sshCmds, tmuxOneWindowOpts{
+			psOne := tmx.ResolvePaneSettings(defaults, &g, len(sshCmds))
+			err := tmx.OpenOneWindow(sshCmds, tmx.OneWindowOpts{
 				WindowName:       name,
 				PaneTitles:       g.Hosts,
 				SplitFlag:        psOne.SplitFlag,
@@ -783,10 +688,10 @@ func (m *groupsModel) doConnectAll(g config.Group, oneWindow bool, remoteCmd str
 		if mode == tmx.OpenPane {
 			name := strings.TrimSpace(g.Name)
 			if name == "" {
-				name = windowName(g.Hosts[0])
+				name = tmx.WindowName(g.Hosts[0])
 			}
-			ps := resolvePaneSettings(defaults, &g, len(sshCmds))
-			err := tmuxOpenOneWindow(sshCmds, tmuxOneWindowOpts{
+			ps := tmx.ResolvePaneSettings(defaults, &g, len(sshCmds))
+			err := tmx.OpenOneWindow(sshCmds, tmx.OneWindowOpts{
 				WindowName:       name,
 				PaneTitles:       g.Hosts,
 				SplitFlag:        ps.SplitFlag,
@@ -803,10 +708,10 @@ func (m *groupsModel) doConnectAll(g config.Group, oneWindow bool, remoteCmd str
 		if mode == tmx.OpenWindow && len(sshCmds) > 1 {
 			name := strings.TrimSpace(g.Name)
 			if name == "" {
-				name = windowName(g.Hosts[0])
+				name = tmx.WindowName(g.Hosts[0])
 			}
-			ps := resolvePaneSettings(defaults, &g, len(sshCmds))
-			err := tmuxOpenOneWindow(sshCmds, tmuxOneWindowOpts{
+			ps := tmx.ResolvePaneSettings(defaults, &g, len(sshCmds))
+			err := tmx.OpenOneWindow(sshCmds, tmx.OneWindowOpts{
 				WindowName:       name,
 				PaneTitles:       g.Hosts,
 				SplitFlag:        ps.SplitFlag,
@@ -824,7 +729,7 @@ func (m *groupsModel) doConnectAll(g config.Group, oneWindow bool, remoteCmd str
 		for i, sshCmd := range sshCmds {
 			name := strings.TrimSpace(g.Name)
 			if name == "" {
-				name = windowName(g.Hosts[i])
+				name = tmx.WindowName(g.Hosts[i])
 			}
 			tmuxCmd := tmx.NewWindowCmd(name, sshCmd)
 			// #nosec G204 -- tmux argv is constructed (no shell) from known host/group settings.

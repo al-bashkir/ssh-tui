@@ -48,15 +48,14 @@ UI files map:
 - `internal/ui/help_modal.go`: help overlay (accent-colored key labels)
 - `internal/ui/helpmap.go`: `helpMap` type used by help modal
 - `internal/ui/confirm_modal.go`: quit/connect/delete confirm dialogs
-- `internal/ui/dispatch_tmux.go`: shared `dispatchConnect` and pane settings resolution
+- `internal/ui/dispatch_tmux.go`: `dispatchConnect`, `buildSSHCommands`, `resolveConnectMode`
 - `internal/ui/ssh_helpers.go`: `ensureSSHForceTTY`, `keepSessionOpenRemoteCmd`
 - `internal/ui/host_config.go`: `hostConfigFor`, `findHostConfig`, `isHostHidden`
+- `internal/ui/host_select.go`: shared `hostSelectList` struct (filter, selection, badges)
+- `internal/ui/update_helpers.go`: shared Update() helpers (`handleConfirmQuit`, `handleConfirmConnect`, `updateSearchOrList`)
 - `internal/ui/copy_helpers.go`: `suggestCopyHostKey`, `suggestCopyGroupName`
-- `internal/ui/connect_group.go`: `connectHostsForGroup`, `connectHostsWithDefaults`
-- `internal/ui/tmux_onewindow.go`: `tmuxOpenOneWindow`, `tmuxOneWindowOpts`, `resolvePaneSettings`
-- `internal/ui/panes.go`: pane settings helpers
+- `internal/ui/connect_group.go`: `connectHosts` (unified group/defaults connect)
 - `internal/ui/pane_border_formats.go`: `paneBorderFormatChoices`, add/remove helpers
-- `internal/ui/listutil.go`: shared list configuration (`configureList`)
-- `internal/ui/option_item.go`: generic option list item
+- `internal/ui/listutil.go`: shared list configuration (`configureList`, `newSearchInput`)
 - `internal/ui/input_underline.go`: `configureSearch`, `setSearchBarFocused`, `setSearchFocused`
 - `internal/ui/view_hosts.go`: `renderMainTabBox` and related view helpers

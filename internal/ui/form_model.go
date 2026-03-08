@@ -253,13 +253,6 @@ func (m *formModel) setFocusIdx(idx int) {
 	m.applyFocusStyles()
 }
 
-// blurAllInputs deactivates all text inputs.
-func (m *formModel) blurAllInputs() {
-	for i := range m.inputs {
-		m.inputs[i].input.Blur()
-	}
-}
-
 // moveFocus moves focus by delta items (+1 down, -1 up), wrapping at edges.
 // Disabled fields are skipped; if all fields are disabled, focus stays put.
 func (m *formModel) moveFocus(delta int) {
@@ -484,14 +477,6 @@ func (m *formModel) handlePickerKey(msg tea.KeyMsg) bool {
 	return true
 }
 
-// pickerView returns the rendered picker popup, or "" if no popup is open.
-func (m *formModel) pickerView() string {
-	if m.picker == nil {
-		return ""
-	}
-	return m.picker.View(m.width)
-}
-
 // overlayPickerOnVisible renders the picker popup on top of visible content
 // lines, positioned as a dropdown near the focused field.
 // When there is not enough room below the field the popup flips above it.
@@ -636,19 +621,4 @@ func (m *formModel) validateField(fd *fieldDef) string {
 	}
 	delete(m.validationErrs, fd.Key)
 	return ""
-}
-
-// validate runs all per-field validators and returns the first error.
-func (m *formModel) validate() error {
-	for _, sec := range m.schema.Sections {
-		for _, fd := range sec.Fields {
-			if fd.Validate == nil {
-				continue
-			}
-			if err := fd.Validate(m.values[fd.Key]); err != nil {
-				return fmt.Errorf("%s: %w", fd.Label, err)
-			}
-		}
-	}
-	return nil
 }

@@ -360,27 +360,3 @@ func (m *groupFormModel) View() string {
 	}
 	return renderFormBox(m.width, title, visible, visibleH, toastStr, footer)
 }
-
-// ---------------------------------------------------------------------------
-// Shared helper (used by all forms that cycle choices).
-// ---------------------------------------------------------------------------
-
-// cycleChoice cycles through vals by delta, wrapping at edges.
-func cycleChoice(cur string, vals []string, delta int) string {
-	cur = strings.TrimSpace(cur)
-	idx := 0
-	for i := range vals {
-		if strings.TrimSpace(vals[i]) == cur {
-			idx = i
-			break
-		}
-	}
-	idx += delta
-	if idx < 0 {
-		idx = len(vals) - 1
-	}
-	if idx >= len(vals) {
-		idx = 0
-	}
-	return vals[idx]
-}

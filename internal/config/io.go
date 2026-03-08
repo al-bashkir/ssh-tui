@@ -32,8 +32,8 @@ func DefaultPath() (string, error) {
 	return filepath.Join(dir, "config.toml"), nil
 }
 
-// DefaultHostsPath returns the default path for the hosts inventory file.
-func DefaultHostsPath() (string, error) {
+// defaultHostsPath returns the default path for the hosts inventory file.
+func defaultHostsPath() (string, error) {
 	dir, err := configDir()
 	if err != nil {
 		return "", err
@@ -128,11 +128,11 @@ func Save(path string, cfg Config) (string, error) {
 }
 
 // LoadInventory loads the hosts/groups inventory from path.
-// If path is empty, DefaultHostsPath is used.
+// If path is empty, defaultHostsPath is used.
 // A missing file is not an error — DefaultInventory is returned.
 func LoadInventory(path string) (Inventory, string, error) {
 	if path == "" {
-		p, err := DefaultHostsPath()
+		p, err := defaultHostsPath()
 		if err != nil {
 			return DefaultInventory(), "", err
 		}
@@ -168,10 +168,10 @@ func LoadInventory(path string) (Inventory, string, error) {
 }
 
 // SaveInventory atomically writes the inventory to path.
-// If path is empty, DefaultHostsPath is used.
+// If path is empty, defaultHostsPath is used.
 func SaveInventory(path string, inv Inventory) (string, error) {
 	if path == "" {
-		p, err := DefaultHostsPath()
+		p, err := defaultHostsPath()
 		if err != nil {
 			return "", err
 		}

@@ -532,9 +532,14 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var toastResult toast
 		var err error
 		if msg.groupIndex >= 0 {
-			execCmd, toastResult, err = m.connectHostsForGroup(msg.groupIndex, msg.hosts, "")
+			if msg.groupIndex >= len(m.opts.Inventory.Groups) {
+				err = fmt.Errorf("invalid group")
+			} else {
+				g := m.opts.Inventory.Groups[msg.groupIndex]
+				execCmd, toastResult, err = m.connectHosts(msg.hosts, &g, "")
+			}
 		} else {
-			execCmd, toastResult, err = m.connectHostsWithDefaults(msg.hosts)
+			execCmd, toastResult, err = m.connectHosts(msg.hosts, nil, "")
 		}
 		if err != nil {
 			toastResult = toast{text: err.Error(), level: toastErr}
@@ -601,7 +606,25 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.gpConnectAfterAdd {
-			execCmd, toastResult, err := m.connectHostsForGroup(msg.groupIndex, m.gpHosts, "")
+			var g *config.Group
+			if msg.groupIndex < 0 || msg.groupIndex >= len(m.opts.Inventory.Groups) {
+				err := fmt.Errorf("invalid group")
+				toastResult := toast{text: err.Error(), level: toastErr}
+				switch m.gpReturnTo {
+				case screenGroups:
+					m.groups.toast = toastResult
+				default:
+					m.hosts.toast = toastResult
+				}
+				m.gp = nil
+				m.gpHosts = nil
+				m.gpConnectAfterAdd = false
+				m.screen = m.gpReturnTo
+				return m, nil
+			}
+			gg := m.opts.Inventory.Groups[msg.groupIndex]
+			g = &gg
+			execCmd, toastResult, err := m.connectHosts(m.gpHosts, g, "")
 			if err != nil {
 				toastResult = toast{text: err.Error(), level: toastErr}
 			}

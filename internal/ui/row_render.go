@@ -101,14 +101,6 @@ func truncateFade(s string, max int) string {
 	return normal + dim.Render(dimChar+"…")
 }
 
-func badgePlain(text string) string {
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return ""
-	}
-	return " " + text + " "
-}
-
 func renderHostLikeRow(width int, active bool, selected bool, host string, hasCfg bool, hidden bool, matchedIndexes []int) string {
 	cur := " "
 	if active {
