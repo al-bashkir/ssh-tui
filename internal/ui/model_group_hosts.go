@@ -203,8 +203,8 @@ func (m *groupHostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		if key.Matches(msg, m.keymap.Esc) {
-			// Esc priority: blur search → clear selection → clear search → back.
+		if key.Matches(msg, m.keymap.Esc) || (key.Matches(msg, m.keymap.Quit) && m.focus != focusSearch) {
+			// Esc/q priority: blur search → clear selection → clear search → back.
 			if m.focus == focusSearch && m.search.Value() == "" {
 				m.focus = focusList
 				m.search.Blur()
