@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"github.com/al-bashkir/ssh-tui/internal/config"
@@ -116,6 +117,9 @@ func groupsRows(inv config.Inventory) []groupRow {
 	for i, g := range inv.Groups {
 		rows = append(rows, groupRow{index: i, name: g.Name, hostCount: len(g.Hosts), hasCfg: groupHasCfg(g)})
 	}
+	sort.SliceStable(rows, func(i, j int) bool {
+		return strings.ToLower(rows[i].name) < strings.ToLower(rows[j].name)
+	})
 	return rows
 }
 
@@ -534,8 +538,10 @@ func (m *groupsModel) emptyStateView() string {
 
 func (m *groupsModel) applyFilter(query string) {
 	var prevName string
+	prevIndex := -1
 	if row, ok := m.list.SelectedItem().(groupRow); ok {
 		prevName = row.name
+		prevIndex = row.index
 	}
 
 	query = strings.TrimSpace(query)
@@ -559,6 +565,15 @@ func (m *groupsModel) applyFilter(query string) {
 
 	if len(rows) == 0 {
 		return
+	}
+	// Prefer index-based restore: stable across renames.
+	if prevIndex >= 0 {
+		for i, r := range rows {
+			if r.index == prevIndex {
+				m.list.Select(i)
+				return
+			}
+		}
 	}
 	if prevName != "" {
 		for i, r := range rows {

@@ -40,7 +40,6 @@ type groupHostsModel struct {
 	cmdInput       textinput.Model
 	toast          toast
 
-	confirmQuit         bool
 	confirmRemove       bool
 	removeList          []string
 	confirmConnect      bool
@@ -141,9 +140,6 @@ func (m *groupHostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		if handled, cmd := handleConfirmQuit(msg, &m.confirmQuit, &m.toast, &m.quitting, true); handled {
-			return m, cmd
-		}
 		if m.confirmRemove {
 			s := msg.String()
 			switch s {
@@ -165,15 +161,6 @@ func (m *groupHostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-		if key.Matches(msg, m.keymap.Quit) {
-			if !m.opts.Config.Defaults.ConfirmQuit {
-				m.quitting = true
-				return m, tea.Quit
-			}
-			m.confirmQuit = true
-			m.toast = toast{text: "quit? (y/n)", level: toastWarn}
-			return m, nil
-		}
 		if key.Matches(msg, m.keymap.Help) {
 			m.showHelp = !m.showHelp
 			if m.showHelp && m.width > 0 && m.height > 0 {
@@ -361,9 +348,6 @@ func (m *groupHostsModel) View() string {
 		return renderCmdPromptModal(m.width, m.height, m.cmdPromptCrumb,
 			"Connect and run a remote command (keeps session open).", m.cmdInput)
 	}
-	if m.confirmQuit {
-		return renderQuitConfirm(m.width, m.height)
-	}
 	if m.confirmConnect {
 		modal := connectConfirmBox(max(0, m.width-4), m.confirmConnectCount, m.confirmConnectHosts)
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal)
@@ -441,7 +425,6 @@ func (m *groupHostsModel) helpKeys() helpMap {
 			remove,
 			esc,
 			m.keymap.Help,
-			m.keymap.Quit,
 		},
 		full: [][]key.Binding{{
 			m.list.KeyMap.CursorUp,
@@ -468,7 +451,6 @@ func (m *groupHostsModel) helpKeys() helpMap {
 			remove,
 		}, {
 			m.keymap.Help,
-			m.keymap.Quit,
 		}},
 		sections: []helpSection{
 			{title: "Navigation", keys: []key.Binding{
@@ -500,7 +482,6 @@ func (m *groupHostsModel) helpKeys() helpMap {
 			}},
 			{title: "General", keys: []key.Binding{
 				m.keymap.Help,
-				m.keymap.Quit,
 			}},
 		},
 	}

@@ -354,7 +354,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.index >= 0 && msg.index < len(m.opts.Inventory.Groups) {
 			g = m.opts.Inventory.Groups[msg.index]
 		}
-		m.form = newGroupFormModel(msg.index, g, m.opts.Config.Defaults, m.opts.Config.Defaults.ConfirmQuit)
+		m.form = newGroupFormModel(msg.index, g, m.opts.Config.Defaults)
 		m.form.parentCrumb = "Groups"
 		if m.width > 0 && m.height > 0 {
 			mw, mh := groupFormModalSize(m.width, m.height)
@@ -363,7 +363,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.screen = screenGroupForm
 		return m, nil
 	case openGroupFormPrefillMsg:
-		m.form = newGroupFormModel(-1, msg.group, m.opts.Config.Defaults, m.opts.Config.Defaults.ConfirmQuit)
+		m.form = newGroupFormModel(-1, msg.group, m.opts.Config.Defaults)
 		m.form.parentCrumb = "Groups"
 		if m.width > 0 && m.height > 0 {
 			mw, mh := groupFormModalSize(m.width, m.height)
@@ -486,7 +486,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case openHostFormMsg:
 		idx, hc := findHostConfig(m.opts.Inventory, msg.host)
-		m.hostForm = newHostFormModel(idx, hc, m.opts.Config.Defaults, m.opts.Config.Defaults.ConfirmQuit)
+		m.hostForm = newHostFormModel(idx, hc, m.opts.Config.Defaults)
 		m.hostForm.parentCrumb = m.breadcrumb()
 		m.hostFormReturnTo = msg.returnTo
 		if m.width > 0 && m.height > 0 {
@@ -496,7 +496,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.screen = screenHostForm
 		return m, nil
 	case openHostFormPrefillMsg:
-		m.hostForm = newHostFormModel(-1, msg.host, m.opts.Config.Defaults, m.opts.Config.Defaults.ConfirmQuit)
+		m.hostForm = newHostFormModel(-1, msg.host, m.opts.Config.Defaults)
 		m.hostForm.parentCrumb = m.breadcrumb()
 		m.hostFormReturnTo = msg.returnTo
 		if m.width > 0 && m.height > 0 {

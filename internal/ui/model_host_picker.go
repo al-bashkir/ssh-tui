@@ -29,11 +29,10 @@ type hostPickerModel struct {
 	search textinput.Model
 	focus  focusState
 
-	keymap      keyMap
-	help        help.Model
-	showHelp    bool
-	toast       toast
-	confirmQuit bool
+	keymap   keyMap
+	help     help.Model
+	showHelp bool
+	toast    toast
 
 	prevSearch string
 }
@@ -91,17 +90,6 @@ func (m *hostPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		if handled, cmd := handleConfirmQuit(msg, &m.confirmQuit, &m.toast, nil, true); handled {
-			return m, cmd
-		}
-		if key.Matches(msg, m.keymap.Quit) {
-			if !m.opts.Config.Defaults.ConfirmQuit {
-				return m, tea.Quit
-			}
-			m.confirmQuit = true
-			m.toast = toast{text: "quit? (y/n)", level: toastWarn}
-			return m, nil
-		}
 		if key.Matches(msg, m.keymap.Help) {
 			m.showHelp = !m.showHelp
 			return m, nil
@@ -186,9 +174,6 @@ func (m *hostPickerModel) View() string {
 	if m.showHelp {
 		return renderHelpModal(m.width, m.height, "Add Hosts", m.help, m.helpKeys())
 	}
-	if m.confirmQuit {
-		return renderQuitConfirm(m.width, m.height)
-	}
 	innerW, _ := frameInnerSize(m.width, m.height)
 	sep := dim.Render(strings.Repeat("─", innerW))
 	searchLine := m.search.View()
@@ -216,7 +201,6 @@ func (m *hostPickerModel) helpKeys() helpMap {
 			add,
 			esc,
 			m.keymap.Help,
-			m.keymap.Quit,
 		},
 		full: [][]key.Binding{{
 			m.list.KeyMap.CursorUp,
@@ -235,7 +219,6 @@ func (m *hostPickerModel) helpKeys() helpMap {
 		}, {
 			esc,
 			m.keymap.Help,
-			m.keymap.Quit,
 		}},
 		sections: []helpSection{
 			{title: "Navigation", keys: []key.Binding{
@@ -255,7 +238,6 @@ func (m *hostPickerModel) helpKeys() helpMap {
 			{title: "General", keys: []key.Binding{
 				esc,
 				m.keymap.Help,
-				m.keymap.Quit,
 			}},
 		},
 	}

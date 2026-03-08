@@ -160,9 +160,6 @@ type groupFormModel struct {
 	toast toast
 
 	keymap keyMap
-
-	confirmQuitEnabled bool
-	confirmQuit        bool
 }
 
 func (m *groupFormModel) refreshAccentStyles() {
@@ -172,7 +169,7 @@ func (m *groupFormModel) refreshAccentStyles() {
 	}
 }
 
-func newGroupFormModel(index int, g config.Group, defs config.Defaults, confirmQuitEnabled bool) *groupFormModel {
+func newGroupFormModel(index int, g config.Group, defs config.Defaults) *groupFormModel {
 	// Reasonable default for new groups.
 	if index < 0 && strings.TrimSpace(g.OpenMode) == "" {
 		g.OpenMode = "tmux-window"
@@ -182,12 +179,11 @@ func newGroupFormModel(index int, g config.Group, defs config.Defaults, confirmQ
 	fm := newFormModel(groupSchema(defs), values, modalFormLabelWidth, defs.ShowFieldHelp)
 
 	return &groupFormModel{
-		form:               fm,
-		index:              index,
-		group:              g,
-		defs:               defs,
-		keymap:             defaultKeyMap(),
-		confirmQuitEnabled: confirmQuitEnabled,
+		form:   fm,
+		index:  index,
+		group:  g,
+		defs:   defs,
+		keymap: defaultKeyMap(),
 	}
 }
 
@@ -227,19 +223,6 @@ func (m *groupFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-		if m.confirmQuit {
-			switch msg.String() {
-			case "y", "Y", "enter":
-				return m, tea.Quit
-			case "n", "N", "esc":
-				m.confirmQuit = false
-				m.toast = toast{}
-				return m, nil
-			default:
-				return m, nil
-			}
-		}
-
 		// In insert mode or picker popup, delegate to form first.
 		if m.form.editing || m.form.picker != nil {
 			handled, cmd := m.form.handleKey(msg)
@@ -258,15 +241,6 @@ func (m *groupFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			return m, func() tea.Msg { return groupFormSaveMsg{index: m.index, group: g} }
-		}
-
-		if key.Matches(msg, m.keymap.Quit) {
-			if !m.confirmQuitEnabled {
-				return m, tea.Quit
-			}
-			m.confirmQuit = true
-			m.toast = toast{text: "quit? (y/n)", level: toastWarn}
-			return m, nil
 		}
 
 		if key.Matches(msg, m.keymap.Esc) {
@@ -301,9 +275,6 @@ func (m *groupFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // ---------------------------------------------------------------------------
 
 func (m *groupFormModel) View() string {
-	if m.confirmQuit {
-		return renderQuitConfirm(m.width, m.height)
-	}
 	if m.borderPicker != nil {
 		return placeCentered(m.width, m.height, m.borderPicker.View())
 	}

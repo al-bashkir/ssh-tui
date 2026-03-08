@@ -115,26 +115,22 @@ type hostFormModel struct {
 	toast toast
 
 	keymap keyMap
-
-	confirmQuitEnabled bool
-	confirmQuit        bool
 }
 
 func (m *hostFormModel) refreshAccentStyles() {
 	m.form.refreshAccentStyles()
 }
 
-func newHostFormModel(index int, h config.Host, defs config.Defaults, confirmQuitEnabled bool) *hostFormModel {
+func newHostFormModel(index int, h config.Host, defs config.Defaults) *hostFormModel {
 	values := hostToValues(h)
 	fm := newFormModel(hostSchema(defs), values, modalFormLabelWidth, defs.ShowFieldHelp)
 
 	return &hostFormModel{
-		form:               fm,
-		index:              index,
-		host:               h,
-		defs:               defs,
-		keymap:             defaultKeyMap(),
-		confirmQuitEnabled: confirmQuitEnabled,
+		form:   fm,
+		index:  index,
+		host:   h,
+		defs:   defs,
+		keymap: defaultKeyMap(),
 	}
 }
 
@@ -153,19 +149,6 @@ func (m *hostFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		if m.confirmQuit {
-			switch msg.String() {
-			case "y", "Y", "enter":
-				return m, tea.Quit
-			case "n", "N", "esc":
-				m.confirmQuit = false
-				m.toast = toast{}
-				return m, nil
-			default:
-				return m, nil
-			}
-		}
-
 		// Insert mode — delegate to form first.
 		if m.form.editing {
 			handled, cmd := m.form.handleKey(msg)
@@ -184,15 +167,6 @@ func (m *hostFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			return m, func() tea.Msg { return hostFormSaveMsg{index: m.index, host: h} }
-		}
-
-		if key.Matches(msg, m.keymap.Quit) {
-			if !m.confirmQuitEnabled {
-				return m, tea.Quit
-			}
-			m.confirmQuit = true
-			m.toast = toast{text: "quit? (y/n)", level: toastWarn}
-			return m, nil
 		}
 
 		if key.Matches(msg, m.keymap.Esc) {
@@ -214,9 +188,6 @@ func (m *hostFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // ---------------------------------------------------------------------------
 
 func (m *hostFormModel) View() string {
-	if m.confirmQuit {
-		return renderQuitConfirm(m.width, m.height)
-	}
 	if m.width <= 0 || m.height <= 0 {
 		return ""
 	}
