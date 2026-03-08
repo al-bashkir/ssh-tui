@@ -182,11 +182,15 @@ func (s *hostSelectList) applyFilter(
 				}
 			}
 		}
-		// Nothing after — try walking backward.
-		for j := len(s.allHosts) - 1; j >= 0; j-- {
-			if s.allHosts[j] == prevHost {
+		// Nothing after — try walking backward to the nearest item before prevHost.
+		prevIdx := -1
+		for i, h := range s.allHosts {
+			if h == prevHost {
+				prevIdx = i
 				break
 			}
+		}
+		for j := prevIdx - 1; j >= 0; j-- {
 			if idx, ok := filteredSet[s.allHosts[j]]; ok {
 				l.Select(idx)
 				return

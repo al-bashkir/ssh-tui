@@ -3,7 +3,6 @@ package ui
 import (
 	"fmt"
 	"io"
-	"os/exec"
 	"strings"
 
 	"github.com/al-bashkir/ssh-tui/internal/config"
@@ -585,10 +584,15 @@ func (m *groupsModel) applyFilter(query string) {
 				}
 			}
 		}
-		for j := len(m.allRows) - 1; j >= 0; j-- {
-			if m.allRows[j].name == prevName {
+		// Nothing after — try walking backward to the nearest item before prevName.
+		prevIdx := -1
+		for i, r := range m.allRows {
+			if r.name == prevName {
+				prevIdx = i
 				break
 			}
+		}
+		for j := prevIdx - 1; j >= 0; j-- {
 			if idx, ok := rowSet[m.allRows[j].name]; ok {
 				m.list.Select(idx)
 				return
@@ -635,6 +639,11 @@ func (m *groupsModel) doConnectAll(g config.Group, oneWindow bool, remoteCmd str
 	rc := strings.TrimSpace(remoteCmd)
 
 	mode, inTmux := resolveConnectMode(defaults, &g)
+	if oneWindow {
+		// Force all hosts into a single tmux window with panes.
+		// Caller (connectAllCmd) already verified tmux is active when oneWindow=true.
+		mode = tmx.OpenPane
+	}
 
 	sshCmds := buildSSHCommands(g.Hosts, defaults, m.opts.Inventory, &g, func(s *sshcmd.Settings) {
 		if rc == "" {
@@ -644,101 +653,16 @@ func (m *groupsModel) doConnectAll(g config.Group, oneWindow bool, remoteCmd str
 		s.RemoteCommand = keepSessionOpenRemoteCmd(rc)
 	})
 
-	if oneWindow {
-		return func() tea.Msg {
-			name := strings.TrimSpace(g.Name)
-			if name == "" {
-				name = tmx.WindowName(g.Hosts[0])
-			}
-			psOne := tmx.ResolvePaneSettings(defaults, &g, len(sshCmds))
-			err := tmx.OpenOneWindow(sshCmds, tmx.OneWindowOpts{
-				WindowName:       name,
-				PaneTitles:       g.Hosts,
-				SplitFlag:        psOne.SplitFlag,
-				Layout:           psOne.Layout,
-				SyncPanes:        psOne.SyncPanes,
-				PaneBorderFormat: psOne.BorderFormat,
-				PaneBorderStatus: psOne.BorderStatus,
-			})
-			if err != nil {
-				return toastMsg{text: err.Error(), level: toastErr}
-			}
-			return toastMsg{text: fmt.Sprintf("opened %d in one window", len(sshCmds)), level: toastInfo}
-		}
-	}
-
-	if mode == tmx.OpenCurrent {
-		if len(sshCmds) > 1 {
-			m.toast = toast{text: "multi-host requires tmux (window or pane mode)", level: toastWarn}
-			return nil
-		}
-		m.execCmd = sshCmds[0]
+	result, cmd := dispatchConnect(g.Hosts, sshCmds, defaults, &g, mode, inTmux)
+	if result.quit {
+		m.execCmd = result.execCmd
 		return tea.Quit
 	}
-	if !inTmux {
-		if len(sshCmds) > 1 {
-			m.toast = toast{text: "multi-host requires an active tmux session", level: toastWarn}
-			return nil
-		}
-		m.execCmd = tmx.NewSessionCmd(defaults.TmuxSession, sshCmds[0])
-		return tea.Quit
+	if !result.toast.empty() {
+		m.toast = result.toast
+		return nil
 	}
-
-	return func() tea.Msg {
-		if mode == tmx.OpenPane {
-			name := strings.TrimSpace(g.Name)
-			if name == "" {
-				name = tmx.WindowName(g.Hosts[0])
-			}
-			ps := tmx.ResolvePaneSettings(defaults, &g, len(sshCmds))
-			err := tmx.OpenOneWindow(sshCmds, tmx.OneWindowOpts{
-				WindowName:       name,
-				PaneTitles:       g.Hosts,
-				SplitFlag:        ps.SplitFlag,
-				Layout:           ps.Layout,
-				SyncPanes:        ps.SyncPanes,
-				PaneBorderFormat: ps.BorderFormat,
-				PaneBorderStatus: ps.BorderStatus,
-			})
-			if err != nil {
-				return toastMsg{text: err.Error(), level: toastErr}
-			}
-			return toastMsg{text: fmt.Sprintf("opened %d in one window", len(sshCmds)), level: toastInfo}
-		}
-		if mode == tmx.OpenWindow && len(sshCmds) > 1 {
-			name := strings.TrimSpace(g.Name)
-			if name == "" {
-				name = tmx.WindowName(g.Hosts[0])
-			}
-			ps := tmx.ResolvePaneSettings(defaults, &g, len(sshCmds))
-			err := tmx.OpenOneWindow(sshCmds, tmx.OneWindowOpts{
-				WindowName:       name,
-				PaneTitles:       g.Hosts,
-				SplitFlag:        ps.SplitFlag,
-				Layout:           ps.Layout,
-				SyncPanes:        ps.SyncPanes,
-				PaneBorderFormat: ps.BorderFormat,
-				PaneBorderStatus: ps.BorderStatus,
-			})
-			if err != nil {
-				return toastMsg{text: err.Error(), level: toastErr}
-			}
-			return toastMsg{text: fmt.Sprintf("opened %d in one window", len(sshCmds)), level: toastInfo}
-		}
-
-		for i, sshCmd := range sshCmds {
-			name := strings.TrimSpace(g.Name)
-			if name == "" {
-				name = tmx.WindowName(g.Hosts[i])
-			}
-			tmuxCmd := tmx.NewWindowCmd(name, sshCmd)
-			// #nosec G204 -- tmux argv is constructed (no shell) from known host/group settings.
-			if err := exec.Command(tmuxCmd[0], tmuxCmd[1:]...).Run(); err != nil {
-				return toastMsg{text: "tmux error: " + err.Error(), level: toastErr}
-			}
-		}
-		return toastMsg{text: fmt.Sprintf("opened %d", len(sshCmds)), level: toastInfo}
-	}
+	return cmd
 }
 
 func (m *groupsModel) IsQuitting() bool  { return m.quitting }

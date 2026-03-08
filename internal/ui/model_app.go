@@ -404,7 +404,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.screen = screenGroupHosts
 		return m, nil
 	case openHostPickerMsg:
-		m.picker = newHostPickerModel(m.opts, msg.groupIndex)
+		m.picker = newHostPickerModel(m.opts)
 		m.picker.parentCrumb = m.breadcrumb()
 		if m.width > 0 && m.height > 0 {
 			mw, mh := pickerModalSize(m.width, m.height)
@@ -945,7 +945,7 @@ func (m *appModel) saveDefaults(d config.Defaults) error {
 		}
 		if m.picker != nil {
 			// Recreate to refresh list source.
-			m.picker = newHostPickerModel(m.opts, m.returnGroupIndex)
+			m.picker = newHostPickerModel(m.opts)
 			if m.width > 0 && m.height > 0 {
 				mw, mh := pickerModalSize(m.width, m.height)
 				_, _ = m.picker.Update(tea.WindowSizeMsg{Width: mw, Height: mh})

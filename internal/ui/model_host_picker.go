@@ -38,7 +38,7 @@ type hostPickerModel struct {
 	prevSearch string
 }
 
-func newHostPickerModel(opts Options, _groupIndex int) *hostPickerModel {
+func newHostPickerModel(opts Options) *hostPickerModel {
 	all := append([]string(nil), opts.Hosts...)
 	items := make([]list.Item, 0, len(all))
 	for _, h := range all {

@@ -26,7 +26,7 @@ UI structure (deeper):
 
 - [UI Structure](ui.md)
 
-UI files map:
+UI files map (non-exhaustive — covers main models, shared helpers, and key utilities):
 
 - `internal/ui/run.go`: `Run()` entrypoint, `Options`, `ExecRequest`, `ErrQuit`
 - `internal/ui/model_app.go`: app router/state machine, config save/refresh
@@ -59,3 +59,12 @@ UI files map:
 - `internal/ui/listutil.go`: shared list configuration (`configureList`, `newSearchInput`)
 - `internal/ui/input_underline.go`: `configureSearch`, `setSearchBarFocused`, `setSearchFocused`
 - `internal/ui/view_hosts.go`: `renderMainTabBox` and related view helpers
+- `internal/ui/view_shared.go`: `renderCmdPromptModal` and other shared overlays
+- `internal/ui/layout.go`: layout constants (header lines, width thresholds, modal margins)
+- `internal/ui/toast.go`: `toast` type, levels, `renderToast`, `toastMsg`
+- `internal/ui/form_schema.go`: `fieldKind`, `fieldDef`, form field descriptors
+- `internal/ui/form_model.go`: generic form model shared by defaults/host/group editors
+- `internal/ui/form_helpers.go`: `formLabel` and other form rendering utilities
+- `internal/ui/form_render.go`: field-level rendering (text, picker, toggle rows)
+- `internal/ui/form_validate.go`: field validators (`validatePort`, etc.)
+- `internal/ui/option_picker_popup.go`: inline option-picker popup used by `formModel`
