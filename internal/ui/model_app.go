@@ -354,7 +354,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.index >= 0 && msg.index < len(m.opts.Inventory.Groups) {
 			g = m.opts.Inventory.Groups[msg.index]
 		}
-		m.form = newGroupFormModel(msg.index, g, m.opts.Config.Defaults, m.opts.Config.Defaults.ConfirmQuit)
+		m.form = newGroupFormModel(msg.index, g, m.opts.Config.Defaults)
 		m.form.parentCrumb = "Groups"
 		if m.width > 0 && m.height > 0 {
 			mw, mh := groupFormModalSize(m.width, m.height)
@@ -363,7 +363,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.screen = screenGroupForm
 		return m, nil
 	case openGroupFormPrefillMsg:
-		m.form = newGroupFormModel(-1, msg.group, m.opts.Config.Defaults, m.opts.Config.Defaults.ConfirmQuit)
+		m.form = newGroupFormModel(-1, msg.group, m.opts.Config.Defaults)
 		m.form.parentCrumb = "Groups"
 		if m.width > 0 && m.height > 0 {
 			mw, mh := groupFormModalSize(m.width, m.height)
@@ -404,7 +404,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.screen = screenGroupHosts
 		return m, nil
 	case openHostPickerMsg:
-		m.picker = newHostPickerModel(m.opts, msg.groupIndex)
+		m.picker = newHostPickerModel(m.opts)
 		m.picker.parentCrumb = m.breadcrumb()
 		if m.width > 0 && m.height > 0 {
 			mw, mh := pickerModalSize(m.width, m.height)
@@ -486,7 +486,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case openHostFormMsg:
 		idx, hc := findHostConfig(m.opts.Inventory, msg.host)
-		m.hostForm = newHostFormModel(idx, hc, m.opts.Config.Defaults, m.opts.Config.Defaults.ConfirmQuit)
+		m.hostForm = newHostFormModel(idx, hc, m.opts.Config.Defaults)
 		m.hostForm.parentCrumb = m.breadcrumb()
 		m.hostFormReturnTo = msg.returnTo
 		if m.width > 0 && m.height > 0 {
@@ -496,7 +496,7 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.screen = screenHostForm
 		return m, nil
 	case openHostFormPrefillMsg:
-		m.hostForm = newHostFormModel(-1, msg.host, m.opts.Config.Defaults, m.opts.Config.Defaults.ConfirmQuit)
+		m.hostForm = newHostFormModel(-1, msg.host, m.opts.Config.Defaults)
 		m.hostForm.parentCrumb = m.breadcrumb()
 		m.hostFormReturnTo = msg.returnTo
 		if m.width > 0 && m.height > 0 {
@@ -532,9 +532,14 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var toastResult toast
 		var err error
 		if msg.groupIndex >= 0 {
-			execCmd, toastResult, err = m.connectHostsForGroup(msg.groupIndex, msg.hosts, "")
+			if msg.groupIndex >= len(m.opts.Inventory.Groups) {
+				err = fmt.Errorf("invalid group")
+			} else {
+				g := m.opts.Inventory.Groups[msg.groupIndex]
+				execCmd, toastResult, err = m.connectHosts(msg.hosts, &g, "")
+			}
 		} else {
-			execCmd, toastResult, err = m.connectHostsWithDefaults(msg.hosts)
+			execCmd, toastResult, err = m.connectHosts(msg.hosts, nil, "")
 		}
 		if err != nil {
 			toastResult = toast{text: err.Error(), level: toastErr}
@@ -601,7 +606,25 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.gpConnectAfterAdd {
-			execCmd, toastResult, err := m.connectHostsForGroup(msg.groupIndex, m.gpHosts, "")
+			var g *config.Group
+			if msg.groupIndex < 0 || msg.groupIndex >= len(m.opts.Inventory.Groups) {
+				err := fmt.Errorf("invalid group")
+				toastResult := toast{text: err.Error(), level: toastErr}
+				switch m.gpReturnTo {
+				case screenGroups:
+					m.groups.toast = toastResult
+				default:
+					m.hosts.toast = toastResult
+				}
+				m.gp = nil
+				m.gpHosts = nil
+				m.gpConnectAfterAdd = false
+				m.screen = m.gpReturnTo
+				return m, nil
+			}
+			gg := m.opts.Inventory.Groups[msg.groupIndex]
+			g = &gg
+			execCmd, toastResult, err := m.connectHosts(m.gpHosts, g, "")
 			if err != nil {
 				toastResult = toast{text: err.Error(), level: toastErr}
 			}
@@ -922,7 +945,7 @@ func (m *appModel) saveDefaults(d config.Defaults) error {
 		}
 		if m.picker != nil {
 			// Recreate to refresh list source.
-			m.picker = newHostPickerModel(m.opts, m.returnGroupIndex)
+			m.picker = newHostPickerModel(m.opts)
 			if m.width > 0 && m.height > 0 {
 				mw, mh := pickerModalSize(m.width, m.height)
 				_, _ = m.picker.Update(tea.WindowSizeMsg{Width: mw, Height: mh})

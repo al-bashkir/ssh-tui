@@ -1,6 +1,21 @@
 package ui
 
-import "github.com/charmbracelet/bubbles/list"
+import (
+	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textinput"
+)
+
+// newSearchInput creates a pre-configured search textinput used by all list screens.
+func newSearchInput() textinput.Model {
+	search := textinput.New()
+	search.Placeholder = "search"
+	search.Prompt = "/ "
+	search.CharLimit = 256
+	search.Width = 40
+	configureSearch(&search)
+	setSearchBarFocused(&search, false)
+	return search
+}
 
 func configureList(m *list.Model) {
 	// Avoid default letter shortcuts that conflict with our app keys.

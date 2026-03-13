@@ -253,13 +253,6 @@ func (m *formModel) setFocusIdx(idx int) {
 	m.applyFocusStyles()
 }
 
-// blurAllInputs deactivates all text inputs.
-func (m *formModel) blurAllInputs() {
-	for i := range m.inputs {
-		m.inputs[i].input.Blur()
-	}
-}
-
 // moveFocus moves focus by delta items (+1 down, -1 up), wrapping at edges.
 // Disabled fields are skipped; if all fields are disabled, focus stays put.
 func (m *formModel) moveFocus(delta int) {
@@ -337,35 +330,6 @@ func (m *formModel) updateFocusedInput(msg tea.Msg) tea.Cmd {
 }
 
 // ---------------------------------------------------------------------------
-// Value cycling (pickers / toggles)
-// ---------------------------------------------------------------------------
-
-// cycleValue cycles the focused picker/toggle value by delta (+1/-1).
-func (m *formModel) cycleValue(delta int) {
-	fd := m.focusedField()
-	if fd == nil || len(fd.Options) == 0 {
-		return
-	}
-	cur := strings.TrimSpace(m.values[fd.Key])
-	idx := 0
-	for i, opt := range fd.Options {
-		if strings.TrimSpace(opt.Value) == cur {
-			idx = i
-			break
-		}
-	}
-	idx += delta
-	if idx < 0 {
-		idx = len(fd.Options) - 1
-	}
-	if idx >= len(fd.Options) {
-		idx = 0
-	}
-	m.values[fd.Key] = fd.Options[idx].Value
-	m.validateField(fd)
-}
-
-// ---------------------------------------------------------------------------
 // Key handling
 // ---------------------------------------------------------------------------
 
@@ -415,29 +379,15 @@ func (m *formModel) handleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 			case fieldPicker:
 				m.openPicker()
 				return true, nil
-			case fieldToggle:
-				m.cycleValue(1)
-				return true, nil
 			case fieldSubModal:
 				return false, nil // wrapper handles sub-modal activation
 			}
 		}
 		m.moveFocus(1)
 		return true, nil
-	case "h", "left":
-		if fd := m.focusedField(); fd != nil && !m.isFocusedFieldDisabled() {
-			if fd.Kind == fieldToggle {
-				m.cycleValue(-1)
-				return true, nil
-			}
-		}
-		return true, nil
 	case "l", "right":
 		if fd := m.focusedField(); fd != nil && !m.isFocusedFieldDisabled() {
 			switch fd.Kind {
-			case fieldToggle:
-				m.cycleValue(1)
-				return true, nil
 			case fieldPicker:
 				m.openPicker()
 				return true, nil
@@ -482,14 +432,6 @@ func (m *formModel) handlePickerKey(msg tea.KeyMsg) bool {
 		m.picker = nil
 	}
 	return true
-}
-
-// pickerView returns the rendered picker popup, or "" if no popup is open.
-func (m *formModel) pickerView() string {
-	if m.picker == nil {
-		return ""
-	}
-	return m.picker.View(m.width)
 }
 
 // overlayPickerOnVisible renders the picker popup on top of visible content
@@ -602,8 +544,6 @@ func (m *formModel) footerHints() string {
 		return "Ctrl+S save  j/k nav  i edit  Esc back"
 	case fieldPicker:
 		return "Ctrl+S save  j/k nav  ⏎ choose  Esc back"
-	case fieldToggle:
-		return "Ctrl+S save  j/k nav  h/l option  Esc back"
 	case fieldSubModal:
 		return "Ctrl+S save  j/k nav  ⏎ select  Esc back"
 	}
@@ -636,19 +576,4 @@ func (m *formModel) validateField(fd *fieldDef) string {
 	}
 	delete(m.validationErrs, fd.Key)
 	return ""
-}
-
-// validate runs all per-field validators and returns the first error.
-func (m *formModel) validate() error {
-	for _, sec := range m.schema.Sections {
-		for _, fd := range sec.Fields {
-			if fd.Validate == nil {
-				continue
-			}
-			if err := fd.Validate(m.values[fd.Key]); err != nil {
-				return fmt.Errorf("%s: %w", fd.Label, err)
-			}
-		}
-	}
-	return nil
 }

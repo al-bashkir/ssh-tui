@@ -17,8 +17,6 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-
-	"github.com/sahilm/fuzzy"
 )
 
 type focusState int
@@ -61,17 +59,14 @@ type knownHostsReloadMsg struct {
 }
 
 type hostsModel struct {
+	hostSelectList
 	opts Options
 
 	width  int
 	height int
 
-	allHosts   []string
-	filtered   []string
-	selected   map[string]bool
-	matchIdxes map[string][]int // fuzzy match indexes per host
-	keymap     keyMap
-	help       help.Model
+	keymap keyMap
+	help   help.Model
 
 	list   list.Model
 	search textinput.Model
@@ -109,24 +104,20 @@ func newHostsModel(opts Options) *hostsModel {
 	l.Title = "Hosts"
 	configureList(&l)
 
-	search := textinput.New()
-	search.Placeholder = "search"
-	search.Prompt = "/ "
-	search.CharLimit = 256
-	search.Width = 40
-	configureSearch(&search)
-	setSearchBarFocused(&search, false)
+	search := newSearchInput()
 
 	m := &hostsModel{
-		opts:     opts,
-		allHosts: append([]string(nil), opts.Hosts...),
-		filtered: append([]string(nil), opts.Hosts...),
-		selected: make(map[string]bool),
-		keymap:   defaultKeyMap(),
-		help:     help.New(),
-		list:     l,
-		search:   search,
-		focus:    focusList,
+		hostSelectList: hostSelectList{
+			allHosts: append([]string(nil), opts.Hosts...),
+			filtered: append([]string(nil), opts.Hosts...),
+			selected: make(map[string]bool),
+		},
+		opts:   opts,
+		keymap: defaultKeyMap(),
+		help:   help.New(),
+		list:   l,
+		search: search,
+		focus:  focusList,
 	}
 	if !opts.Config.Defaults.LoadKnownHosts {
 		m.keymap.Reload.SetEnabled(false)
@@ -209,40 +200,12 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		if m.confirmQuit {
-			s := msg.String()
-			switch s {
-			case "y", "Y", "enter":
-				m.quitting = true
-				return m, tea.Quit
-			case "n", "N", "esc":
-				m.confirmQuit = false
-				m.toast = toast{}
-				return m, nil
-			default:
-				return m, nil
-			}
+		if handled, cmd := handleConfirmQuit(msg, &m.confirmQuit, &m.toast, &m.quitting, true); handled {
+			return m, cmd
 		}
 
-		if m.confirmConnect {
-			s := msg.String()
-			switch s {
-			case "y", "Y", "enter":
-				m.confirmConnect = false
-				fn := m.pendingConnectFn
-				m.pendingConnectFn = nil
-				if fn != nil {
-					return m, fn()
-				}
-				return m, nil
-			case "n", "N", "esc":
-				m.confirmConnect = false
-				m.pendingConnectFn = nil
-				m.toast = toast{}
-				return m, nil
-			default:
-				return m, nil
-			}
+		if handled, cmd := handleConfirmConnect(msg, &m.confirmConnect, &m.pendingConnectFn, &m.toast); handled {
+			return m, cmd
 		}
 
 		if key.Matches(msg, m.keymap.Quit) {
@@ -451,144 +414,29 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	var cmd tea.Cmd
-	if m.focus == focusSearch {
-		m.search, cmd = m.search.Update(msg)
-		cur := m.search.Value()
-		if cur != m.prevSearch {
-			m.applyFilter(cur)
-			m.prevSearch = cur
-		}
-		return m, cmd
-	}
-
-	m.list, cmd = m.list.Update(msg)
-	return m, cmd
+	return m, updateSearchOrList(m.focus, &m.search, &m.list, &m.prevSearch, msg, m.applyFilter)
 }
 
 func (m *hostsModel) applyFilter(query string) {
-	// Remember current selection so we can restore cursor position.
-	var prevHost string
-	if row, ok := m.list.SelectedItem().(hostRow); ok {
-		prevHost = row.host
-	}
-
-	query = strings.TrimSpace(query)
-	var filtered []string
-	m.matchIdxes = nil
-	if query == "" {
-		filtered = append([]string(nil), m.allHosts...)
-	} else {
-		matches := fuzzy.Find(query, m.allHosts)
-		filtered = make([]string, 0, len(matches))
-		m.matchIdxes = make(map[string][]int, len(matches))
-		for _, match := range matches {
-			filtered = append(filtered, match.Str)
-			if len(match.MatchedIndexes) > 0 {
-				m.matchIdxes[match.Str] = match.MatchedIndexes
-			}
-		}
-	}
+	var excludeFn func(config.Inventory, string) bool
 	if !m.showHidden {
-		visible := make([]string, 0, len(filtered))
-		for _, h := range filtered {
-			if isHostHidden(m.opts.Inventory, h) {
-				continue
-			}
-			visible = append(visible, h)
-		}
-		filtered = visible
+		excludeFn = isHostHidden
 	}
-	m.filtered = filtered
-	m.setListItems(m.filtered)
-
-	// Restore cursor: prefer same host; if gone, pick the next visible
-	// neighbour based on the master allHosts order, then fall back to 0.
-	if len(m.filtered) == 0 {
-		return
-	}
-	if prevHost != "" {
-		// Fast path: host is still in the list.
-		for i, h := range m.filtered {
-			if h == prevHost {
-				m.list.Select(i)
-				return
-			}
-		}
-		// Host was removed (e.g. hidden). Walk allHosts forward from the
-		// previous host to find the first entry that is in the new list.
-		filteredSet := make(map[string]int, len(m.filtered))
-		for i, h := range m.filtered {
-			filteredSet[h] = i
-		}
-		past := false
-		for _, h := range m.allHosts {
-			if h == prevHost {
-				past = true
-				continue
-			}
-			if past {
-				if idx, ok := filteredSet[h]; ok {
-					m.list.Select(idx)
-					return
-				}
-			}
-		}
-		// Nothing after — try walking backward.
-		for j := len(m.allHosts) - 1; j >= 0; j-- {
-			if m.allHosts[j] == prevHost {
-				break
-			}
-			if idx, ok := filteredSet[m.allHosts[j]]; ok {
-				m.list.Select(idx)
-				return
-			}
-		}
-	}
-	m.list.Select(0)
-}
-
-func (m *hostsModel) setListItems(hosts []string) {
-	items := make([]list.Item, 0, len(hosts))
-	for _, h := range hosts {
-		_, ok := hostConfigFor(m.opts.Inventory, h)
-		hidden := isHostHidden(m.opts.Inventory, h)
-		items = append(items, hostRow{host: h, selected: m.selected[h], hasCfg: ok, hidden: hidden, matchedIndexes: m.matchIdxes[h]})
-	}
-	m.list.SetItems(items)
+	m.hostSelectList.applyFilter(&m.list, query, m.opts.Inventory, excludeFn, isHostHidden)
 }
 
 type toastMsg toast
 
 func (m *hostsModel) refreshVisibleSelection() {
-	items := m.list.Items()
-	for i := range items {
-		row, ok := items[i].(hostRow)
-		if !ok {
-			continue
-		}
-		row.selected = m.selected[row.host]
-		items[i] = row
-	}
-	m.list.SetItems(items)
+	m.hostSelectList.refreshVisibleSelection(&m.list)
 }
 
 func (m *hostsModel) refreshVisibleBadges() {
-	idx := m.list.Index()
-	items := m.list.Items()
-	for i := range items {
-		row, ok := items[i].(hostRow)
-		if !ok {
-			continue
-		}
-		_, ok = hostConfigFor(m.opts.Inventory, row.host)
-		row.hasCfg = ok
-		items[i] = row
-	}
-	m.list.SetItems(items)
-	if idx >= 0 && idx < len(items) {
-		m.list.Select(idx)
-	}
+	m.hostSelectList.refreshVisibleBadges(&m.list, m.opts.Inventory)
+}
+
+func (m *hostsModel) toggleCurrentSelection() {
+	m.hostSelectList.toggleCurrentSelection(&m.list)
 }
 
 func (m *hostsModel) toggleCurrentHidden() tea.Cmd {
@@ -614,32 +462,6 @@ func (m *hostsModel) hiddenCount() int {
 	return count
 }
 
-func (m *hostsModel) toggleCurrentSelection() {
-	row, ok := m.list.SelectedItem().(hostRow)
-	if !ok || row.host == "" {
-		return
-	}
-	if m.selected[row.host] {
-		delete(m.selected, row.host)
-	} else {
-		m.selected[row.host] = true
-	}
-	m.refreshVisibleSelection()
-}
-
-func (m *hostsModel) selectedHosts() []string {
-	if len(m.selected) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(m.selected))
-	for _, h := range m.allHosts {
-		if m.selected[h] {
-			out = append(out, h)
-		}
-	}
-	return out
-}
-
 func (m *hostsModel) hostsToOpen() []string {
 	if sel := m.selectedHosts(); len(sel) > 0 {
 		return sel
@@ -652,20 +474,7 @@ func (m *hostsModel) hostsToOpen() []string {
 }
 
 func (m *hostsModel) buildSSHCmds(hosts []string, modifySettings func(*sshcmd.Settings)) [][]string {
-	base := sshcmd.FromDefaults(m.opts.Config.Defaults)
-	cmds := make([][]string, 0, len(hosts))
-	for _, h := range hosts {
-		s := base
-		if hc, ok := hostConfigFor(m.opts.Inventory, h); ok {
-			s = sshcmd.ApplyHost(s, hc)
-		}
-		if modifySettings != nil {
-			modifySettings(&s)
-		}
-		cmd, _ := sshcmd.BuildCommand(h, s)
-		cmds = append(cmds, cmd)
-	}
-	return cmds
+	return buildSSHCommands(hosts, m.opts.Config.Defaults, m.opts.Inventory, nil, modifySettings)
 }
 
 func connectThreshold(d config.Defaults) int {
@@ -684,8 +493,7 @@ func (m *hostsModel) handleConnect() tea.Cmd {
 
 	doConnect := func() tea.Cmd {
 		defaults := m.opts.Config.Defaults
-		inTmux := tmx.InTmux()
-		mode := tmx.ResolveOpenMode(defaults.Tmux, defaults.OpenMode, inTmux)
+		mode, inTmux := resolveConnectMode(defaults, nil)
 		sshCmds := m.buildSSHCmds(hosts, nil)
 
 		res, cmd := dispatchConnect(hosts, sshCmds, defaults, nil, mode, inTmux)
@@ -724,8 +532,7 @@ func (m *hostsModel) handleConnectWithRemoteCommand(remoteCmd string) tea.Cmd {
 
 	doConnect := func() tea.Cmd {
 		defaults := m.opts.Config.Defaults
-		inTmux := tmx.InTmux()
-		mode := tmx.ResolveOpenMode(defaults.Tmux, defaults.OpenMode, inTmux)
+		mode, inTmux := resolveConnectMode(defaults, nil)
 		sshCmds := m.buildSSHCmds(hosts, func(s *sshcmd.Settings) {
 			s.ExtraArgs = ensureSSHForceTTY(s.ExtraArgs)
 			s.RemoteCommand = keepSessionOpenRemoteCmd(remoteCmd)
@@ -782,9 +589,9 @@ func (m *hostsModel) openOneWindow() tea.Cmd {
 		sshCmds := m.buildSSHCmds(hosts, nil)
 		defaults := m.opts.Config.Defaults
 		return func() tea.Msg {
-			ps := resolvePaneSettings(defaults, nil, len(sshCmds))
-			err := tmuxOpenOneWindow(sshCmds, tmuxOneWindowOpts{
-				WindowName:       windowName(hosts[0]),
+			ps := tmx.ResolvePaneSettings(defaults, nil, len(sshCmds))
+			err := tmx.OpenOneWindow(sshCmds, tmx.OneWindowOpts{
+				WindowName:       tmx.WindowName(hosts[0]),
 				PaneTitles:       hosts,
 				SplitFlag:        ps.SplitFlag,
 				Layout:           ps.Layout,
@@ -807,10 +614,6 @@ func (m *hostsModel) openOneWindow() tea.Cmd {
 		return nil
 	}
 	return doConnect()
-}
-
-func windowName(host string) string {
-	return tmx.WindowName(host)
 }
 
 func (m *hostsModel) helpKeys() helpMap {
@@ -906,18 +709,4 @@ func reloadKnownHostsCmd(paths []string) tea.Cmd {
 		res, errs := hosts.LoadKnownHosts(paths)
 		return knownHostsReloadMsg{res: res, errs: errs}
 	}
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }

@@ -50,7 +50,7 @@ func settingsSchema() formSchema {
 					Placeholder: "-o Option=value ...",
 					Helper:      "Additional ssh flags, space-separated",
 					CharLimit:   1024},
-				{Key: "load_known_hosts", Label: "Load known_hosts", Kind: fieldToggle,
+				{Key: "load_known_hosts", Label: "Load known_hosts", Kind: fieldPicker,
 					Options: opts("yes", "no"), Default: "yes",
 					Helper: "Auto-import hosts from ~/.ssh/known_hosts"},
 			}},
@@ -67,7 +67,7 @@ func settingsSchema() formSchema {
 						}
 						return ""
 					}},
-				{Key: "show_field_help", Label: "Field help", Kind: fieldToggle,
+				{Key: "show_field_help", Label: "Field help", Kind: fieldPicker,
 					Options: opts("yes", "no"), Default: "yes",
 					Helper: "Show helper text below focused form fields"},
 			}},
@@ -84,7 +84,7 @@ func settingsSchema() formSchema {
 					CharLimit: 128},
 			}},
 			{Key: "behavior", Label: "Behavior", Fields: []fieldDef{
-				{Key: "confirm_quit", Label: "Confirm quit", Kind: fieldToggle,
+				{Key: "confirm_quit", Label: "Confirm quit", Kind: fieldPicker,
 					Options: opts("yes", "no"), Default: "no",
 					Helper: "Show confirmation dialog before quitting"},
 				{Key: "threshold", Label: "Confirm threshold", Kind: fieldNumber,
@@ -94,13 +94,13 @@ func settingsSchema() formSchema {
 					Validate: validateNonNegativeInt},
 			}},
 			{Key: "panes", Label: "Panes", Fields: []fieldDef{
-				{Key: "pane_split", Label: "Split direction", Kind: fieldToggle,
+				{Key: "pane_split", Label: "Split direction", Kind: fieldPicker,
 					Options: opts("horizontal", "vertical"),
 					Helper:  "Direction for splitting tmux panes"},
 				{Key: "pane_layout", Label: "Layout", Kind: fieldPicker,
 					Options: opts("auto", "tiled", "even-horizontal", "even-vertical", "main-horizontal", "main-vertical"),
 					Helper:  "Tmux pane arrangement algorithm"},
-				{Key: "pane_sync", Label: "Synchronize input", Kind: fieldToggle,
+				{Key: "pane_sync", Label: "Synchronize input", Kind: fieldPicker,
 					Options: opts("on", "off"), Default: "on",
 					Helper: "Send keystrokes to all panes simultaneously"},
 				{Key: "border_pos", Label: "Border position", Kind: fieldPicker,
@@ -365,6 +365,8 @@ func (m *defaultsFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.form.editing || m.form.picker != nil {
 			handled, cmd := m.form.handleKey(msg)
 			if handled {
+				// Live-preview: sync after picker/edit confirms.
+				m.form.showFieldHelp = m.form.values["show_field_help"] != "no"
 				return m, cmd
 			}
 		}

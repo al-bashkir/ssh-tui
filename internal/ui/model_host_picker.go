@@ -2,7 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/help"
@@ -10,8 +9,6 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-
-	"github.com/sahilm/fuzzy"
 )
 
 type hostPickerCancelMsg struct{}
@@ -20,82 +17,47 @@ type hostPickerDoneMsg struct {
 	hosts []string
 }
 
-type pickerRow struct {
-	host           string
-	selected       bool
-	hasCfg         bool
-	matchedIndexes []int
-}
-
-func (i pickerRow) Title() string       { return i.host }
-func (i pickerRow) Description() string { return "" }
-func (i pickerRow) FilterValue() string { return i.host }
-
-type pickerDelegate struct{}
-
-func (d pickerDelegate) Height() int                             { return 1 }
-func (d pickerDelegate) Spacing() int                            { return 0 }
-func (d pickerDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
-
-func (d pickerDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
-	row, ok := item.(pickerRow)
-	if !ok {
-		fmt.Fprint(w, item.FilterValue())
-		return
-	}
-	fmt.Fprint(w, renderHostLikeRow(m.Width(), index == m.Index(), row.selected, row.host, row.hasCfg, false, row.matchedIndexes))
-}
-
 type hostPickerModel struct {
+	hostSelectList
 	opts        Options
 	parentCrumb string
 
 	width  int
 	height int
 
-	allHosts   []string
-	filtered   []string
-	selected   map[string]bool
-	matchIdxes map[string][]int
-
 	list   list.Model
 	search textinput.Model
 	focus  focusState
 
-	keymap      keyMap
-	help        help.Model
-	showHelp    bool
-	toast       toast
-	confirmQuit bool
+	keymap   keyMap
+	help     help.Model
+	showHelp bool
+	toast    toast
 
 	prevSearch string
 }
 
-func newHostPickerModel(opts Options, _groupIndex int) *hostPickerModel {
+func newHostPickerModel(opts Options) *hostPickerModel {
 	all := append([]string(nil), opts.Hosts...)
 	items := make([]list.Item, 0, len(all))
 	for _, h := range all {
 		_, ok := hostConfigFor(opts.Inventory, h)
-		items = append(items, pickerRow{host: h, hasCfg: ok})
+		items = append(items, hostRow{host: h, hasCfg: ok})
 	}
 
-	l := list.New(items, pickerDelegate{}, 0, 0)
+	l := list.New(items, hostDelegate{}, 0, 0)
 	l.Title = "Add hosts"
 	configureList(&l)
 
-	search := textinput.New()
-	search.Placeholder = "search"
-	search.Prompt = "/ "
-	search.CharLimit = 256
-	search.Width = 40
-	configureSearch(&search)
-	setSearchBarFocused(&search, false)
+	search := newSearchInput()
 
 	m := &hostPickerModel{
+		hostSelectList: hostSelectList{
+			allHosts: all,
+			filtered: append([]string(nil), all...),
+			selected: make(map[string]bool),
+		},
 		opts:     opts,
-		allHosts: all,
-		filtered: append([]string(nil), all...),
-		selected: make(map[string]bool),
 		list:     l,
 		search:   search,
 		focus:    focusList,
@@ -128,27 +90,6 @@ func (m *hostPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		if m.confirmQuit {
-			s := msg.String()
-			switch s {
-			case "y", "Y", "enter":
-				return m, tea.Quit
-			case "n", "N", "esc":
-				m.confirmQuit = false
-				m.toast = toast{}
-				return m, nil
-			default:
-				return m, nil
-			}
-		}
-		if key.Matches(msg, m.keymap.Quit) {
-			if !m.opts.Config.Defaults.ConfirmQuit {
-				return m, tea.Quit
-			}
-			m.confirmQuit = true
-			m.toast = toast{text: "quit? (y/n)", level: toastWarn}
-			return m, nil
-		}
 		if key.Matches(msg, m.keymap.Help) {
 			m.showHelp = !m.showHelp
 			return m, nil
@@ -217,7 +158,7 @@ func (m *hostPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			picked := m.selectedHosts()
 			if len(picked) == 0 {
-				row, ok := m.list.SelectedItem().(pickerRow)
+				row, ok := m.list.SelectedItem().(hostRow)
 				if ok && row.host != "" {
 					picked = []string{row.host}
 				}
@@ -226,27 +167,12 @@ func (m *hostPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	var cmd tea.Cmd
-	if m.focus == focusSearch {
-		m.search, cmd = m.search.Update(msg)
-		cur := m.search.Value()
-		if cur != m.prevSearch {
-			m.applyFilter(cur)
-			m.prevSearch = cur
-		}
-		return m, cmd
-	}
-
-	m.list, cmd = m.list.Update(msg)
-	return m, cmd
+	return m, updateSearchOrList(m.focus, &m.search, &m.list, &m.prevSearch, msg, m.applyFilter)
 }
 
 func (m *hostPickerModel) View() string {
 	if m.showHelp {
 		return renderHelpModal(m.width, m.height, "Add Hosts", m.help, m.helpKeys())
-	}
-	if m.confirmQuit {
-		return renderQuitConfirm(m.width, m.height)
 	}
 	innerW, _ := frameInnerSize(m.width, m.height)
 	sep := dim.Render(strings.Repeat("─", innerW))
@@ -275,7 +201,6 @@ func (m *hostPickerModel) helpKeys() helpMap {
 			add,
 			esc,
 			m.keymap.Help,
-			m.keymap.Quit,
 		},
 		full: [][]key.Binding{{
 			m.list.KeyMap.CursorUp,
@@ -294,7 +219,6 @@ func (m *hostPickerModel) helpKeys() helpMap {
 		}, {
 			esc,
 			m.keymap.Help,
-			m.keymap.Quit,
 		}},
 		sections: []helpSection{
 			{title: "Navigation", keys: []key.Binding{
@@ -314,7 +238,6 @@ func (m *hostPickerModel) helpKeys() helpMap {
 			{title: "General", keys: []key.Binding{
 				esc,
 				m.keymap.Help,
-				m.keymap.Quit,
 			}},
 		},
 	}
@@ -349,130 +272,17 @@ func (m *hostPickerModel) statusLine() string {
 }
 
 func (m *hostPickerModel) applyFilter(query string) {
-	var prevHost string
-	if row, ok := m.list.SelectedItem().(pickerRow); ok {
-		prevHost = row.host
-	}
-
-	query = strings.TrimSpace(query)
-	m.matchIdxes = nil
-	if query == "" {
-		m.filtered = append([]string(nil), m.allHosts...)
-	} else {
-		matches := fuzzy.Find(query, m.allHosts)
-		m.filtered = make([]string, 0, len(matches))
-		m.matchIdxes = make(map[string][]int, len(matches))
-		for _, match := range matches {
-			m.filtered = append(m.filtered, match.Str)
-			if len(match.MatchedIndexes) > 0 {
-				m.matchIdxes[match.Str] = match.MatchedIndexes
-			}
-		}
-	}
-	m.setListItems(m.filtered)
-
-	if len(m.filtered) == 0 {
-		return
-	}
-	if prevHost != "" {
-		for i, h := range m.filtered {
-			if h == prevHost {
-				m.list.Select(i)
-				return
-			}
-		}
-		filteredSet := make(map[string]int, len(m.filtered))
-		for i, h := range m.filtered {
-			filteredSet[h] = i
-		}
-		past := false
-		for _, h := range m.allHosts {
-			if h == prevHost {
-				past = true
-				continue
-			}
-			if past {
-				if idx, ok := filteredSet[h]; ok {
-					m.list.Select(idx)
-					return
-				}
-			}
-		}
-		for j := len(m.allHosts) - 1; j >= 0; j-- {
-			if m.allHosts[j] == prevHost {
-				break
-			}
-			if idx, ok := filteredSet[m.allHosts[j]]; ok {
-				m.list.Select(idx)
-				return
-			}
-		}
-	}
-	m.list.Select(0)
-}
-
-func (m *hostPickerModel) setListItems(hosts []string) {
-	items := make([]list.Item, 0, len(hosts))
-	for _, h := range hosts {
-		_, ok := hostConfigFor(m.opts.Inventory, h)
-		items = append(items, pickerRow{host: h, selected: m.selected[h], hasCfg: ok, matchedIndexes: m.matchIdxes[h]})
-	}
-	m.list.SetItems(items)
+	m.hostSelectList.applyFilter(&m.list, query, m.opts.Inventory, nil, nil)
 }
 
 func (m *hostPickerModel) refreshVisibleSelection() {
-	items := m.list.Items()
-	for i := range items {
-		row, ok := items[i].(pickerRow)
-		if !ok {
-			continue
-		}
-		row.selected = m.selected[row.host]
-		items[i] = row
-	}
-	m.list.SetItems(items)
+	m.hostSelectList.refreshVisibleSelection(&m.list)
 }
 
 func (m *hostPickerModel) refreshVisibleBadges() {
-	idx := m.list.Index()
-	items := m.list.Items()
-	for i := range items {
-		row, ok := items[i].(pickerRow)
-		if !ok {
-			continue
-		}
-		_, ok = hostConfigFor(m.opts.Inventory, row.host)
-		row.hasCfg = ok
-		items[i] = row
-	}
-	m.list.SetItems(items)
-	if idx >= 0 && idx < len(items) {
-		m.list.Select(idx)
-	}
+	m.hostSelectList.refreshVisibleBadges(&m.list, m.opts.Inventory)
 }
 
 func (m *hostPickerModel) toggleCurrentSelection() {
-	row, ok := m.list.SelectedItem().(pickerRow)
-	if !ok || row.host == "" {
-		return
-	}
-	if m.selected[row.host] {
-		delete(m.selected, row.host)
-	} else {
-		m.selected[row.host] = true
-	}
-	m.refreshVisibleSelection()
-}
-
-func (m *hostPickerModel) selectedHosts() []string {
-	if len(m.selected) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(m.selected))
-	for _, h := range m.allHosts {
-		if m.selected[h] {
-			out = append(out, h)
-		}
-	}
-	return out
+	m.hostSelectList.toggleCurrentSelection(&m.list)
 }

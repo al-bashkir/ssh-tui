@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -188,7 +189,7 @@ hosts = ["db1.example"]
 	}
 	content := string(raw)
 	for _, s := range []string{"[[hosts]]", "[[groups]]", "hidden_hosts"} {
-		if contains(content, s) {
+		if strings.Contains(content, s) {
 			t.Fatalf("migrated config.toml still contains %q", s)
 		}
 	}
@@ -246,17 +247,4 @@ func TestMigrateNoHostData(t *testing.T) {
 	if _, err := os.Stat(hostsPath); !os.IsNotExist(err) {
 		t.Fatalf("hosts.toml should not exist after migration with no host data")
 	}
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && searchSubstring(s, substr)
-}
-
-func searchSubstring(s, sub string) bool {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
 }

@@ -15,14 +15,6 @@ func renderQuitConfirm(width, height int) string {
 	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, box)
 }
 
-func renderDeleteGroupConfirm(width, height int, name string, hostCount int) string {
-	box := deleteGroupConfirmBox(width, name, hostCount)
-	if width <= 0 || height <= 0 {
-		return strings.TrimSpace(box)
-	}
-	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, box)
-}
-
 // renderConfirmBox builds a confirm dialog using manual box primitives.
 // title is embedded in the top border; body and footer are indented 2 spaces.
 func renderConfirmBox(totalW int, title, body, footer string) string {

@@ -26,7 +26,7 @@ UI structure (deeper):
 
 - [UI Structure](ui.md)
 
-UI files map:
+UI files map (non-exhaustive — covers main models, shared helpers, and key utilities):
 
 - `internal/ui/run.go`: `Run()` entrypoint, `Options`, `ExecRequest`, `ErrQuit`
 - `internal/ui/model_app.go`: app router/state machine, config save/refresh
@@ -48,15 +48,23 @@ UI files map:
 - `internal/ui/help_modal.go`: help overlay (accent-colored key labels)
 - `internal/ui/helpmap.go`: `helpMap` type used by help modal
 - `internal/ui/confirm_modal.go`: quit/connect/delete confirm dialogs
-- `internal/ui/dispatch_tmux.go`: shared `dispatchConnect` and pane settings resolution
+- `internal/ui/dispatch_tmux.go`: `dispatchConnect`, `buildSSHCommands`, `resolveConnectMode`
 - `internal/ui/ssh_helpers.go`: `ensureSSHForceTTY`, `keepSessionOpenRemoteCmd`
 - `internal/ui/host_config.go`: `hostConfigFor`, `findHostConfig`, `isHostHidden`
+- `internal/ui/host_select.go`: shared `hostSelectList` struct (filter, selection, badges)
+- `internal/ui/update_helpers.go`: shared Update() helpers (`handleConfirmQuit`, `handleConfirmConnect`, `updateSearchOrList`)
 - `internal/ui/copy_helpers.go`: `suggestCopyHostKey`, `suggestCopyGroupName`
-- `internal/ui/connect_group.go`: `connectHostsForGroup`, `connectHostsWithDefaults`
-- `internal/ui/tmux_onewindow.go`: `tmuxOpenOneWindow`, `tmuxOneWindowOpts`, `resolvePaneSettings`
-- `internal/ui/panes.go`: pane settings helpers
+- `internal/ui/connect_group.go`: `connectHosts` (unified group/defaults connect)
 - `internal/ui/pane_border_formats.go`: `paneBorderFormatChoices`, add/remove helpers
-- `internal/ui/listutil.go`: shared list configuration (`configureList`)
-- `internal/ui/option_item.go`: generic option list item
+- `internal/ui/listutil.go`: shared list configuration (`configureList`, `newSearchInput`)
 - `internal/ui/input_underline.go`: `configureSearch`, `setSearchBarFocused`, `setSearchFocused`
 - `internal/ui/view_hosts.go`: `renderMainTabBox` and related view helpers
+- `internal/ui/view_shared.go`: `renderCmdPromptModal` and other shared overlays
+- `internal/ui/layout.go`: layout constants (header lines, width thresholds, modal margins)
+- `internal/ui/toast.go`: `toast` type, levels, `renderToast`, `toastMsg`
+- `internal/ui/form_schema.go`: `fieldKind`, `fieldDef`, form field descriptors
+- `internal/ui/form_model.go`: generic form model shared by defaults/host/group editors
+- `internal/ui/form_helpers.go`: `formLabel` and other form rendering utilities
+- `internal/ui/form_render.go`: field-level rendering (text, picker, toggle rows)
+- `internal/ui/form_validate.go`: field validators (`validatePort`, etc.)
+- `internal/ui/option_picker_popup.go`: inline option-picker popup used by `formModel`

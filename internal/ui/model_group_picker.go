@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/help"
@@ -51,13 +52,12 @@ type groupPickerModel struct {
 	width  int
 	height int
 
-	all         []groupPickRow
-	names       []string // cached for fuzzy search, parallel to all
-	keymap      keyMap
-	help        help.Model
-	showHelp    bool
-	toast       toast
-	confirmQuit bool
+	all      []groupPickRow
+	names    []string // cached for fuzzy search, parallel to all
+	keymap   keyMap
+	help     help.Model
+	showHelp bool
+	toast    toast
 
 	list       list.Model
 	search     textinput.Model
@@ -70,22 +70,20 @@ func newGroupPickerModel(opts Options) *groupPickerModel {
 	names := make([]string, 0, len(opts.Inventory.Groups))
 	items := make([]list.Item, 0, len(opts.Inventory.Groups))
 	for i, g := range opts.Inventory.Groups {
-		row := groupPickRow{index: i, name: g.Name}
-		all = append(all, row)
-		names = append(names, g.Name)
+		all = append(all, groupPickRow{index: i, name: g.Name})
+	}
+	sort.SliceStable(all, func(i, j int) bool {
+		return strings.ToLower(all[i].name) < strings.ToLower(all[j].name)
+	})
+	for _, row := range all {
+		names = append(names, row.name)
 		items = append(items, row)
 	}
 
 	l := list.New(items, groupPickerDelegate{}, 0, 0)
 	configureList(&l)
 
-	search := textinput.New()
-	search.Placeholder = "search"
-	search.Prompt = "/ "
-	search.CharLimit = 256
-	search.Width = 40
-	configureSearch(&search)
-	setSearchBarFocused(&search, false)
+	search := newSearchInput()
 
 	m := &groupPickerModel{
 		opts:     opts,
@@ -124,25 +122,6 @@ func (m *groupPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		if m.confirmQuit {
-			s := msg.String()
-			switch s {
-			case "y", "Y", "enter":
-				return m, tea.Quit
-			case "n", "N", "esc":
-				m.confirmQuit = false
-				return m, nil
-			default:
-				return m, nil
-			}
-		}
-		if key.Matches(msg, m.keymap.Quit) {
-			if !m.opts.Config.Defaults.ConfirmQuit {
-				return m, tea.Quit
-			}
-			m.confirmQuit = true
-			return m, nil
-		}
 		if key.Matches(msg, m.keymap.Help) {
 			m.showHelp = !m.showHelp
 			return m, nil
@@ -201,19 +180,7 @@ func (m *groupPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	var cmd tea.Cmd
-	if m.focus == focusSearch {
-		m.search, cmd = m.search.Update(msg)
-		cur := m.search.Value()
-		if cur != m.prevSearch {
-			m.applyFilter(cur)
-			m.prevSearch = cur
-		}
-		return m, cmd
-	}
-
-	m.list, cmd = m.list.Update(msg)
-	return m, cmd
+	return m, updateSearchOrList(m.focus, &m.search, &m.list, &m.prevSearch, msg, m.applyFilter)
 }
 
 // addingLines packs the pending host names into at most 2 lines, each fitting
@@ -312,9 +279,6 @@ func (m *groupPickerModel) View() string {
 	if m.showHelp {
 		return renderHelpModal(m.width, m.height, "Select Group", m.help, m.helpKeys())
 	}
-	if m.confirmQuit {
-		return renderQuitConfirm(m.width, m.height)
-	}
 	innerW, _ := frameInnerSize(m.width, m.height)
 	sep := dim.Render(strings.Repeat("─", innerW))
 	searchLine := m.search.View()
@@ -348,7 +312,6 @@ func (m *groupPickerModel) helpKeys() helpMap {
 			selectGroup,
 			esc,
 			m.keymap.Help,
-			m.keymap.Quit,
 		},
 		full: [][]key.Binding{{
 			m.list.KeyMap.CursorUp,
@@ -364,7 +327,6 @@ func (m *groupPickerModel) helpKeys() helpMap {
 		}, {
 			esc,
 			m.keymap.Help,
-			m.keymap.Quit,
 		}},
 		sections: []helpSection{
 			{title: "Navigation", keys: []key.Binding{
@@ -381,7 +343,6 @@ func (m *groupPickerModel) helpKeys() helpMap {
 			{title: "General", keys: []key.Binding{
 				esc,
 				m.keymap.Help,
-				m.keymap.Quit,
 			}},
 		},
 	}

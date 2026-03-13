@@ -6,12 +6,11 @@ type fieldKind int
 const (
 	fieldText     fieldKind = iota // text input (press i to edit)
 	fieldNumber                    // numeric text input
-	fieldPicker                    // segmented horizontal option picker (h/l to cycle)
-	fieldToggle                    // two-option toggle (h/l/space to flip)
+	fieldPicker                    // option picker (enter/space opens dropdown)
 	fieldSubModal                  // value shown inline; enter/space opens a sub-modal
 )
 
-// fieldOption is a selectable value for picker and toggle fields.
+// fieldOption is a selectable value for picker fields.
 type fieldOption struct {
 	Value   string // stored value ("" represents default/inherit)
 	Display string // display text shown to the user
@@ -22,7 +21,7 @@ type fieldDef struct {
 	Key         string             // unique identifier (maps to a config field)
 	Label       string             // display label (without trailing colon)
 	Kind        fieldKind          // control type
-	Options     []fieldOption      // for Picker/Toggle: available choices
+	Options     []fieldOption      // for Picker: available choices
 	Default     string             // default value
 	Placeholder string             // placeholder for text/number inputs
 	Helper      string             // help text shown when field is focused

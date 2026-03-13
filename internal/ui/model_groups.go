@@ -3,7 +3,7 @@ package ui
 import (
 	"fmt"
 	"io"
-	"os/exec"
+	"sort"
 	"strings"
 
 	"github.com/al-bashkir/ssh-tui/internal/config"
@@ -96,13 +96,7 @@ func newGroupsModel(opts Options) *groupsModel {
 	l.Title = "Groups"
 	configureList(&l)
 
-	search := textinput.New()
-	search.Placeholder = "search"
-	search.Prompt = "/ "
-	search.CharLimit = 256
-	search.Width = 40
-	configureSearch(&search)
-	setSearchBarFocused(&search, false)
+	search := newSearchInput()
 
 	m := &groupsModel{
 		opts:     opts,
@@ -123,6 +117,9 @@ func groupsRows(inv config.Inventory) []groupRow {
 	for i, g := range inv.Groups {
 		rows = append(rows, groupRow{index: i, name: g.Name, hostCount: len(g.Hosts), hasCfg: groupHasCfg(g)})
 	}
+	sort.SliceStable(rows, func(i, j int) bool {
+		return strings.ToLower(rows[i].name) < strings.ToLower(rows[j].name)
+	})
 	return rows
 }
 
@@ -207,19 +204,8 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		if m.confirmQuit {
-			s := msg.String()
-			switch s {
-			case "y", "Y", "enter":
-				m.quitting = true
-				return m, tea.Quit
-			case "n", "N", "esc":
-				m.confirmQuit = false
-				m.toast = toast{}
-				return m, nil
-			default:
-				return m, nil
-			}
+		if handled, cmd := handleConfirmQuit(msg, &m.confirmQuit, &m.toast, &m.quitting, true); handled {
+			return m, cmd
 		}
 		if m.confirmDelete {
 			s := msg.String()
@@ -236,25 +222,8 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
-		if m.confirmConnect {
-			s := msg.String()
-			switch s {
-			case "y", "Y", "enter":
-				m.confirmConnect = false
-				fn := m.pendingConnectFn
-				m.pendingConnectFn = nil
-				if fn != nil {
-					return m, fn()
-				}
-				return m, nil
-			case "n", "N", "esc":
-				m.confirmConnect = false
-				m.pendingConnectFn = nil
-				m.toast = toast{}
-				return m, nil
-			default:
-				return m, nil
-			}
+		if handled, cmd := handleConfirmConnect(msg, &m.confirmConnect, &m.pendingConnectFn, &m.toast); handled {
+			return m, cmd
 		}
 
 		if key.Matches(msg, m.keymap.Quit) {
@@ -420,19 +389,7 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	var cmd tea.Cmd
-	if m.focus == focusSearch {
-		m.search, cmd = m.search.Update(msg)
-		cur := m.search.Value()
-		if cur != m.prevSearch {
-			m.applyFilter(cur)
-			m.prevSearch = cur
-		}
-		return m, cmd
-	}
-
-	m.list, cmd = m.list.Update(msg)
-	return m, cmd
+	return m, updateSearchOrList(m.focus, &m.search, &m.list, &m.prevSearch, msg, m.applyFilter)
 }
 
 func (m *groupsModel) View() string {
@@ -579,41 +536,12 @@ func (m *groupsModel) emptyStateView() string {
 		dim.Render("No groups yet.")+"\n"+dim.Render("n \u2014 create a new group"))
 }
 
-func (m *groupsModel) statusLine() string {
-	shown := len(m.list.Items())
-	total := len(m.allRows)
-	pg := ""
-	if m.list.Paginator.TotalPages > 1 {
-		pg = fmt.Sprintf("pg:%d/%d", m.list.Paginator.Page+1, m.list.Paginator.TotalPages)
-	}
-
-	q := strings.TrimSpace(m.search.Value())
-	searchInfo := "search"
-	if q != "" {
-		if len(q) > 40 {
-			q = q[:40] + "..."
-		}
-		searchInfo = "search: " + q
-	}
-
-	pos := ""
-	if shown > 0 {
-		pos = fmt.Sprintf("  %d of %d", m.list.Index()+1, shown)
-	}
-	left := fmt.Sprintf("groups: %d/%d", shown, total) + dim.Render(pos)
-	if pg != "" {
-		left += "  " + dim.Render(pg)
-	}
-	if !m.toast.empty() {
-		left += "  " + renderToast(m.toast)
-	}
-	return left + "  " + statusOK.Render(searchInfo)
-}
-
 func (m *groupsModel) applyFilter(query string) {
 	var prevName string
+	prevIndex := -1
 	if row, ok := m.list.SelectedItem().(groupRow); ok {
 		prevName = row.name
+		prevIndex = row.index
 	}
 
 	query = strings.TrimSpace(query)
@@ -637,6 +565,15 @@ func (m *groupsModel) applyFilter(query string) {
 
 	if len(rows) == 0 {
 		return
+	}
+	// Prefer index-based restore: stable across renames.
+	if prevIndex >= 0 {
+		for i, r := range rows {
+			if r.index == prevIndex {
+				m.list.Select(i)
+				return
+			}
+		}
 	}
 	if prevName != "" {
 		for i, r := range rows {
@@ -662,10 +599,15 @@ func (m *groupsModel) applyFilter(query string) {
 				}
 			}
 		}
-		for j := len(m.allRows) - 1; j >= 0; j-- {
-			if m.allRows[j].name == prevName {
+		// Nothing after — try walking backward to the nearest item before prevName.
+		prevIdx := -1
+		for i, r := range m.allRows {
+			if r.name == prevName {
+				prevIdx = i
 				break
 			}
+		}
+		for j := prevIdx - 1; j >= 0; j-- {
 			if idx, ok := rowSet[m.allRows[j].name]; ok {
 				m.list.Select(idx)
 				return
@@ -709,131 +651,33 @@ func (m *groupsModel) connectAllCmd(oneWindow bool, remoteCmd string) tea.Cmd {
 
 func (m *groupsModel) doConnectAll(g config.Group, oneWindow bool, remoteCmd string) tea.Cmd {
 	defaults := m.opts.Config.Defaults
-	base := sshcmd.FromDefaults(defaults)
 	rc := strings.TrimSpace(remoteCmd)
 
-	tmuxSetting := defaults.Tmux
-	if strings.TrimSpace(g.Tmux) != "" {
-		tmuxSetting = g.Tmux
-	}
-	openModeSetting := defaults.OpenMode
-	if strings.TrimSpace(g.OpenMode) != "" {
-		openModeSetting = g.OpenMode
-	}
-
-	inTmux := tmx.InTmux()
-	mode := tmx.ResolveOpenMode(tmuxSetting, openModeSetting, inTmux)
-
-	sshCmds := make([][]string, 0, len(g.Hosts))
-	for _, h := range g.Hosts {
-		s := base
-		if hc, ok := hostConfigFor(m.opts.Inventory, h); ok {
-			s = sshcmd.ApplyHost(s, hc)
-		}
-		s = sshcmd.ApplyGroup(s, g)
-		if rc != "" {
-			s.ExtraArgs = ensureSSHForceTTY(s.ExtraArgs)
-			s.RemoteCommand = keepSessionOpenRemoteCmd(rc)
-		}
-		cmd, _ := sshcmd.BuildCommand(h, s)
-		sshCmds = append(sshCmds, cmd)
-	}
-
+	mode, inTmux := resolveConnectMode(defaults, &g)
 	if oneWindow {
-		return func() tea.Msg {
-			name := strings.TrimSpace(g.Name)
-			if name == "" {
-				name = windowName(g.Hosts[0])
-			}
-			psOne := resolvePaneSettings(defaults, &g, len(sshCmds))
-			err := tmuxOpenOneWindow(sshCmds, tmuxOneWindowOpts{
-				WindowName:       name,
-				PaneTitles:       g.Hosts,
-				SplitFlag:        psOne.SplitFlag,
-				Layout:           psOne.Layout,
-				SyncPanes:        psOne.SyncPanes,
-				PaneBorderFormat: psOne.BorderFormat,
-				PaneBorderStatus: psOne.BorderStatus,
-			})
-			if err != nil {
-				return toastMsg{text: err.Error(), level: toastErr}
-			}
-			return toastMsg{text: fmt.Sprintf("opened %d in one window", len(sshCmds)), level: toastInfo}
-		}
+		// Force all hosts into a single tmux window with panes.
+		// Caller (connectAllCmd) already verified tmux is active when oneWindow=true.
+		mode = tmx.OpenPane
 	}
 
-	if mode == tmx.OpenCurrent {
-		if len(sshCmds) > 1 {
-			m.toast = toast{text: "multi-host requires tmux (window or pane mode)", level: toastWarn}
-			return nil
+	sshCmds := buildSSHCommands(g.Hosts, defaults, m.opts.Inventory, &g, func(s *sshcmd.Settings) {
+		if rc == "" {
+			return
 		}
-		m.execCmd = sshCmds[0]
+		s.ExtraArgs = ensureSSHForceTTY(s.ExtraArgs)
+		s.RemoteCommand = keepSessionOpenRemoteCmd(rc)
+	})
+
+	result, cmd := dispatchConnect(g.Hosts, sshCmds, defaults, &g, mode, inTmux)
+	if result.quit {
+		m.execCmd = result.execCmd
 		return tea.Quit
 	}
-	if !inTmux {
-		if len(sshCmds) > 1 {
-			m.toast = toast{text: "multi-host requires an active tmux session", level: toastWarn}
-			return nil
-		}
-		m.execCmd = tmx.NewSessionCmd(defaults.TmuxSession, sshCmds[0])
-		return tea.Quit
+	if !result.toast.empty() {
+		m.toast = result.toast
+		return nil
 	}
-
-	return func() tea.Msg {
-		if mode == tmx.OpenPane {
-			name := strings.TrimSpace(g.Name)
-			if name == "" {
-				name = windowName(g.Hosts[0])
-			}
-			ps := resolvePaneSettings(defaults, &g, len(sshCmds))
-			err := tmuxOpenOneWindow(sshCmds, tmuxOneWindowOpts{
-				WindowName:       name,
-				PaneTitles:       g.Hosts,
-				SplitFlag:        ps.SplitFlag,
-				Layout:           ps.Layout,
-				SyncPanes:        ps.SyncPanes,
-				PaneBorderFormat: ps.BorderFormat,
-				PaneBorderStatus: ps.BorderStatus,
-			})
-			if err != nil {
-				return toastMsg{text: err.Error(), level: toastErr}
-			}
-			return toastMsg{text: fmt.Sprintf("opened %d in one window", len(sshCmds)), level: toastInfo}
-		}
-		if mode == tmx.OpenWindow && len(sshCmds) > 1 {
-			name := strings.TrimSpace(g.Name)
-			if name == "" {
-				name = windowName(g.Hosts[0])
-			}
-			ps := resolvePaneSettings(defaults, &g, len(sshCmds))
-			err := tmuxOpenOneWindow(sshCmds, tmuxOneWindowOpts{
-				WindowName:       name,
-				PaneTitles:       g.Hosts,
-				SplitFlag:        ps.SplitFlag,
-				Layout:           ps.Layout,
-				SyncPanes:        ps.SyncPanes,
-				PaneBorderFormat: ps.BorderFormat,
-				PaneBorderStatus: ps.BorderStatus,
-			})
-			if err != nil {
-				return toastMsg{text: err.Error(), level: toastErr}
-			}
-			return toastMsg{text: fmt.Sprintf("opened %d in one window", len(sshCmds)), level: toastInfo}
-		}
-
-		for i, sshCmd := range sshCmds {
-			name := strings.TrimSpace(g.Name)
-			if name == "" {
-				name = windowName(g.Hosts[i])
-			}
-			tmuxCmd := tmx.NewWindowCmd(name, sshCmd)
-			// #nosec G204 -- tmux argv is constructed (no shell) from known host/group settings.
-			if err := exec.Command(tmuxCmd[0], tmuxCmd[1:]...).Run(); err != nil {
-				return toastMsg{text: "tmux error: " + err.Error(), level: toastErr}
-			}
-		}
-		return toastMsg{text: fmt.Sprintf("opened %d", len(sshCmds)), level: toastInfo}
-	}
+	return cmd
 }
 
 func (m *groupsModel) IsQuitting() bool  { return m.quitting }

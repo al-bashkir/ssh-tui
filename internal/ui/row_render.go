@@ -101,14 +101,6 @@ func truncateFade(s string, max int) string {
 	return normal + dim.Render(dimChar+"…")
 }
 
-func badgePlain(text string) string {
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return ""
-	}
-	return " " + text + " "
-}
-
 func renderHostLikeRow(width int, active bool, selected bool, host string, hasCfg bool, hidden bool, matchedIndexes []int) string {
 	cur := " "
 	if active {
@@ -159,10 +151,8 @@ func renderHostLikeRow(width int, active bool, selected bool, host string, hasCf
 
 	// For hidden hosts, prepend ⊘ prefix to the display string.
 	displayHost := host
-	hiddenPrefix := 0
 	if hidden {
 		displayHost = "⊘ " + host
-		hiddenPrefix = 2 // offset matched indexes by the prefix length
 	}
 
 	hostStr := displayHost
@@ -175,14 +165,14 @@ func renderHostLikeRow(width int, active bool, selected bool, host string, hasCf
 	}
 
 	// Apply search match highlighting (before dim/active styling).
+	// Hidden rows are skipped because their ⊘ prefix shifts the display string
+	// but matchedIndexes are relative to the raw host name.
 	if len(matchedIndexes) > 0 && !hidden {
 		visibleLen := len([]rune(hostStr))
-		// Adjust indexes for hidden prefix offset.
 		adjusted := make([]int, 0, len(matchedIndexes))
 		for _, idx := range matchedIndexes {
-			ai := idx + hiddenPrefix
-			if ai >= 0 && ai < visibleLen {
-				adjusted = append(adjusted, ai)
+			if idx >= 0 && idx < visibleLen {
+				adjusted = append(adjusted, idx)
 			}
 		}
 		if len(adjusted) > 0 {
