@@ -103,10 +103,6 @@ func (m *formModel) renderFieldLines(fd *fieldDef, focused bool, innerW, fieldW 
 			lines = append(lines, prefix+labelStr+" "+underlineText(m.values[fd.Key], focused, w))
 		}
 
-	case fieldToggle:
-		cur := strings.TrimSpace(m.values[fd.Key])
-		lines = append(lines, prefix+labelStr+" "+renderCycleToggle(fd.Options, cur, focused, fieldW))
-
 	case fieldPicker:
 		cur := strings.TrimSpace(m.values[fd.Key])
 		lines = append(lines, prefix+labelStr+" "+renderPickerInline(fd.Options, cur, focused, fieldW))
@@ -137,28 +133,6 @@ func (m *formModel) renderFieldLines(fd *fieldDef, focused bool, innerW, fieldW 
 	}
 
 	return lines
-}
-
-// ---------------------------------------------------------------------------
-// Toggle rendering (compact cycle: ◂ val ▸)
-// ---------------------------------------------------------------------------
-
-// renderCycleToggle renders a two-option toggle as "◂ display ▸".
-func renderCycleToggle(options []fieldOption, cur string, focused bool, maxW int) string {
-	display := cur
-	for _, opt := range options {
-		if strings.TrimSpace(opt.Value) == cur {
-			display = opt.Display
-			break
-		}
-	}
-
-	arrow := dim.Render("◂") + " " + display + " " + dim.Render("▸")
-	if focused {
-		arrow = checkedStyle.Render("◂") + " " + checkedStyle.Render(display) + " " + checkedStyle.Render("▸")
-	}
-
-	return padVisible(arrow, maxW)
 }
 
 // ---------------------------------------------------------------------------
