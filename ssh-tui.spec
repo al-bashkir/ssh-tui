@@ -64,6 +64,14 @@ install -Dpm 0644 _ssh_tui %{buildroot}%{_datadir}/zsh/site-functions/_ssh_tui
 %{_datadir}/zsh/site-functions/_ssh_tui
 
 %changelog
+* Fri Mar 13 2026 Pavel Aksenov <41126916+al-bashkir@users.noreply.github.com> - 1.3.0-1
+- Add named colorscheme support (dracula, nord, gruvbox, catppuccin, kanagawa)
+- Preserve cursor position across filter updates and hide/toggle in all list views
+- Highlight fuzzy search matches in accent/underline style
+- Settings options use dropdown pickers; add show_field_help setting
+- Groups sorted alphabetically; quit (q/Q) restricted to main tabs
+- Inline field validation, disabled fields, grouped help modal sections
+
 * Mon Mar 02 2026 Pavel Aksenov <41126916+al-bashkir@users.noreply.github.com> - 1.2.1-1
 - Fix completion
 
