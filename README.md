@@ -8,7 +8,7 @@ A terminal UI for managing SSH connections. Reads hosts from `known_hosts`, stor
 ## Install
 
 ```bash
-go install github.com/bashkir/ssh-tui/cmd/ssh-tui@latest
+go install github.com/al-bashkir/ssh-tui/cmd/ssh-tui@latest
 ```
 
 Fedora (COPR): https://copr.fedorainfracloud.org/coprs/al-bashkir/ssh-tui/
@@ -50,28 +50,31 @@ ssh-tui
 
 Launches the full terminal UI: host list with fuzzy search, group management, multi-select, host hiding, and tmux integration.
 
-Key bindings (hosts screen):
+Key bindings:
 
 | Key | Action |
 |---|---|
-| `Enter` | Connect (or cursor host if nothing selected) |
-| `Space` | Toggle selection |
+| `Enter` | Connect current/selected host, or open selected group |
+| `Space` | Toggle host selection |
 | `Ctrl+A` | Select all |
 | `Ctrl+D` | Clear selection |
-| `o` | Open selected in one tmux window (split panes) |
-| `O` | Open in current pane |
-| `C` | Connect all hosts in group (groups screen) |
+| `o` | Open current/selected hosts in one tmux window (split panes) |
+| `O` | Open a single host in the current pane |
+| `C` | Connect all hosts in the selected group (Groups screen) |
 | `Ctrl+O` | Connect with custom remote command |
 | `c` | Connect a custom host |
+| `a` | Add current/selected hosts to a group, or add hosts to the selected group |
 | `Ctrl+H` | Hide / unhide the current host |
 | `H` | Show / hide hidden hosts |
-| `Ctrl+F` | Focus search bar |
+| `Ctrl+F`, `/` | Focus search bar |
 | `Tab` | Toggle focus between search and list |
 | `Esc` | Clear search / deselect / back |
 | `e` | Edit host config |
 | `r` | Reload known_hosts |
-| `g` | Switch to groups tab |
-| `Ctrl+S` | Settings |
+| `Alt+1` | Switch to Hosts tab |
+| `Alt+2` | Switch to Groups tab |
+| `Alt+3` | Switch to Settings tab |
+| `Ctrl+S` | Save forms/settings |
 | `?` | Help |
 | `q` | Quit |
 
@@ -88,10 +91,12 @@ ssh-tui c g prod
 
 # List configured groups
 ssh-tui list groups
+ssh-tui list groups -json
 ssh-tui l g
 
 # List known hosts
 ssh-tui list hosts
+ssh-tui list hosts -json
 ssh-tui l h
 ```
 
@@ -164,20 +169,27 @@ On first run after upgrading from an older single-file layout, hosts.toml is cre
 version = 1
 
 [defaults]
-load_known_hosts = true  # when false, host list comes from hosts.toml only
+colorscheme = ""         # default | dracula | nord | gruvbox | catppuccin | kanagawa
+accent_color = ""        # default | blue | cyan | green | amber | red | magenta
+load_known_hosts = true  # when false, Hosts list comes from hosts.toml only
 user = ""
 port = 22
 identity_file = ""
 extra_args = []
 
-tmux = "auto"            # auto | force | never
-open_mode = "auto"       # auto | current | tmux-window | tmux-pane
-tmux_session = "ssh-tui"
-
 pane_split = "vertical"       # horizontal | vertical
 pane_layout = "even-vertical" # auto | tiled | even-horizontal | even-vertical | main-horizontal | main-vertical
 pane_sync = "on"              # on | off
+pane_border_format = "..."    # selected tmux pane border format
+pane_border_formats = []       # user-defined border formats managed by Settings
 pane_border_status = "bottom" # off | top | bottom
+
+tmux = "auto"            # auto | force | never
+open_mode = "auto"       # auto | current | tmux-window | tmux-pane
+tmux_session = "ssh-tui"
+confirm_quit = false
+connect_confirm_threshold = 5  # ask before connecting to more than N hosts; 0 disables
+show_field_help = true
 ```
 
 ### hosts.toml
@@ -200,11 +212,22 @@ hidden = false  # set true to hide from the list (toggle with Ctrl+H)
 name = "prod"
 hosts = ["web1.prod.example.com", "web2.prod.example.com", "[10.0.0.1]:2222"]
 user = "deploy"
+port = 22
 identity_file = "~/.ssh/prod_ed25519"
+extra_args = ["-o", "ServerAliveInterval=30"]
+remote_command = ""      # executed as: sh -c '<remote_command>'
+
+pane_split = ""          # optional override; empty inherits defaults
+pane_layout = ""
+pane_sync = ""
+pane_border_format = ""
+pane_border_status = ""
+
+tmux = ""                # optional override; empty inherits defaults
 open_mode = "tmux-pane"  # override open mode for this group
 ```
 
-Settings are merged in this order: `defaults` (config.toml) → `[[groups]]` override → `[[hosts]]` override.
+For single-host connections, SSH settings are `defaults` → matching `[[hosts]]` override. For group connections, they are `defaults` → matching `[[hosts]]` override → `[[groups]]` override.
 
 ## Limits
 

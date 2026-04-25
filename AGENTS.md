@@ -1,60 +1,50 @@
-# AGENTS.md — ssh-tui
+# AGENTS.md - ssh-tui
 
-This file is intentionally short. Use the documents below.
+## Commands
 
-## Quick Start
+- Baseline verification: `go test ./...`
+- Focused package test: `go test ./internal/sshcmd`
+- Focused test: `go test ./internal/tmux -run TestResolveOpenMode`
+- Run locally: `go run ./cmd/ssh-tui`
+- Build locally: `go build -o build/ssh-tui ./cmd/ssh-tui`
+- Always build into `build/`; never place binaries in the repo root.
+- Release CI runs `go test ./...` then `gosec ./...`.
 
-```bash
-go test ./...
-go run ./cmd/ssh-tui
-go build -o build/ssh-tui ./cmd/ssh-tui
-```
+## Structure
 
-Always build to the `build/` directory. Never place binaries in the repo root.
+- CLI entrypoint and flag parsing: `cmd/ssh-tui/main.go`
+- Subcommands: `cmd/ssh-tui/cmd_connect.go`, `cmd/ssh-tui/cmd_list.go`, `cmd/ssh-tui/cmd_completion.go`
+- Config and inventory TOML load/save/migration: `internal/config`
+- `known_hosts` parsing/loading: `internal/hosts`
+- SSH argv construction: `internal/sshcmd`
+- tmux detection and argv builders: `internal/tmux`
+- Bubble Tea app, screens, styles, keybindings: `internal/ui`
+- UI router/state machine: `internal/ui/model_app.go`; `internal/ui/run.go` returns `ExecRequest` for `syscall.Exec`.
 
-## Documentation
+## Runtime Gotchas
 
-- Docs index: [docs/README.md](docs/README.md)
-- Functional spec:
-  - [Product](docs/functional/product.md)
-  - [UI](docs/functional/ui.md)
-  - [Config](docs/functional/config.md)
-  - [known_hosts](docs/functional/known_hosts.md)
-  - [SSH](docs/functional/ssh.md)
-  - [tmux](docs/functional/tmux.md)
-- Engineering:
-  - [Structure](docs/engineering/structure.md)
-  - [UI Structure](docs/engineering/ui.md)
-  - [Build](docs/engineering/build.md)
-  - [Limits](docs/engineering/limits.md)
+- The app delegates connections to the system `ssh`; it does not implement SSH.
+- Config is split into `config.toml` and `hosts.toml`; first run can migrate older single-file config.
+- Default config dir respects `$XDG_CONFIG_HOME`, otherwise `~/.config/ssh-tui`.
+- Config and inventory saves are atomic and chmod `0600`.
+- Hashed `known_hosts` entries are skipped because they are not displayable.
+- Multi-host interactive sessions require tmux modes; single-host/current-pane connections exec `ssh` directly.
+- Global flags must appear before subcommands.
 
-## Repo Structure (high level)
+## Docs
 
-- `cmd/ssh-tui/main.go` — CLI entrypoint + flag parsing
-- `cmd/ssh-tui/cmd_connect.go` — `connect host|group` subcommand
-- `cmd/ssh-tui/cmd_list.go` — `list hosts|groups` subcommand
-- `cmd/ssh-tui/cmd_completion.go` — `completion bash|zsh` + internal `__complete`
-- `internal/config` — config schema + load/save (atomic, 0600)
-- `internal/hosts` — known_hosts parsing/loading
-- `internal/sshcmd` — build ssh argv from merged settings
-- `internal/tmux` — tmux detection, argv builders, pane/window helpers
-- `internal/ui` — Bubble Tea models/views, styles, keybindings
+- Start with `docs/README.md` for specs and engineering notes.
+- Use `docs/engineering/ui.md` before changing screens, popups, routing, or modal behavior.
+- Use `docs/functional/config.md`, `docs/functional/ssh.md`, and `docs/functional/tmux.md` before changing config merge, SSH argv, or tmux behavior.
+
+## Packaging
+
+- COPR SRPM flow is `make -f .copr/Makefile srpm`; it vendors Go deps into the source tarball.
+- RPM builds use `go build -trimpath -mod=vendor -ldflags "-s -w" ./cmd/ssh-tui`.
 
 ## Git Workflow
 
-After making file changes: **stop, report what was done, and wait for the next instruction.**
-Committing is a separate explicit step — never part of making changes.
-
-| Rule | Requirement |
-|------|-------------|
-| Trigger | Only run `git commit` when the user's message explicitly contains the word **"commit"** |
-| Frequency | One commit per user request maximum — stop after the first commit and wait |
-| Branch | Never commit directly to `main` — always work on a feature branch |
-| Push | Never run `git push` — leave pushing to the user |
-
-## Limits (short)
-
-- Uses system `ssh` (no SSH protocol implementation).
-- Multi-select interactive sessions require tmux.
-- Hashed known_hosts entries are ignored.
-- No secret management; config stores paths and argv tokens only.
+- After file changes, stop and report what changed; committing is a separate explicit step.
+- Only run `git commit` when the user explicitly says `commit`.
+- Never commit directly to `main`.
+- Never run `git push`; leave pushing to the user.
