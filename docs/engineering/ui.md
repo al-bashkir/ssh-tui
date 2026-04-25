@@ -61,8 +61,8 @@ const (
 Navigation graph (simplified):
 
 ```text
-screenHosts  <---- g ---->  screenGroups  ---- Enter ---->  screenGroupHosts
-    |  Ctrl+s                     |  Ctrl+s                     |
+screenHosts  <-- Alt+1/Alt+2 -->  screenGroups  ---- Enter ---->  screenGroupHosts
+    |  Alt+3                          |  Alt+3                     |
     v                             v                             |
 screenDefaultsForm           screenDefaultsForm                  |
 

@@ -75,6 +75,7 @@ type hostsModel struct {
 	reloading   bool
 	showHidden  bool
 	prevSearch  string
+	navPendingG bool
 	toast       toast
 	confirmQuit bool
 
@@ -138,9 +139,7 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = w
 		m.height = h
 		innerW := max(0, w-2)
-		innerH := max(0, h-2)
-		// tabs + sep + header + sep + footer sep + footer
-		m.list.SetSize(innerW, max(1, innerH-6))
+		m.list.SetSize(innerW, tabBoxListContentHeight(w, h))
 		promptW := len(m.search.Prompt)
 		reserve := 24
 		m.search.Width = max(10, innerW-reserve-promptW)
@@ -208,6 +207,21 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
+		if m.focus == focusList {
+			if handleVimListNav(msg, &m.list, &m.navPendingG) {
+				return m, nil
+			}
+		} else {
+			m.navPendingG = false
+		}
+
+		if key.Matches(msg, m.keymap.GroupsTab) {
+			return m, func() tea.Msg { return switchScreenMsg{to: screenGroups} }
+		}
+		if key.Matches(msg, m.keymap.Settings) {
+			return m, func() tea.Msg { return openDefaultsFormMsg{returnTo: screenHosts} }
+		}
+
 		if key.Matches(msg, m.keymap.Quit) {
 			if !m.opts.Config.Defaults.ConfirmQuit {
 				m.quitting = true
@@ -242,10 +256,6 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		if key.Matches(msg, m.keymap.SwitchTab) && m.focus != focusSearch {
-			return m, func() tea.Msg { return switchScreenMsg{to: screenGroups} }
-		}
-
 		if key.Matches(msg, m.keymap.Esc) {
 			// Esc priority: blur search → clear selection → clear search.
 			if m.focus == focusSearch && m.search.Value() == "" {
@@ -392,9 +402,6 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			hc.Host = suggestCopyHostKey(m.opts.Inventory, hc.Host)
 			return m, func() tea.Msg { return openHostFormPrefillMsg{host: hc, returnTo: screenHosts} }
-		}
-		if key.Matches(msg, m.keymap.Settings) && m.focus == focusList {
-			return m, func() tea.Msg { return openDefaultsFormMsg{returnTo: screenHosts} }
 		}
 		if key.Matches(msg, m.keymap.HideHost) && m.focus == focusList {
 			return m, m.toggleCurrentHidden()
@@ -633,7 +640,7 @@ func (m *hostsModel) helpKeys() helpMap {
 			m.keymap.Copy,
 			m.keymap.Settings,
 			m.keymap.Reload,
-			m.keymap.SwitchTab,
+			m.keymap.GroupsTab,
 			m.keymap.Help,
 			m.keymap.Quit,
 		},
@@ -642,10 +649,13 @@ func (m *hostsModel) helpKeys() helpMap {
 			m.list.KeyMap.CursorDown,
 			m.list.KeyMap.PrevPage,
 			m.list.KeyMap.NextPage,
+			m.list.KeyMap.GoToStart,
+			m.list.KeyMap.GoToEnd,
 		}, {
 			m.keymap.ToggleFocus,
 			m.keymap.FocusSearch,
-			m.keymap.SwitchTab,
+			m.keymap.GroupsTab,
+			m.keymap.Settings,
 			m.keymap.Esc,
 			m.keymap.ToggleSel,
 			m.keymap.SelectAll,
@@ -659,7 +669,6 @@ func (m *hostsModel) helpKeys() helpMap {
 			m.keymap.CustomHost,
 			m.keymap.HostConfig,
 			m.keymap.Copy,
-			m.keymap.Settings,
 			m.keymap.Reload,
 			m.keymap.Help,
 			m.keymap.Quit,
@@ -670,9 +679,12 @@ func (m *hostsModel) helpKeys() helpMap {
 				m.list.KeyMap.CursorDown,
 				m.list.KeyMap.PrevPage,
 				m.list.KeyMap.NextPage,
+				m.list.KeyMap.GoToStart,
+				m.list.KeyMap.GoToEnd,
 				m.keymap.FocusSearch,
 				m.keymap.ToggleFocus,
-				m.keymap.SwitchTab,
+				m.keymap.GroupsTab,
+				m.keymap.Settings,
 				m.keymap.Esc,
 			}},
 			{title: "Selection", keys: []key.Binding{

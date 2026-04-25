@@ -67,6 +67,32 @@ func handleConfirmConnect(
 	}
 }
 
+func handleVimListNav(msg tea.KeyMsg, l *list.Model, pendingG *bool) bool {
+	switch msg.String() {
+	case "g":
+		if *pendingG {
+			start, end := l.Paginator.GetSliceBounds(len(l.VisibleItems()))
+			if start < end {
+				l.Select(start)
+			}
+			*pendingG = false
+			return true
+		}
+		*pendingG = true
+		return true
+	case "G":
+		start, end := l.Paginator.GetSliceBounds(len(l.VisibleItems()))
+		if start < end {
+			l.Select(end - 1)
+		}
+		*pendingG = false
+		return true
+	default:
+		*pendingG = false
+		return false
+	}
+}
+
 // updateSearchOrList delegates a tea.Msg to either the search input or the
 // list, depending on the current focus. When the search value changes,
 // applyFn is called with the new query. Returns the resulting tea.Cmd.

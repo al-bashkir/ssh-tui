@@ -24,9 +24,9 @@ func configureList(m *list.Model) {
 	km.NextPage.SetKeys("right", "pgdown", "l")
 	km.PrevPage.SetKeys("left", "pgup", "h")
 	km.GoToStart.SetKeys("home")
-	km.GoToStart.SetHelp("home", "go to start")
-	km.GoToEnd.SetKeys("end")
-	km.GoToEnd.SetHelp("end", "go to end")
+	km.GoToStart.SetHelp("home/gg", "page top")
+	km.GoToEnd.SetKeys("end", "G")
+	km.GoToEnd.SetHelp("end/G", "page bottom")
 	m.KeyMap = km
 
 	// We render our own header/footer.

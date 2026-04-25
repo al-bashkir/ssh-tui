@@ -7,10 +7,12 @@ type keyMap struct {
 	Help        key.Binding
 	FocusSearch key.Binding
 	ToggleFocus key.Binding
-	SwitchTab   key.Binding
+	HostsTab    key.Binding
+	GroupsTab   key.Binding
 	Reload      key.Binding
 	Esc         key.Binding
 	Settings    key.Binding
+	Save        key.Binding
 	CustomHost  key.Binding
 	HostConfig  key.Binding
 	ConnectCmd  key.Binding
@@ -49,9 +51,13 @@ func defaultKeyMap() keyMap {
 			key.WithKeys("tab"),
 			key.WithHelp("tab", "search/list"),
 		),
-		SwitchTab: key.NewBinding(
-			key.WithKeys("g", "G"),
-			key.WithHelp("g", "switch tab"),
+		HostsTab: key.NewBinding(
+			key.WithKeys("alt+1"),
+			key.WithHelp("alt+1", "hosts"),
+		),
+		GroupsTab: key.NewBinding(
+			key.WithKeys("alt+2"),
+			key.WithHelp("alt+2", "groups"),
 		),
 		Reload: key.NewBinding(
 			key.WithKeys("r"),
@@ -62,8 +68,12 @@ func defaultKeyMap() keyMap {
 			key.WithHelp("esc", "clear/blur"),
 		),
 		Settings: key.NewBinding(
+			key.WithKeys("alt+3"),
+			key.WithHelp("alt+3", "settings"),
+		),
+		Save: key.NewBinding(
 			key.WithKeys("ctrl+s"),
-			key.WithHelp("ctrl+s", "settings"),
+			key.WithHelp("ctrl+s", "save"),
 		),
 		CustomHost: key.NewBinding(
 			key.WithKeys("c"),
@@ -145,5 +155,5 @@ func (k keyMap) ShortHelp() []key.Binding {
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.FocusSearch, k.ToggleFocus, k.SwitchTab, k.Esc}, {k.ToggleSel, k.SelectAll, k.ClearSel, k.Connect, k.ConnectSame, k.ConnectAll, k.CustomHost, k.ConnectCmd, k.OneWindow}, {k.Settings, k.NewGroup, k.EditGroup, k.DeleteGroup, k.AddHosts, k.Back}, {k.Reload, k.Help, k.Quit}}
+	return [][]key.Binding{{k.FocusSearch, k.ToggleFocus, k.HostsTab, k.GroupsTab, k.Settings, k.Esc}, {k.ToggleSel, k.SelectAll, k.ClearSel, k.Connect, k.ConnectSame, k.ConnectAll, k.CustomHost, k.ConnectCmd, k.OneWindow}, {k.NewGroup, k.EditGroup, k.DeleteGroup, k.AddHosts, k.Back}, {k.Reload, k.Help, k.Quit}}
 }
