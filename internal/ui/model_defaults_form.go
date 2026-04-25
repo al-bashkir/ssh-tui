@@ -371,8 +371,20 @@ func (m *defaultsFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		if key.Matches(msg, m.keymap.HostsTab) || key.Matches(msg, m.keymap.GroupsTab) {
+			if m.form.isDirty() {
+				m.toast = toast{text: "unsaved changes; save or Esc", level: toastWarn}
+				return m, nil
+			}
+			to := screenHosts
+			if key.Matches(msg, m.keymap.GroupsTab) {
+				to = screenGroups
+			}
+			return m, func() tea.Msg { return switchScreenMsg{to: to} }
+		}
+
 		// Save (Ctrl+S).
-		if key.Matches(msg, m.keymap.Settings) {
+		if key.Matches(msg, m.keymap.Save) {
 			m.form.exitEdit()
 			m.toast = toast{}
 			d, err := applySettingsValues(m.form.values, m.defaults)

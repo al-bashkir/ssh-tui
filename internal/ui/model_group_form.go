@@ -232,7 +232,7 @@ func (m *groupFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Save.
-		if key.Matches(msg, m.keymap.Settings) {
+		if key.Matches(msg, m.keymap.Save) {
 			m.form.exitEdit()
 			m.toast = toast{}
 			g, err := applyGroupValues(m.form.values, m.group)

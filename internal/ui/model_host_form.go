@@ -158,7 +158,7 @@ func (m *hostFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Save.
-		if key.Matches(msg, m.keymap.Settings) {
+		if key.Matches(msg, m.keymap.Save) {
 			m.form.exitEdit()
 			m.toast = toast{}
 			h, err := applyHostValues(m.form.values, m.host)

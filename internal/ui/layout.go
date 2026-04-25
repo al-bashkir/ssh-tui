@@ -51,3 +51,13 @@ const (
 	// content to form the total box width.
 	confirmDialogPadding = 6
 )
+
+func tabBoxListContentHeight(width, height int) int {
+	innerH := max(0, height-2)
+	footerLines := 1
+	if width >= compactWidthThreshold && height >= twoLineFooterMinHeight {
+		footerLines = 2
+	}
+	// tab/header lines + footer separator + footer lines.
+	return max(1, innerH-tabBoxHeaderLines-1-footerLines)
+}

@@ -49,7 +49,8 @@ type groupHostsModel struct {
 	quitting            bool
 	execCmd             []string
 
-	prevSearch string
+	prevSearch  string
+	navPendingG bool
 }
 
 func newGroupHostsModel(opts Options, groupIndex int) *groupHostsModel {
@@ -99,9 +100,7 @@ func (m *groupHostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = w
 		m.height = h
 		innerW := max(0, w-2)
-		innerH := max(0, h-2)
-		// tabs + sep + header + sep + footer sep + footer
-		m.list.SetSize(innerW, max(1, innerH-6))
+		m.list.SetSize(innerW, tabBoxListContentHeight(w, h))
 		promptW := len(m.search.Prompt)
 		reserve := 24
 		m.search.Width = max(10, innerW-reserve-promptW)
@@ -159,6 +158,24 @@ func (m *groupHostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if handled, cmd := handleConfirmConnect(msg, &m.confirmConnect, &m.pendingConnectFn, &m.toast); handled {
 			return m, cmd
+		}
+
+		if m.focus == focusList {
+			if handleVimListNav(msg, &m.list, &m.navPendingG) {
+				return m, nil
+			}
+		} else {
+			m.navPendingG = false
+		}
+
+		if key.Matches(msg, m.keymap.HostsTab) {
+			return m, func() tea.Msg { return switchScreenMsg{to: screenHosts} }
+		}
+		if key.Matches(msg, m.keymap.GroupsTab) {
+			return m, func() tea.Msg { return switchScreenMsg{to: screenGroups} }
+		}
+		if key.Matches(msg, m.keymap.Settings) {
+			return m, func() tea.Msg { return openDefaultsFormMsg{returnTo: screenGroupHosts} }
 		}
 
 		if key.Matches(msg, m.keymap.Help) {
@@ -386,7 +403,7 @@ func (m *groupHostsModel) View() string {
 	} else {
 		footer = styledFooter("\u21b5 connect  O pane  ·  \u2423 select  o panes  ·  Ctrl+o cmd  a add")
 		if m.height >= twoLineFooterMinHeight {
-			footer += "\n" + styledFooter("e config  c custom  d remove  y copy  ·  tab search  esc back  ? help")
+			footer += "\n" + styledFooter("e config  c custom  d remove  y copy  ·  Alt+1 hosts  Alt+3 settings  esc back  ? help")
 		}
 	}
 
@@ -423,6 +440,9 @@ func (m *groupHostsModel) helpKeys() helpMap {
 			m.keymap.HostConfig,
 			m.keymap.Copy,
 			remove,
+			m.keymap.HostsTab,
+			m.keymap.GroupsTab,
+			m.keymap.Settings,
 			esc,
 			m.keymap.Help,
 		},
@@ -431,6 +451,11 @@ func (m *groupHostsModel) helpKeys() helpMap {
 			m.list.KeyMap.CursorDown,
 			m.list.KeyMap.PrevPage,
 			m.list.KeyMap.NextPage,
+			m.list.KeyMap.GoToStart,
+			m.list.KeyMap.GoToEnd,
+			m.keymap.HostsTab,
+			m.keymap.GroupsTab,
+			m.keymap.Settings,
 		}, {
 			m.keymap.ToggleFocus,
 			m.keymap.FocusSearch,
@@ -458,6 +483,11 @@ func (m *groupHostsModel) helpKeys() helpMap {
 				m.list.KeyMap.CursorDown,
 				m.list.KeyMap.PrevPage,
 				m.list.KeyMap.NextPage,
+				m.list.KeyMap.GoToStart,
+				m.list.KeyMap.GoToEnd,
+				m.keymap.HostsTab,
+				m.keymap.GroupsTab,
+				m.keymap.Settings,
 				m.keymap.FocusSearch,
 				m.keymap.ToggleFocus,
 				esc,

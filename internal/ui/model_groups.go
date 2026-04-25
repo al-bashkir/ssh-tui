@@ -78,7 +78,8 @@ type groupsModel struct {
 	confirmConnectHosts []string
 	pendingConnectFn    func() tea.Cmd
 
-	prevSearch string
+	prevSearch  string
+	navPendingG bool
 
 	quitting bool
 	execCmd  []string
@@ -163,9 +164,7 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = w
 		m.height = h
 		innerW := max(0, w-2)
-		innerH := max(0, h-2)
-		// tabs + sep + header + sep + footer sep + footer
-		m.list.SetSize(innerW, max(1, innerH-6))
+		m.list.SetSize(innerW, tabBoxListContentHeight(w, h))
 		promptW := len(m.search.Prompt)
 		reserve := 18
 		m.search.Width = max(10, innerW-reserve-promptW)
@@ -226,6 +225,21 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
+		if m.focus == focusList {
+			if handleVimListNav(msg, &m.list, &m.navPendingG) {
+				return m, nil
+			}
+		} else {
+			m.navPendingG = false
+		}
+
+		if key.Matches(msg, m.keymap.HostsTab) {
+			return m, func() tea.Msg { return switchScreenMsg{to: screenHosts} }
+		}
+		if key.Matches(msg, m.keymap.Settings) {
+			return m, func() tea.Msg { return openDefaultsFormMsg{returnTo: screenGroups} }
+		}
+
 		if key.Matches(msg, m.keymap.Quit) {
 			if !m.opts.Config.Defaults.ConfirmQuit {
 				m.quitting = true
@@ -241,9 +255,6 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.helpVP = initHelpViewport(m.width, m.height, "Groups", m.help, m.helpKeys())
 			}
 			return m, nil
-		}
-		if key.Matches(msg, m.keymap.Settings) && m.focus == focusList {
-			return m, func() tea.Msg { return openDefaultsFormMsg{returnTo: screenGroups} }
 		}
 		if key.Matches(msg, m.keymap.FocusSearch) {
 			m.focus = focusSearch
@@ -262,9 +273,6 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				setSearchBarFocused(&m.search, true)
 			}
 			return m, nil
-		}
-		if key.Matches(msg, m.keymap.SwitchTab) && m.focus != focusSearch {
-			return m, func() tea.Msg { return switchScreenMsg{to: screenHosts} }
 		}
 		if key.Matches(msg, m.keymap.Esc) {
 			if m.focus == focusSearch && m.search.Value() == "" {
@@ -435,7 +443,7 @@ func (m *groupsModel) View() string {
 	} else {
 		footer = styledFooter("\u21b5 open  C connect  ·  o panes  Ctrl+o cmd  ·  n new")
 		if m.height >= twoLineFooterMinHeight {
-			footer += "\n" + styledFooter("e edit  d delete  y copy  a add hosts  c custom  ·  g hosts  tab search  ? help")
+			footer += "\n" + styledFooter("e edit  d delete  y copy  a add hosts  c custom  ·  Alt+1 hosts  Alt+3 settings  tab search  ? help")
 		}
 	}
 
@@ -467,7 +475,7 @@ func (m *groupsModel) helpKeys() helpMap {
 			m.keymap.Copy,
 			m.keymap.DeleteGroup,
 			m.keymap.AddHosts,
-			m.keymap.SwitchTab,
+			m.keymap.HostsTab,
 			m.keymap.Settings,
 			m.keymap.Help,
 			m.keymap.Quit,
@@ -477,10 +485,13 @@ func (m *groupsModel) helpKeys() helpMap {
 			m.list.KeyMap.CursorDown,
 			m.list.KeyMap.PrevPage,
 			m.list.KeyMap.NextPage,
+			m.list.KeyMap.GoToStart,
+			m.list.KeyMap.GoToEnd,
 		}, {
 			m.keymap.ToggleFocus,
 			m.keymap.FocusSearch,
-			m.keymap.SwitchTab,
+			m.keymap.HostsTab,
+			m.keymap.Settings,
 			m.keymap.Esc,
 			m.keymap.NewGroup,
 			m.keymap.EditGroup,
@@ -493,7 +504,6 @@ func (m *groupsModel) helpKeys() helpMap {
 			m.keymap.OneWindow,
 			m.keymap.CustomHost,
 			m.keymap.AddHosts,
-			m.keymap.Settings,
 			m.keymap.Help,
 			m.keymap.Quit,
 		}},
@@ -503,9 +513,12 @@ func (m *groupsModel) helpKeys() helpMap {
 				m.list.KeyMap.CursorDown,
 				m.list.KeyMap.PrevPage,
 				m.list.KeyMap.NextPage,
+				m.list.KeyMap.GoToStart,
+				m.list.KeyMap.GoToEnd,
 				m.keymap.FocusSearch,
 				m.keymap.ToggleFocus,
-				m.keymap.SwitchTab,
+				m.keymap.HostsTab,
+				m.keymap.Settings,
 				m.keymap.Esc,
 			}},
 			{title: "Connection", keys: []key.Binding{

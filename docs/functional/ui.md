@@ -16,8 +16,8 @@ Rendering rules:
 
 Keybindings (high level):
 
-- Global: `Ctrl+f` focus search, `Tab` toggle search/list focus, `Esc` clear/blur/back, `?` help, `q` quit (confirm configurable).
-- Tabs: `g` toggles Hosts/Groups, `Ctrl+s` opens Settings.
+- Global: `Ctrl+f` focus search, `Tab` toggle search/list focus, `gg` go to current page top, `G` go to current page bottom, `Esc` clear/blur/back, `?` help, `q` quit (confirm configurable).
+- Tabs: `Alt+1` opens Hosts, `Alt+2` opens Groups, `Alt+3` opens Settings.
 
 Hosts:
 

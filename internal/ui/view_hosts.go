@@ -65,10 +65,10 @@ func (m *hostsModel) View() string {
 		if hasSel {
 			footer = styledFooter("\u21b5 connect  o panes  ·  Ctrl+o cmd  a add-to-group  ·  \u2423 clear")
 			if m.height >= twoLineFooterMinHeight {
-				footer += "\n" + styledFooter("e config  r reload  ·  g groups  ? help")
+				footer += "\n" + styledFooter("e config  r reload  ·  Alt+2 groups  Alt+3 settings  ? help")
 			}
 		} else {
-			footer = styledFooter("\u21b5 connect  O pane  ·  \u2423 select  o panes  ·  c custom  g groups  Ctrl+H hide")
+			footer = styledFooter("\u21b5 connect  O pane  ·  \u2423 select  o panes  ·  c custom  Alt+2 groups  Ctrl+H hide")
 			if m.height >= twoLineFooterMinHeight {
 				footer += "\n" + styledFooter("e config  Ctrl+o cmd  a add  r reload  ·  tab search  H show hidden  ? help")
 			}
@@ -87,7 +87,7 @@ func (m *hostsModel) emptyStateView() string {
 	if len(m.allHosts) == 0 {
 		divider := formSection("", 26)
 		hint1 := footerKeyStyle.Render("c") + hintStyle.Render("          custom host")
-		hint3 := footerKeyStyle.Render("Ctrl+s") + hintStyle.Render("     open settings")
+		hint3 := footerKeyStyle.Render("Alt+3") + hintStyle.Render("      open settings")
 		if m.opts.Config.Defaults.LoadKnownHosts {
 			hint2 := footerKeyStyle.Render("r") + hintStyle.Render("          reload known_hosts")
 			defaultMsg = dim.Render("No hosts found.") + "\n" + divider + "\n" + hint1 + "\n" + hint2 + "\n" + hint3
