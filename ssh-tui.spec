@@ -16,7 +16,7 @@ URL:            https://github.com/al-bashkir/ssh-tui
 # before creating the archive, so the vendor/ directory is already present.
 Source0:        %{name}-%{version}.tar.gz
 
-BuildRequires:  golang >= 1.21
+BuildRequires:  golang >= 1.25.6
 BuildRequires:  git-core
 
 # ssh-tui shells out to the system ssh binary
@@ -64,6 +64,12 @@ install -Dpm 0644 _ssh_tui %{buildroot}%{_datadir}/zsh/site-functions/_ssh_tui
 %{_datadir}/zsh/site-functions/_ssh_tui
 
 %changelog
+* Sat Apr 25 2026 Pavel Aksenov <41126916+al-bashkir@users.noreply.github.com> - 1.3.1-1
+- Move tab and settings navigation to Alt shortcuts
+- Add vim-style g/G list navigation
+- Match list height to footer size to avoid clipped pages
+- Update README and UI docs for current keybindings and usage
+
 * Fri Mar 13 2026 Pavel Aksenov <41126916+al-bashkir@users.noreply.github.com> - 1.3.0-1
 - Add named colorscheme support (dracula, nord, gruvbox, catppuccin, kanagawa)
 - Preserve cursor position across filter updates and hide/toggle in all list views
