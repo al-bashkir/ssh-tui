@@ -37,15 +37,19 @@ func (m *hostsModel) View() string {
 		if selCount := len(m.selected); selCount > 0 {
 			right += "  " + badgeSelStyle.Render(fmt.Sprintf("%d selected", selCount))
 		}
-		shown := len(m.list.Items())
+		hc := m.hiddenCount()
 		total := len(m.allHosts)
+		if !m.showHidden {
+			total -= hc
+		}
+		shown := len(m.list.Items())
 		q := strings.TrimSpace(m.search.Value())
 		if q != "" {
 			right += dim.Render(fmt.Sprintf(" %d / %d hosts", shown, total))
 		} else {
 			right += dim.Render(fmt.Sprintf(" %d hosts", total))
 		}
-		if hc := m.hiddenCount(); hc > 0 {
+		if hc > 0 {
 			if m.showHidden {
 				right += "  " + headerStyle.Render(fmt.Sprintf("%d showed", hc))
 			} else {
