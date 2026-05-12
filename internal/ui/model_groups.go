@@ -240,7 +240,7 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return openDefaultsFormMsg{returnTo: screenGroups} }
 		}
 
-		if key.Matches(msg, m.keymap.Quit) {
+		if key.Matches(msg, m.keymap.Quit) && m.focus != focusSearch {
 			if !m.opts.Config.Defaults.ConfirmQuit {
 				m.quitting = true
 				return m, tea.Quit
