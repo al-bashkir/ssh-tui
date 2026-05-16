@@ -7,6 +7,16 @@ A terminal UI for managing SSH connections. Reads hosts from `known_hosts`, stor
 
 ## Install
 
+Homebrew (macOS and Linux):
+
+```bash
+brew install al-bashkir/tools/ssh-tui
+```
+
+Or `brew tap al-bashkir/tools` and then `brew install ssh-tui`.
+
+Go install:
+
 ```bash
 go install github.com/al-bashkir/ssh-tui/cmd/ssh-tui@latest
 ```
