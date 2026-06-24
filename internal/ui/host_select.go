@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/al-bashkir/ssh-tui/internal/config"
+	"github.com/al-bashkir/ssh-tui/internal/sshcmd"
 	"github.com/charmbracelet/bubbles/list"
 
 	"github.com/sahilm/fuzzy"
@@ -33,7 +34,7 @@ func (s *hostSelectList) setListItems(
 ) {
 	items := make([]list.Item, 0, len(s.filtered))
 	for _, h := range s.filtered {
-		_, hasCfg := hostConfigFor(inv, h)
+		_, hasCfg := sshcmd.FindHostConfig(inv.Hosts, h)
 		hidden := hiddenFn != nil && hiddenFn(inv, h)
 		items = append(items, hostRow{
 			host:           h,
@@ -69,7 +70,7 @@ func (s *hostSelectList) refreshVisibleBadges(l *list.Model, inv config.Inventor
 		if !ok {
 			continue
 		}
-		_, ok = hostConfigFor(inv, row.host)
+		_, ok = sshcmd.FindHostConfig(inv.Hosts, row.host)
 		row.hasCfg = ok
 		items[i] = row
 	}

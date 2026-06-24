@@ -1,7 +1,6 @@
 package sshcmd
 
 import (
-	"strconv"
 	"strings"
 
 	"github.com/al-bashkir/ssh-tui/internal/config"
@@ -36,24 +35,6 @@ func FindHostConfig(hosts []config.Host, host string) (config.Host, bool) {
 }
 
 func parseBracketHostConfig(s string) (host string, ok bool) {
-	s = strings.TrimSpace(s)
-	if !strings.HasPrefix(s, "[") {
-		return "", false
-	}
-	idx := strings.LastIndex(s, "]:")
-	if idx < 0 {
-		return "", false
-	}
-	h := strings.TrimSpace(s[1:idx])
-	if h == "" {
-		return "", false
-	}
-	ps := strings.TrimSpace(s[idx+2:])
-	if ps == "" {
-		return "", false
-	}
-	if p, err := strconv.Atoi(ps); err != nil || p <= 0 {
-		return "", false
-	}
-	return h, true
+	h, _, ok := parseBracketHost(strings.TrimSpace(s))
+	return h, ok
 }

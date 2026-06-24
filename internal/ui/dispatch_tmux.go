@@ -27,7 +27,7 @@ func buildSSHCommands(hosts []string, defaults config.Defaults, inv config.Inven
 	sshCmds := make([][]string, 0, len(hosts))
 	for _, h := range hosts {
 		s := base
-		if hc, ok := hostConfigFor(inv, h); ok {
+		if hc, ok := sshcmd.FindHostConfig(inv.Hosts, h); ok {
 			s = sshcmd.ApplyHost(s, hc)
 		}
 		if group != nil {

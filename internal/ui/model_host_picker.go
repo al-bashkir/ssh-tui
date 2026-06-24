@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/al-bashkir/ssh-tui/internal/sshcmd"
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
@@ -41,7 +42,7 @@ func newHostPickerModel(opts Options) *hostPickerModel {
 	all := append([]string(nil), opts.Hosts...)
 	items := make([]list.Item, 0, len(all))
 	for _, h := range all {
-		_, ok := hostConfigFor(opts.Inventory, h)
+		_, ok := sshcmd.FindHostConfig(opts.Inventory.Hosts, h)
 		items = append(items, hostRow{host: h, hasCfg: ok})
 	}
 

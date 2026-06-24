@@ -7,12 +7,8 @@ import (
 	"github.com/al-bashkir/ssh-tui/internal/sshcmd"
 )
 
-func hostConfigFor(inv config.Inventory, host string) (config.Host, bool) {
-	return sshcmd.FindHostConfig(inv.Hosts, host)
-}
-
 func findHostConfig(inv config.Inventory, host string) (index int, hc config.Host) {
-	if h, ok := hostConfigFor(inv, host); ok {
+	if h, ok := sshcmd.FindHostConfig(inv.Hosts, host); ok {
 		for i := range inv.Hosts {
 			if strings.TrimSpace(inv.Hosts[i].Host) == strings.TrimSpace(h.Host) {
 				return i, h
@@ -30,6 +26,6 @@ func isHostHidden(inv config.Inventory, host string) bool {
 			return true
 		}
 	}
-	hc, ok := hostConfigFor(inv, host)
+	hc, ok := sshcmd.FindHostConfig(inv.Hosts, host)
 	return ok && hc.Hidden
 }

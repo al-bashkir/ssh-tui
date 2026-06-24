@@ -61,7 +61,7 @@ func newGroupHostsModel(opts Options, groupIndex int) *groupHostsModel {
 
 	items := make([]list.Item, 0, len(g.Hosts))
 	for _, h := range g.Hosts {
-		_, ok := hostConfigFor(opts.Inventory, h)
+		_, ok := sshcmd.FindHostConfig(opts.Inventory.Hosts, h)
 		items = append(items, hostRow{host: h, hasCfg: ok})
 	}
 
@@ -336,7 +336,7 @@ func (m *groupHostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.toast = toast{text: "no host selected", level: toastWarn}
 				return m, nil
 			}
-			hc, ok := hostConfigFor(m.opts.Inventory, row.host)
+			hc, ok := sshcmd.FindHostConfig(m.opts.Inventory.Hosts, row.host)
 			if !ok {
 				m.toast = toast{text: "no host config", level: toastWarn}
 				return m, nil
