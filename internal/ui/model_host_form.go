@@ -16,18 +16,7 @@ import (
 // ---------------------------------------------------------------------------
 
 func hostSchema(defs config.Defaults) formSchema {
-	portPlaceholder := "22"
-	if defs.Port != 0 {
-		portPlaceholder = strconv.Itoa(defs.Port)
-	}
-	identPlaceholder := strings.TrimSpace(defs.IdentityFile)
-	if identPlaceholder == "" {
-		identPlaceholder = "~/.ssh/id_ed25519"
-	}
-	extraPlaceholder := strings.Join(defs.ExtraArgs, " ")
-	if extraPlaceholder == "" {
-		extraPlaceholder = "-o Option=value ..."
-	}
+	portPlaceholder, identPlaceholder, extraPlaceholder := sshPlaceholders(defs)
 
 	return formSchema{
 		Sections: []sectionDef{
@@ -106,7 +95,6 @@ type hostFormModel struct {
 	form        formModel
 	index       int
 	host        config.Host
-	defs        config.Defaults
 	parentCrumb string
 
 	width  int
@@ -118,7 +106,7 @@ type hostFormModel struct {
 }
 
 func (m *hostFormModel) refreshAccentStyles() {
-	m.form.refreshAccentStyles()
+	m.form.applyFocusStyles()
 }
 
 func newHostFormModel(index int, h config.Host, defs config.Defaults) *hostFormModel {
@@ -129,7 +117,6 @@ func newHostFormModel(index int, h config.Host, defs config.Defaults) *hostFormM
 		form:   fm,
 		index:  index,
 		host:   h,
-		defs:   defs,
 		keymap: defaultKeyMap(),
 	}
 }
@@ -188,50 +175,10 @@ func (m *hostFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // ---------------------------------------------------------------------------
 
 func (m *hostFormModel) View() string {
-	if m.width <= 0 || m.height <= 0 {
-		return ""
+	name := m.host.Host
+	if strings.TrimSpace(name) == "" {
+		name = m.form.value("host")
 	}
-
-	innerW := max(0, m.width-2)
-
-	// Build content lines from the form.
-	lines, focusLine := m.form.renderFormContent(innerW)
-
-	// Footer.
-	footer := m.form.renderFooter()
-
-	// Scroll.
-	innerH := max(0, m.height-2)
-	reserved := 2 // sep + footer
-	if !m.toast.empty() {
-		reserved++
-	}
-	visibleH := innerH - reserved
-	if visibleH < 1 {
-		visibleH = 1
-	}
-	start, end := formScrollWindow(len(lines), visibleH, focusLine)
-	visible := lines[start:end]
-
-	// Title / breadcrumb.
-	title := "Create Host"
-	if m.index >= 0 {
-		name := strings.TrimSpace(m.host.Host)
-		if name == "" {
-			name = strings.TrimSpace(m.form.value("host"))
-		}
-		if name != "" {
-			title = breadcrumbTitle(m.parentCrumb, name)
-		} else {
-			title = breadcrumbTitle(m.parentCrumb, "Edit Host")
-		}
-	} else {
-		title = breadcrumbTitle(m.parentCrumb, "Create Host")
-	}
-
-	toastStr := ""
-	if !m.toast.empty() {
-		toastStr = renderToast(m.toast)
-	}
-	return renderFormBox(m.width, title, visible, visibleH, toastStr, footer)
+	title := formTitle(m.parentCrumb, m.index, name, "Create Host", "Edit Host")
+	return renderModalForm(&m.form, m.width, m.height, title, m.toast)
 }

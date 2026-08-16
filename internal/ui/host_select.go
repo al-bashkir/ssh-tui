@@ -14,24 +14,35 @@ import (
 // logic shared by hostsModel, groupHostsModel, and hostPickerModel.
 //
 // It is embedded (not composed) in each model so that fields like allHosts,
-// filtered, selected, and matchIdxes are promoted to the outer struct.
-// Each model keeps thin wrapper methods (applyFilter, refreshVisibleSelection,
-// etc.) that delegate to these methods with the appropriate list.Model pointer
-// and config.Inventory.
+// filtered, selected, and matchIdxes are promoted to the outer struct. The
+// owning model wires l to its own list with bindList after construction.
 type hostSelectList struct {
+	l          *list.Model
 	allHosts   []string
 	filtered   []string
 	selected   map[string]bool
 	matchIdxes map[string][]int // fuzzy match indexes per host
 }
 
+func newHostSelectList(hosts []string) hostSelectList {
+	return hostSelectList{
+		allHosts: append([]string(nil), hosts...),
+		filtered: append([]string(nil), hosts...),
+		selected: make(map[string]bool),
+	}
+}
+
+// bindList attaches the owning model's list. Must be called once, after the
+// model struct is allocated, before any other method.
+func (s *hostSelectList) bindList(l *list.Model) { s.l = l }
+
 // setListItems rebuilds list items from the current filtered hosts.
 // hiddenFn, when non-nil, is called to set the display-only hidden flag.
 func (s *hostSelectList) setListItems(
-	l *list.Model,
 	inv config.Inventory,
 	hiddenFn func(config.Inventory, string) bool,
 ) {
+	l := s.l
 	items := make([]list.Item, 0, len(s.filtered))
 	for _, h := range s.filtered {
 		_, hasCfg := sshcmd.FindHostConfig(inv.Hosts, h)
@@ -48,7 +59,8 @@ func (s *hostSelectList) setListItems(
 }
 
 // refreshVisibleSelection updates the selected state on visible list items.
-func (s *hostSelectList) refreshVisibleSelection(l *list.Model) {
+func (s *hostSelectList) refreshVisibleSelection() {
+	l := s.l
 	items := l.Items()
 	for i := range items {
 		row, ok := items[i].(hostRow)
@@ -62,7 +74,8 @@ func (s *hostSelectList) refreshVisibleSelection(l *list.Model) {
 }
 
 // refreshVisibleBadges updates hasCfg badges on visible list items.
-func (s *hostSelectList) refreshVisibleBadges(l *list.Model, inv config.Inventory) {
+func (s *hostSelectList) refreshVisibleBadges(inv config.Inventory) {
+	l := s.l
 	idx := l.Index()
 	items := l.Items()
 	for i := range items {
@@ -81,8 +94,8 @@ func (s *hostSelectList) refreshVisibleBadges(l *list.Model, inv config.Inventor
 }
 
 // toggleCurrentSelection toggles selection on the currently focused host.
-func (s *hostSelectList) toggleCurrentSelection(l *list.Model) {
-	row, ok := l.SelectedItem().(hostRow)
+func (s *hostSelectList) toggleCurrentSelection() {
+	row, ok := s.l.SelectedItem().(hostRow)
 	if !ok || row.host == "" {
 		return
 	}
@@ -91,7 +104,40 @@ func (s *hostSelectList) toggleCurrentSelection(l *list.Model) {
 	} else {
 		s.selected[row.host] = true
 	}
-	s.refreshVisibleSelection(l)
+	s.refreshVisibleSelection()
+}
+
+// clearSelection deselects every host.
+func (s *hostSelectList) clearSelection() {
+	s.selected = make(map[string]bool)
+	s.refreshVisibleSelection()
+}
+
+// selectAllFiltered selects every host currently passing the filter.
+func (s *hostSelectList) selectAllFiltered() {
+	for _, h := range s.filtered {
+		s.selected[h] = true
+	}
+	s.refreshVisibleSelection()
+}
+
+// currentHost returns the focused host, or "" when the list is empty.
+func (s *hostSelectList) currentHost() string {
+	if row, ok := s.l.SelectedItem().(hostRow); ok {
+		return row.host
+	}
+	return ""
+}
+
+// hostsToOpen returns the selected hosts, falling back to the focused one.
+func (s *hostSelectList) hostsToOpen() []string {
+	if sel := s.selectedHosts(); len(sel) > 0 {
+		return sel
+	}
+	if h := s.currentHost(); h != "" {
+		return []string{h}
+	}
+	return nil
 }
 
 // selectedHosts returns hosts that are currently selected, preserving
@@ -109,20 +155,16 @@ func (s *hostSelectList) selectedHosts() []string {
 	return out
 }
 
-// applyFilter fuzzy-filters hosts, optionally excludes entries, and preserves
+// filter fuzzy-filters hosts, optionally excludes entries, and preserves
 // cursor position. excludeFn removes entries from the result when it returns
 // true. hiddenFn is forwarded to setListItems for display badges.
-func (s *hostSelectList) applyFilter(
-	l *list.Model,
+func (s *hostSelectList) filter(
 	query string,
 	inv config.Inventory,
 	excludeFn func(config.Inventory, string) bool,
 	hiddenFn func(config.Inventory, string) bool,
 ) {
-	var prevHost string
-	if row, ok := l.SelectedItem().(hostRow); ok {
-		prevHost = row.host
-	}
+	prevHost := s.currentHost()
 
 	query = strings.TrimSpace(query)
 	s.matchIdxes = nil
@@ -150,51 +192,45 @@ func (s *hostSelectList) applyFilter(
 		s.filtered = visible
 	}
 
-	s.setListItems(l, inv, hiddenFn)
+	s.setListItems(inv, hiddenFn)
+	restoreCursor(s.l, s.allHosts, s.filtered, prevHost)
+}
 
-	// Restore cursor: prefer same host; if gone, pick the next visible
-	// neighbour based on allHosts order, then fall back to 0.
-	if len(s.filtered) == 0 {
+// restoreCursor re-selects prev after a re-filter. When prev is gone it picks
+// the nearest surviving neighbour in `all` order — first looking forward, then
+// backward — and otherwise falls back to the first row.
+func restoreCursor(l *list.Model, all, visible []string, prev string) {
+	if len(visible) == 0 {
 		return
 	}
-	if prevHost != "" {
-		// Fast path: host is still in the list.
-		for i, h := range s.filtered {
-			if h == prevHost {
-				l.Select(i)
-				return
-			}
+	if prev != "" {
+		pos := make(map[string]int, len(visible))
+		for i, k := range visible {
+			pos[k] = i
 		}
-		// Walk allHosts forward from the previous host.
-		filteredSet := make(map[string]int, len(s.filtered))
-		for i, h := range s.filtered {
-			filteredSet[h] = i
+		if i, ok := pos[prev]; ok {
+			l.Select(i)
+			return
 		}
-		past := false
-		for _, h := range s.allHosts {
-			if h == prevHost {
-				past = true
-				continue
-			}
-			if past {
-				if idx, ok := filteredSet[h]; ok {
-					l.Select(idx)
-					return
-				}
-			}
-		}
-		// Nothing after — try walking backward to the nearest item before prevHost.
 		prevIdx := -1
-		for i, h := range s.allHosts {
-			if h == prevHost {
+		for i, k := range all {
+			if k == prev {
 				prevIdx = i
 				break
 			}
 		}
-		for j := prevIdx - 1; j >= 0; j-- {
-			if idx, ok := filteredSet[s.allHosts[j]]; ok {
-				l.Select(idx)
-				return
+		if prevIdx >= 0 {
+			for j := prevIdx + 1; j < len(all); j++ {
+				if i, ok := pos[all[j]]; ok {
+					l.Select(i)
+					return
+				}
+			}
+			for j := prevIdx - 1; j >= 0; j-- {
+				if i, ok := pos[all[j]]; ok {
+					l.Select(i)
+					return
+				}
 			}
 		}
 	}

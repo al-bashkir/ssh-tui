@@ -3,12 +3,10 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/al-bashkir/ssh-tui/internal/config"
-	"github.com/al-bashkir/ssh-tui/internal/sshcmd"
-	tmx "github.com/al-bashkir/ssh-tui/internal/tmux"
+	"github.com/al-bashkir/ssh-tui/internal/connect"
 )
 
 func runConnect(args []string, cfg config.Config, inv config.Inventory, noTmux bool) {
@@ -47,115 +45,32 @@ func connectGroup(name string, cfg config.Config, inv config.Inventory, noTmux b
 	if len(group.Hosts) == 0 {
 		fatal(fmt.Errorf("group %q has no hosts", name))
 	}
-
-	// Build SSH commands with the same precedence as the TUI:
-	// Defaults → per-host override → Group settings.
-	base := sshcmd.FromDefaults(cfg.Defaults)
-	sshCmds := make([][]string, 0, len(group.Hosts))
-	for _, h := range group.Hosts {
-		s := base
-		if hc, ok := sshcmd.FindHostConfig(inv.Hosts, h); ok {
-			s = sshcmd.ApplyHost(s, hc)
-		}
-		s = sshcmd.ApplyGroup(s, group)
-		cmd, err := sshcmd.BuildCommand(h, s)
-		if err != nil {
-			fatal(fmt.Errorf("build ssh command for %s: %w", h, err))
-		}
-		sshCmds = append(sshCmds, cmd)
-	}
-
-	// Resolve effective tmux / open-mode settings (group overrides defaults).
-	tmuxSetting := cfg.Defaults.Tmux
-	if strings.TrimSpace(group.Tmux) != "" {
-		tmuxSetting = group.Tmux
-	}
-	openModeSetting := cfg.Defaults.OpenMode
-	if strings.TrimSpace(group.OpenMode) != "" {
-		openModeSetting = group.OpenMode
-	}
 	if noTmux {
-		tmuxSetting = "never"
+		group.Tmux = "never"
 	}
 
-	inTmux := tmx.InTmux()
-	mode := tmx.ResolveOpenMode(tmuxSetting, openModeSetting, inTmux)
-	execConnect(group.Hosts, sshCmds, cfg.Defaults, &group, mode, inTmux)
+	open(group.Hosts, cfg, inv, &group)
 }
 
 func connectHost(name string, cfg config.Config, inv config.Inventory) {
-	// Build SSH command with the same precedence as the TUI:
-	// Defaults → per-host override (no group).
-	base := sshcmd.FromDefaults(cfg.Defaults)
-	s := base
-	if hc, ok := sshcmd.FindHostConfig(inv.Hosts, name); ok {
-		s = sshcmd.ApplyHost(s, hc)
-	}
-	cmd, err := sshcmd.BuildCommand(name, s)
-	if err != nil {
-		fatal(fmt.Errorf("build ssh command for %s: %w", name, err))
-	}
-
-	inTmux := tmx.InTmux()
-	mode := tmx.ResolveOpenMode(cfg.Defaults.Tmux, cfg.Defaults.OpenMode, inTmux)
-	execConnect([]string{name}, [][]string{cmd}, cfg.Defaults, nil, mode, inTmux)
+	open([]string{name}, cfg, inv, nil)
 }
 
-// execConnect dispatches SSH commands using the same logic as the TUI's dispatchConnect.
-func execConnect(
-	hosts []string,
-	sshCmds [][]string,
-	defaults config.Defaults,
-	group *config.Group,
-	mode tmx.OpenMode,
-	inTmux bool,
-) {
-	wName := tmx.GroupWindowName(hosts, group)
+// open dispatches hosts the same way the TUI does, then either replaces this
+// process with ssh/tmux or reports what was opened.
+func open(hosts []string, cfg config.Config, inv config.Inventory, group *config.Group) {
+	sshCmds := connect.BuildCommands(hosts, cfg.Defaults, inv, group, nil)
+	mode, inTmux := connect.Mode(cfg.Defaults, group)
 
-	switch {
-	case mode == tmx.OpenCurrent:
-		if len(sshCmds) > 1 {
-			fatal(fmt.Errorf("multi-host requires tmux (set open_mode to tmux-window or tmux-pane)"))
-		}
-		if err := execReplace(sshCmds[0]); err != nil {
-			fatal(err)
-		}
-
-	case !inTmux:
-		if len(sshCmds) > 1 {
-			fatal(fmt.Errorf("multi-host requires an active tmux session"))
-		}
-		// NewSessionCmd uses -A so it attaches to an existing session instead of failing.
-		if err := execReplace(tmx.NewSessionCmd(defaults.TmuxSession, sshCmds[0])); err != nil {
-			fatal(err)
-		}
-
-	case mode == tmx.OpenPane || (mode == tmx.OpenWindow && len(sshCmds) > 1):
-		// Open all hosts as panes in a single new tmux window.
-		ps := tmx.ResolvePaneSettings(defaults, group, len(sshCmds))
-		if err := tmx.OpenOneWindow(sshCmds, tmx.OneWindowOpts{
-			WindowName:       wName,
-			PaneTitles:       hosts,
-			SplitFlag:        ps.SplitFlag,
-			Layout:           ps.Layout,
-			SyncPanes:        ps.SyncPanes,
-			PaneBorderFormat: ps.BorderFormat,
-			PaneBorderStatus: ps.BorderStatus,
-		}); err != nil {
-			fatal(err)
-		}
-		_, _ = fmt.Fprintf(os.Stderr, "opened %d in one window\n", len(sshCmds))
-
-	default:
-		// OpenWindow: one tmux window per host.
-		for i, sshCmd := range sshCmds {
-			name := tmx.GroupWindowName(hosts[i:i+1], group)
-			tmuxCmd := tmx.NewWindowCmd(name, sshCmd)
-			// #nosec G204 -- tmux argv is constructed (no shell) from known host/group settings.
-			if err := exec.Command(tmuxCmd[0], tmuxCmd[1:]...).Run(); err != nil {
-				fatal(fmt.Errorf("tmux new-window: %w", err))
-			}
-		}
-		_, _ = fmt.Fprintf(os.Stderr, "opened %d\n", len(sshCmds))
+	execCmd, msg, err := connect.Open(hosts, sshCmds, cfg.Defaults, group, mode, inTmux)
+	if err != nil {
+		fatal(err)
 	}
+	if len(execCmd) != 0 {
+		if err := execReplace(execCmd); err != nil {
+			fatal(err)
+		}
+		return
+	}
+	_, _ = fmt.Fprintln(os.Stderr, msg)
 }

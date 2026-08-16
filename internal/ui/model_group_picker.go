@@ -6,7 +6,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -55,7 +54,6 @@ type groupPickerModel struct {
 	all      []groupPickRow
 	names    []string // cached for fuzzy search, parallel to all
 	keymap   keyMap
-	help     help.Model
 	showHelp bool
 	toast    toast
 
@@ -90,7 +88,6 @@ func newGroupPickerModel(opts Options) *groupPickerModel {
 		all:      all,
 		names:    names,
 		keymap:   defaultKeyMap(),
-		help:     help.New(),
 		showHelp: false,
 		list:     l,
 		search:   search,
@@ -126,50 +123,18 @@ func (m *groupPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.showHelp = !m.showHelp
 			return m, nil
 		}
-		if key.Matches(msg, m.keymap.FocusSearch) {
-			m.focus = focusSearch
-			m.search.Focus()
-			setSearchBarFocused(&m.search, true)
-			return m, nil
-		}
-		if key.Matches(msg, m.keymap.ToggleFocus) {
-			if m.focus == focusSearch {
-				m.focus = focusList
-				m.search.Blur()
-				setSearchBarFocused(&m.search, false)
-			} else {
-				m.focus = focusSearch
-				m.search.Focus()
-				setSearchBarFocused(&m.search, true)
-			}
+		if handleFocusKeys(msg, m.keymap, &m.focus, &m.search) {
 			return m, nil
 		}
 		if key.Matches(msg, m.keymap.Esc) {
-			if m.focus == focusSearch {
-				if m.search.Value() != "" {
-					m.search.SetValue("")
-					m.applyFilter("")
-					m.prevSearch = ""
-					return m, nil
-				}
-				m.focus = focusList
-				m.search.Blur()
-				setSearchBarFocused(&m.search, false)
-				return m, nil
-			}
-			if m.search.Value() != "" {
-				m.search.SetValue("")
-				m.applyFilter("")
-				m.prevSearch = ""
+			if handlePickerEsc(&m.focus, &m.search, &m.prevSearch, m.applyFilter) {
 				return m, nil
 			}
 			return m, func() tea.Msg { return groupPickerCancelMsg{} }
 		}
 		if key.Matches(msg, m.keymap.Connect) {
 			if m.focus == focusSearch {
-				m.focus = focusList
-				m.search.Blur()
-				setSearchBarFocused(&m.search, false)
+				setFocus(&m.focus, &m.search, focusList)
 				return m, nil
 			}
 			row, ok := m.list.SelectedItem().(groupPickRow)
@@ -277,7 +242,7 @@ func (m *groupPickerModel) addingLines(innerW int) []string {
 
 func (m *groupPickerModel) View() string {
 	if m.showHelp {
-		return renderHelpModal(m.width, m.height, "Select Group", m.help, m.helpKeys())
+		return renderHelpModal(m.width, m.height, "Select Group", m.helpKeys())
 	}
 	innerW, _ := frameInnerSize(m.width, m.height)
 	sep := dim.Render(strings.Repeat("─", innerW))
@@ -305,29 +270,6 @@ func (m *groupPickerModel) helpKeys() helpMap {
 	)
 
 	return helpMap{
-		short: []key.Binding{
-			m.list.KeyMap.CursorUp,
-			m.list.KeyMap.CursorDown,
-			m.keymap.FocusSearch,
-			selectGroup,
-			esc,
-			m.keymap.Help,
-		},
-		full: [][]key.Binding{{
-			m.list.KeyMap.CursorUp,
-			m.list.KeyMap.CursorDown,
-			m.list.KeyMap.PrevPage,
-			m.list.KeyMap.NextPage,
-		}, {
-			m.keymap.FocusSearch,
-			m.keymap.ToggleFocus,
-			esc,
-		}, {
-			selectGroup,
-		}, {
-			esc,
-			m.keymap.Help,
-		}},
 		sections: []helpSection{
 			{title: "Navigation", keys: []key.Binding{
 				m.list.KeyMap.CursorUp,
@@ -349,24 +291,8 @@ func (m *groupPickerModel) helpKeys() helpMap {
 }
 
 func (m *groupPickerModel) statusLine() string {
-	shown := len(m.list.Items())
-	total := len(m.all)
-	left := fmt.Sprintf("groups: %d/%d", shown, total)
-	if m.list.Paginator.TotalPages > 1 {
-		left += "  " + dim.Render(fmt.Sprintf("pg:%d/%d", m.list.Paginator.Page+1, m.list.Paginator.TotalPages))
-	}
-	if !m.toast.empty() {
-		left += "  " + renderToast(m.toast)
-	}
-	q := strings.TrimSpace(m.search.Value())
-	searchInfo := "search"
-	if q != "" {
-		if len(q) > 40 {
-			q = q[:40] + "..."
-		}
-		searchInfo = "search: " + q
-	}
-	return left + "  " + statusOK.Render(searchInfo)
+	left := fmt.Sprintf("groups: %d/%d", len(m.list.Items()), len(m.all))
+	return pickerStatusLine(left, &m.list, m.search.Value(), m.toast)
 }
 
 func (m *groupPickerModel) applyFilter(query string) {

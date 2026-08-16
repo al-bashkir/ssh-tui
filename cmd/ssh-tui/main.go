@@ -28,14 +28,12 @@ func main() {
 	var knownHosts multiFlag
 	var noTmux bool
 	var popup bool
-	var debug bool
 
 	flag.StringVar(&configPath, "config", "", "path to config.toml (default: XDG config)")
 	flag.StringVar(&hostsPath, "hosts", "", "path to hosts.toml (default: next to config.toml)")
 	flag.Var(&knownHosts, "known-hosts", "known_hosts path (repeatable)")
 	flag.BoolVar(&noTmux, "no-tmux", false, "disable tmux integration")
 	flag.BoolVar(&popup, "popup", false, "quit after connecting (for tmux popup use)")
-	flag.BoolVar(&debug, "debug", false, "enable debug logging")
 	flag.Usage = usage
 	flag.Parse()
 
@@ -83,7 +81,6 @@ func main() {
 			Hosts:         res.Hosts,
 			SkippedLines:  res.SkippedLines,
 			LoadErrors:    loadErrs,
-			Debug:         debug,
 			Popup:         popup,
 		})
 		return

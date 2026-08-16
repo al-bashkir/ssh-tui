@@ -35,91 +35,76 @@ func quitConfirmBox(maxWidth int) string {
 		boxW = quitConfirmMaxW
 	}
 	boxW = min(quitConfirmMaxW, max(22, boxW-confirmDialogMargin))
-	title := confirmTitleStyle.Render("Quit?")
-	body := "Exit ssh-tui?"
-	footer := styledFooter("y/⏎ quit  n/Esc cancel")
-	return renderConfirmBox(boxW+confirmDialogPadding, title, body, footer)
+	return renderConfirmBox(boxW+confirmDialogPadding,
+		confirmTitleStyle.Render("Quit?"),
+		"Exit ssh-tui?",
+		styledFooter("y/⏎ quit  n/Esc cancel"))
 }
 
 func deleteGroupConfirmBox(maxWidth int, name string, hostCount int) string {
-	name = strings.TrimSpace(name)
+	body := "This will remove the group"
+	if name = strings.TrimSpace(name); name != "" {
+		body = fmt.Sprintf("Delete %q (%d)?", name, hostCount)
+	}
+	return renderConfirmBox(confirmDialogWidth(maxWidth),
+		confirmTitleStyle.Render("Delete group?"),
+		body,
+		styledFooter("y/⏎ delete  n/Esc cancel"))
+}
+
+// confirmDialogWidth clamps the dialog to the terminal width and adds the
+// border/padding overhead, returning the total box width.
+func confirmDialogWidth(maxWidth int) int {
 	boxW := maxWidth
 	if boxW <= 0 {
 		boxW = confirmDialogMaxW
 	}
-	boxW = min(confirmDialogMaxW, max(24, boxW-confirmDialogMargin))
-	title := confirmTitleStyle.Render("Delete group?")
-	body := "This will remove the group"
-	if name != "" {
-		body = fmt.Sprintf("Delete %q (%d)?", name, hostCount)
+	return min(confirmDialogMaxW, max(24, boxW-confirmDialogMargin)) + confirmDialogPadding
+}
+
+// renderHostListConfirmBox is a confirm dialog listing up to 4 hosts, with a
+// "+N more" trailer beyond that and an optional note line below the list.
+func renderHostListConfirmBox(maxWidth int, title, footer string, hosts []string, note string) string {
+	totalW := confirmDialogWidth(maxWidth)
+
+	parts := []string{focusedBoxTitleTop(totalW, title), focusedBoxLine(totalW, "")}
+	shown, extra := hosts, 0
+	if len(hosts) > 4 {
+		shown, extra = hosts[:4], len(hosts)-4
 	}
-	footer := styledFooter("y/⏎ delete  n/Esc cancel")
-	return renderConfirmBox(boxW+confirmDialogPadding, title, body, footer)
+	for i, h := range shown {
+		line := "  " + h
+		if i == len(shown)-1 && extra > 0 {
+			line += fmt.Sprintf("    +%d more", extra)
+		}
+		parts = append(parts, focusedBoxLine(totalW, line))
+	}
+	if note != "" {
+		parts = append(parts, focusedBoxLine(totalW, ""), focusedBoxLine(totalW, note))
+	}
+	parts = append(parts,
+		focusedBoxLine(totalW, ""),
+		focusedBoxLine(totalW, "  "+footer),
+		focusedBoxLine(totalW, ""),
+		focusedBoxBottom(totalW),
+	)
+	return strings.Join(parts, "\n")
 }
 
 func connectConfirmBox(maxWidth int, count int, hostNames []string) string {
-	boxW := maxWidth
-	if boxW <= 0 {
-		boxW = confirmDialogMaxW
-	}
-	boxW = min(confirmDialogMaxW, max(24, boxW-confirmDialogMargin))
-	totalW := boxW + confirmDialogPadding
-	title := confirmTitleStyle.Render(fmt.Sprintf("Connect %d hosts?", count))
-	footer := styledFooter("y/⏎ connect  n/Esc cancel")
-
-	parts := []string{focusedBoxTitleTop(totalW, title), focusedBoxLine(totalW, "")}
-	shown := hostNames
-	extra := 0
-	if len(hostNames) > 4 {
-		shown = hostNames[:4]
-		extra = len(hostNames) - 4
-	}
-	for i, h := range shown {
-		line := "  " + h
-		if i == len(shown)-1 && extra > 0 {
-			line += fmt.Sprintf("    +%d more", extra)
-		}
-		parts = append(parts, focusedBoxLine(totalW, line))
-	}
-	parts = append(parts, focusedBoxLine(totalW, ""))
-	parts = append(parts, focusedBoxLine(totalW, "  "+footer))
-	parts = append(parts, focusedBoxLine(totalW, ""))
-	parts = append(parts, focusedBoxBottom(totalW))
-	return strings.Join(parts, "\n")
+	return renderHostListConfirmBox(maxWidth,
+		confirmTitleStyle.Render(fmt.Sprintf("Connect %d hosts?", count)),
+		styledFooter("y/⏎ connect  n/Esc cancel"),
+		hostNames, "")
 }
 
 func removeHostsConfirmBox(maxWidth int, hosts []string, groupName string) string {
-	boxW := maxWidth
-	if boxW <= 0 {
-		boxW = confirmDialogMaxW
-	}
-	boxW = min(confirmDialogMaxW, max(24, boxW-confirmDialogMargin))
-	totalW := boxW + confirmDialogPadding
-	count := len(hosts)
-	title := confirmTitleStyle.Render("Remove hosts?")
-	footer := styledFooter("y/⏎ remove  n/Esc cancel")
-
-	parts := []string{focusedBoxTitleTop(totalW, title), focusedBoxLine(totalW, "")}
-	shown := hosts
-	extra := 0
-	if count > 4 {
-		shown = hosts[:4]
-		extra = count - 4
-	}
-	for i, h := range shown {
-		line := "  " + h
-		if i == len(shown)-1 && extra > 0 {
-			line += fmt.Sprintf("    +%d more", extra)
-		}
-		parts = append(parts, focusedBoxLine(totalW, line))
-	}
+	note := ""
 	if groupName != "" {
-		parts = append(parts, focusedBoxLine(totalW, ""))
-		parts = append(parts, focusedBoxLine(totalW, dim.Render("  from ")+groupName))
+		note = dim.Render("  from ") + groupName
 	}
-	parts = append(parts, focusedBoxLine(totalW, ""))
-	parts = append(parts, focusedBoxLine(totalW, "  "+footer))
-	parts = append(parts, focusedBoxLine(totalW, ""))
-	parts = append(parts, focusedBoxBottom(totalW))
-	return strings.Join(parts, "\n")
+	return renderHostListConfirmBox(maxWidth,
+		confirmTitleStyle.Render("Remove hosts?"),
+		styledFooter("y/⏎ remove  n/Esc cancel"),
+		hosts, note)
 }

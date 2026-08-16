@@ -141,7 +141,6 @@ type appModel struct {
 	hostForm           *hostFormModel
 	gpHosts            []string
 	gpReturnTo         screen
-	gpConnectAfterAdd  bool
 	returnTo           screen
 	returnGroupIndex   int
 	defaultsReturnTo   screen
@@ -420,7 +419,6 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.gp.hosts = append([]string(nil), m.gpHosts...)
 		m.gp.parentCrumb = m.breadcrumb()
 		m.gpReturnTo = screenHosts
-		m.gpConnectAfterAdd = false
 		if m.width > 0 && m.height > 0 {
 			mw, mh := pickerModalSize(m.width, m.height)
 			_, _ = m.gp.Update(tea.WindowSizeMsg{Width: mw, Height: mh})
@@ -519,7 +517,6 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.gp.hosts = append([]string(nil), m.gpHosts...)
 		m.gp.parentCrumb = m.breadcrumb()
 		m.gpReturnTo = msg.returnTo
-		m.gpConnectAfterAdd = false
 		if m.width > 0 && m.height > 0 {
 			mw, mh := pickerModalSize(m.width, m.height)
 			_, _ = m.gp.Update(tea.WindowSizeMsg{Width: mw, Height: mh})
@@ -536,10 +533,10 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 				err = fmt.Errorf("invalid group")
 			} else {
 				g := m.opts.Inventory.Groups[msg.groupIndex]
-				execCmd, toastResult, err = m.connectHosts(msg.hosts, &g, "")
+				execCmd, toastResult, err = m.connectHosts(msg.hosts, &g)
 			}
 		} else {
-			execCmd, toastResult, err = m.connectHosts(msg.hosts, nil, "")
+			execCmd, toastResult, err = m.connectHosts(msg.hosts, nil)
 		}
 		if err != nil {
 			toastResult = toast{text: err.Error(), level: toastErr}
@@ -597,57 +594,11 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case groupPickerCancelMsg:
 		m.gp = nil
 		m.gpHosts = nil
-		m.gpConnectAfterAdd = false
 		m.screen = m.gpReturnTo
 		return m, nil
 	case groupPickerDoneMsg:
 		if err := m.addHostsToGroup(msg.groupIndex, m.gpHosts); err != nil {
 			m.gp.toast = toast{text: err.Error(), level: toastErr}
-			return m, nil
-		}
-		if m.gpConnectAfterAdd {
-			var g *config.Group
-			if msg.groupIndex < 0 || msg.groupIndex >= len(m.opts.Inventory.Groups) {
-				err := fmt.Errorf("invalid group")
-				toastResult := toast{text: err.Error(), level: toastErr}
-				switch m.gpReturnTo {
-				case screenGroups:
-					m.groups.toast = toastResult
-				default:
-					m.hosts.toast = toastResult
-				}
-				m.gp = nil
-				m.gpHosts = nil
-				m.gpConnectAfterAdd = false
-				m.screen = m.gpReturnTo
-				return m, nil
-			}
-			gg := m.opts.Inventory.Groups[msg.groupIndex]
-			g = &gg
-			execCmd, toastResult, err := m.connectHosts(m.gpHosts, g, "")
-			if err != nil {
-				toastResult = toast{text: err.Error(), level: toastErr}
-			}
-			if !toastResult.empty() {
-				switch m.gpReturnTo {
-				case screenGroups:
-					m.groups.toast = toastResult
-				default:
-					m.hosts.toast = toastResult
-				}
-			}
-			m.gp = nil
-			m.gpHosts = nil
-			m.gpConnectAfterAdd = false
-			m.screen = m.gpReturnTo
-			if len(execCmd) != 0 {
-				m.execCmd = execCmd
-				return m, tea.Quit
-			}
-			if m.opts.Popup && !toastResult.empty() && toastResult.level != toastErr {
-				m.quitting = true
-				return m, tea.Quit
-			}
 			return m, nil
 		}
 		addedToast := toast{text: fmt.Sprintf("added %d", len(m.gpHosts)), level: toastOK}
@@ -714,14 +665,14 @@ func (m *appModel) doUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.hosts != nil {
-			m.hosts.refreshVisibleBadges()
+			m.hosts.refreshVisibleBadges(m.opts.Inventory)
 			m.hosts.reapplyFilter()
 		}
 		if m.gh != nil {
-			m.gh.refreshVisibleBadges()
+			m.gh.refreshVisibleBadges(m.opts.Inventory)
 		}
 		if m.picker != nil {
-			m.picker.refreshVisibleBadges()
+			m.picker.refreshVisibleBadges(m.opts.Inventory)
 		}
 		savedToast := toast{text: "saved", level: toastOK}
 		if hadForm {
@@ -954,7 +905,7 @@ func (m *appModel) saveDefaults(d config.Defaults) error {
 	}
 	if m.hosts != nil {
 		m.hosts.opts = m.opts
-		m.hosts.refreshVisibleBadges()
+		m.hosts.refreshVisibleBadges(m.opts.Inventory)
 	}
 	if m.groups != nil {
 		m.groups.opts = m.opts
@@ -962,11 +913,11 @@ func (m *appModel) saveDefaults(d config.Defaults) error {
 	}
 	if m.gh != nil {
 		m.gh.opts = m.opts
-		m.gh.refreshVisibleBadges()
+		m.gh.refreshVisibleBadges(m.opts.Inventory)
 	}
 	if m.picker != nil {
 		m.picker.opts = m.opts
-		m.picker.refreshVisibleBadges()
+		m.picker.refreshVisibleBadges(m.opts.Inventory)
 	}
 	if m.gp != nil {
 		m.gp.opts = m.opts

@@ -16,9 +16,8 @@ import (
 type paneBorderFormatsCancelMsg struct{}
 
 type paneBorderFormatsDoneMsg struct {
-	value       string
-	customFmts  []string
-	usedDefault bool
+	value      string
+	customFmts []string
 }
 
 type paneBorderFormatRow struct {
@@ -217,7 +216,7 @@ func (m *paneBorderFormatsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		if key.Matches(msg, m.keymap.Esc) || msg.String() == "esc" {
+		if key.Matches(msg, m.keymap.Esc) {
 			return m, func() tea.Msg { return paneBorderFormatsCancelMsg{} }
 		}
 
@@ -232,7 +231,7 @@ func (m *paneBorderFormatsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.selected = val
 			return m, func() tea.Msg {
-				return paneBorderFormatsDoneMsg{value: m.selected, customFmts: append([]string(nil), m.custom...), usedDefault: strings.TrimSpace(m.selected) == strings.TrimSpace(config.DefaultPaneBorderFormat)}
+				return paneBorderFormatsDoneMsg{value: m.selected, customFmts: append([]string(nil), m.custom...)}
 			}
 		}
 

@@ -4,30 +4,15 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 // helpContent generates the rendered help text body (without the box).
-func helpContent(title string, h help.Model, keys helpMap, innerW int) string {
+func helpContent(title string, keys helpMap) string {
 	header := helpTitleStyle.Render(title + " keybindings")
-
-	var body string
-	if len(keys.sections) > 0 {
-		body = renderHelpSections(keys.sections)
-	} else {
-		// Fallback to bubbles help renderer.
-		hh := h
-		hh.ShowAll = true
-		hh.Width = innerW
-		keyStyle := lipgloss.NewStyle().Foreground(cAccent).Bold(true)
-		hh.Styles.ShortKey = keyStyle
-		hh.Styles.FullKey = keyStyle
-		body = strings.TrimSpace(hh.View(keys))
-	}
-
+	body := renderHelpSections(keys.sections)
 	footer := styledFooter("Esc/? close  j/k scroll")
 	return header + "\n\n" + body + "\n\n" + footer
 }
@@ -76,11 +61,11 @@ func helpInnerWidth(boxW int) int {
 }
 
 // initHelpViewport creates a viewport sized for the help modal and sets its content.
-func initHelpViewport(width, height int, title string, h help.Model, keys helpMap) viewport.Model {
+func initHelpViewport(width, height int, title string, keys helpMap) viewport.Model {
 	boxW := helpBoxWidth(width)
 	innerW := helpInnerWidth(boxW)
 
-	content := helpContent(title, h, keys, innerW)
+	content := helpContent(title, keys)
 
 	// Size viewport to fit content, but cap at available terminal height.
 	contentLines := strings.Count(content, "\n") + 1
@@ -110,11 +95,11 @@ func updateHelpViewport(vp *viewport.Model, msg tea.KeyMsg) {
 	}
 }
 
-func renderHelpModal(width, height int, title string, h help.Model, keys helpMap) string {
-	return renderHelpModalWithVP(width, height, title, h, keys, nil)
+func renderHelpModal(width, height int, title string, keys helpMap) string {
+	return renderHelpModalWithVP(width, height, title, keys, nil)
 }
 
-func renderHelpModalWithVP(width, height int, title string, h help.Model, keys helpMap, vp *viewport.Model) string {
+func renderHelpModalWithVP(width, height int, title string, keys helpMap, vp *viewport.Model) string {
 	title = strings.TrimSpace(title)
 	if title == "" {
 		title = "Help"
@@ -122,14 +107,10 @@ func renderHelpModalWithVP(width, height int, title string, h help.Model, keys h
 
 	// Fallback for very early render before we have window size.
 	if width <= 0 || height <= 0 {
-		hh := h
-		hh.ShowAll = true
-		hh.Width = 0
-		return helpTitleStyle.Render(title) + "\n\n" + hh.View(keys)
+		return helpTitleStyle.Render(title) + "\n\n" + renderHelpSections(keys.sections)
 	}
 
 	boxW := helpBoxWidth(width)
-	innerW := helpInnerWidth(boxW)
 
 	if vp != nil {
 		content := vp.View()
@@ -152,7 +133,7 @@ func renderHelpModalWithVP(width, height int, title string, h help.Model, keys h
 	}
 
 	// Non-viewport fallback (legacy).
-	content := helpContent(title, h, keys, innerW)
+	content := helpContent(title, keys)
 	box := helpBoxStyle.Width(boxW).Render(content)
 	return withThemeBG(lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, box))
 }

@@ -7,11 +7,11 @@ import (
 	"github.com/al-bashkir/ssh-tui/internal/config"
 )
 
-func TestMerge(t *testing.T) {
+func TestApplyGroupOverDefaults(t *testing.T) {
 	d := config.Defaults{User: "", Port: 22, IdentityFile: "", ExtraArgs: []string{"-o", "A=B"}}
 	g := config.Group{User: "root", Port: 0, IdentityFile: "id", ExtraArgs: nil, RemoteCommand: ""}
 
-	got := Merge(d, g)
+	got := ApplyGroup(FromDefaults(d), g)
 	want := Settings{User: "root", Port: 22, IdentityFile: "id", ExtraArgs: []string{"-o", "A=B"}, RemoteCommand: ""}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got=%#v, want %#v", got, want)
