@@ -205,87 +205,59 @@ var accentPresets = map[string]lipgloss.AdaptiveColor{
 	"magenta": {Light: "127", Dark: "213"},
 }
 
+// Every style below is (re)built by rebuildAllStyles, which runs on every
+// color change and at startup via ApplyColorScheme. Declarations only.
 var (
-	statusOK   = lipgloss.NewStyle().Foreground(cOK)
-	statusWarn = lipgloss.NewStyle().Foreground(cWarn)
-	statusErr  = lipgloss.NewStyle().Foreground(cErr)
-	dim        = lipgloss.NewStyle().Foreground(cMuted)
+	statusOK   lipgloss.Style
+	statusWarn lipgloss.Style
+	statusErr  lipgloss.Style
+	dim        lipgloss.Style
 
 	// Extended style tokens.
-	hintStyle      = lipgloss.NewStyle().Foreground(cHint).Italic(true)
-	secondaryStyle = lipgloss.NewStyle().Foreground(cSecondary)
-	disabledStyle  = lipgloss.NewStyle().Foreground(cDisabled).Italic(true)
+	hintStyle      lipgloss.Style
+	secondaryStyle lipgloss.Style
+	disabledStyle  lipgloss.Style
 
-	frameStyle = lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(cFrameBorder).
-			Padding(0, 1)
+	focusedFrameStyle lipgloss.Style
 
-	focusedFrameStyle = lipgloss.NewStyle().
-				Border(lipgloss.NormalBorder()).
-				BorderForeground(cFocusedBorder).
-				Padding(0, 1)
+	headerStyle lipgloss.Style
+	footerStyle lipgloss.Style
 
-	headerStyle = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
-	footerStyle = lipgloss.NewStyle().Foreground(cMuted)
-
-	checkedStyle   = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
-	uncheckedStyle = lipgloss.NewStyle().Foreground(cMuted)
+	checkedStyle   lipgloss.Style
+	uncheckedStyle lipgloss.Style
 
 	// Active list row: solid background + foreground + bold — no inner styles allowed.
-	rowActiveStyle = lipgloss.NewStyle().Background(cRowActiveBG).Foreground(cRowActiveFG).Bold(true)
+	rowActiveStyle lipgloss.Style
 
-	badgeCfgStyle   = lipgloss.NewStyle().Foreground(cAccent).Background(lipgloss.AdaptiveColor{Light: "254", Dark: "235"}).Padding(0, 1).Bold(true)
-	badgeCountStyle = lipgloss.NewStyle().Foreground(cMuted).Background(lipgloss.AdaptiveColor{Light: "254", Dark: "236"}).Padding(0, 1)
-
+	badgeCfgStyle   lipgloss.Style
+	badgeCountStyle lipgloss.Style
 	// Selection count pill badge — inverted accent.
-	badgeSelStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.AdaptiveColor{Light: "255", Dark: "16"}).
-			Background(cAccent).
-			Padding(0, 1).
-			Bold(true)
+	badgeSelStyle lipgloss.Style
 
-	footerKeyStyle = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
+	footerKeyStyle lipgloss.Style
 
-	tabActiveStyle   = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
-	tabInactiveStyle = lipgloss.NewStyle().Foreground(cMuted)
+	tabActiveStyle   lipgloss.Style
+	tabInactiveStyle lipgloss.Style
 
-	searchUnfocused = lipgloss.NewStyle().Foreground(cSearchDim)
+	searchUnfocused lipgloss.Style
 
 	// Confirm dialog title (referenced in confirm_modal.go).
-	confirmTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(cErr)
+	confirmTitleStyle lipgloss.Style
 
 	// Help overlay (referenced in help_modal.go).
-	helpBoxStyle = lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(cFocusedBorder).
-			Padding(1, 2)
-	helpTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
+	helpBoxStyle   lipgloss.Style
+	helpTitleStyle lipgloss.Style
 
 	// Toast notifications (referenced in toast.go).
-	toastOKStyle   = lipgloss.NewStyle().Foreground(cOK)
-	toastInfoStyle = lipgloss.NewStyle().Foreground(cMuted)
-	toastErrStyle  = lipgloss.NewStyle().Foreground(cErr)
+	toastOKStyle   lipgloss.Style
+	toastInfoStyle lipgloss.Style
+	toastErrStyle  lipgloss.Style
 )
 
 func SetAccentColor(name string) {
 	// Switching to accent-only mode clears any theme background.
 	cBackground = ""
 	bgANSICode = ""
-	frameStyle = lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder()).
-		BorderForeground(cFrameBorder).
-		Padding(0, 1)
-	focusedFrameStyle = lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder()).
-		BorderForeground(cFocusedBorder).
-		Padding(0, 1)
-	tabBoxBorderStyle = lipgloss.NewStyle().Foreground(cFrameBorder)
-	tabBoxPadStyle = lipgloss.NewStyle()
-	helpBoxStyle = lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder()).
-		BorderForeground(cFocusedBorder).
-		Padding(1, 2)
 
 	name = strings.ToLower(strings.TrimSpace(name))
 	if name == "" || name == "default" {
@@ -369,15 +341,6 @@ func rebuildAllStyles() {
 	underlineFill = lipgloss.NewStyle().Foreground(cFrameBorder)
 
 	// Frame / modal chrome.
-	fs := lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder()).
-		BorderForeground(cFrameBorder).
-		Padding(0, 1)
-	if hasBG {
-		fs = fs.Background(bg)
-	}
-	frameStyle = fs
-
 	ffs := lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(cFocusedBorder).
@@ -484,7 +447,7 @@ func withThemeBG(s string) string {
 }
 
 func frameInnerSize(w, h int) (innerW, innerH int) {
-	// frameStyle has 1-char border on each side + horizontal padding=1.
+	// Frames have a 1-char border on each side + horizontal padding=1.
 	innerW = w - 2 - 2
 	innerH = h - 2
 	if innerW < 0 {
@@ -534,41 +497,8 @@ func joinHeader(width int, left, right string) string {
 	return left + strings.Repeat(" ", gap) + right
 }
 
-func renderFrame(w, h int, title string, headerRight string, body string, footer string) string {
-	if w <= 0 || h <= 0 {
-		// Early render fallback.
-		out := strings.TrimSpace(title)
-		if out != "" {
-			header := out
-			if strings.TrimSpace(headerRight) != "" {
-				header = header + " " + strings.TrimSpace(headerRight)
-			}
-			out = headerStyle.Render(header) + "\n"
-		}
-		out += strings.TrimSpace(body)
-		if strings.TrimSpace(footer) != "" {
-			out += "\n" + footer
-		}
-		return strings.TrimSpace(out)
-	}
-
-	innerW, _ := frameInnerSize(w, h)
-	head := headerStyle.Render(joinHeader(innerW, title, headerRight))
-	foot := ""
-	if strings.TrimSpace(footer) != "" {
-		foot = footer
-	}
-
-	content := strings.TrimRight(head+"\n"+body, "\n")
-	if foot != "" {
-		content = strings.TrimRight(content, "\n") + "\n" + foot
-	}
-	box := frameStyle.Width(w).Height(h).Render(content)
-	return withThemeBG(box)
-}
-
-// renderFocusedFrame is like renderFrame but uses focusedFrameStyle (cFocusedBorder).
-// Used for modal overlays that should stand out from the background tab box.
+// renderFocusedFrame renders a bordered modal frame using focusedFrameStyle
+// (cFocusedBorder) so overlays stand out from the background tab box.
 func renderFocusedFrame(w, h int, title string, headerRight string, body string, footer string) string {
 	if w <= 0 || h <= 0 {
 		out := strings.TrimSpace(title)

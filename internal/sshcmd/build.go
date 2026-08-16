@@ -69,10 +69,6 @@ func ApplyHost(base Settings, host config.Host) Settings {
 	return s
 }
 
-func Merge(defaults config.Defaults, group config.Group) Settings {
-	return ApplyGroup(FromDefaults(defaults), group)
-}
-
 // BuildCommand returns the full command slice starting with "ssh".
 func BuildCommand(host string, s Settings) ([]string, error) {
 	baseHost := strings.TrimSpace(host)

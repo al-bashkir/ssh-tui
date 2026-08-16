@@ -26,7 +26,6 @@ type Options struct {
 	Hosts         []string
 	SkippedLines  int
 	LoadErrors    []hosts.PathError
-	Debug         bool
 	Popup         bool // quit after any tmux connect (for tmux popup use)
 }
 

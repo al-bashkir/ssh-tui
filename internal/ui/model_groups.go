@@ -7,10 +7,7 @@ import (
 	"strings"
 
 	"github.com/al-bashkir/ssh-tui/internal/config"
-	"github.com/al-bashkir/ssh-tui/internal/sshcmd"
-	tmx "github.com/al-bashkir/ssh-tui/internal/tmux"
 
-	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -49,6 +46,7 @@ func (i groupRow) Description() string { return "" }
 func (i groupRow) FilterValue() string { return i.name }
 
 type groupsModel struct {
+	connectActions
 	opts Options
 
 	width  int
@@ -62,27 +60,18 @@ type groupsModel struct {
 	focus  focusState
 
 	keymap         keyMap
-	help           help.Model
 	showHelp       bool
 	helpVP         viewport.Model
 	cmdPrompt      bool
 	cmdPromptCrumb string
 	cmdInput       textinput.Model
-	toast          toast
 
-	confirmQuit         bool
-	confirmDelete       bool
-	deleteIndex         int
-	confirmConnect      bool
-	confirmConnectCount int
-	confirmConnectHosts []string
-	pendingConnectFn    func() tea.Cmd
+	confirmQuit   bool
+	confirmDelete bool
+	deleteIndex   int
 
 	prevSearch  string
 	navPendingG bool
-
-	quitting bool
-	execCmd  []string
 }
 
 func newGroupsModel(opts Options) *groupsModel {
@@ -107,7 +96,6 @@ func newGroupsModel(opts Options) *groupsModel {
 		search:   search,
 		focus:    focusList,
 		keymap:   defaultKeyMap(),
-		help:     help.New(),
 		showHelp: false,
 	}
 	return m
@@ -180,27 +168,8 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if m.cmdPrompt {
-			s := msg.String()
-			switch s {
-			case "esc":
-				m.cmdPrompt = false
-				m.cmdInput.Blur()
-				return m, nil
-			case "enter":
-				cmd := strings.TrimSpace(m.cmdInput.Value())
-				m.cmdPrompt = false
-				m.cmdInput.Blur()
-				m.cmdInput.SetValue("")
-				if cmd == "" {
-					return m, nil
-				}
-				m.toast = toast{}
-				return m, m.connectAllCmd(false, cmd)
-			default:
-				var cmdTea tea.Cmd
-				m.cmdInput, cmdTea = m.cmdInput.Update(msg)
-				return m, cmdTea
-			}
+			run := func(cmd string) tea.Cmd { return m.connectAllCmd(false, cmd) }
+			return m, handleCmdPromptKey(msg, &m.cmdPrompt, &m.cmdInput, &m.toast, run)
 		}
 
 		if handled, cmd := handleConfirmQuit(msg, &m.confirmQuit, &m.toast, &m.quitting, true); handled {
@@ -252,46 +221,15 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, m.keymap.Help) {
 			m.showHelp = !m.showHelp
 			if m.showHelp && m.width > 0 && m.height > 0 {
-				m.helpVP = initHelpViewport(m.width, m.height, "Groups", m.help, m.helpKeys())
+				m.helpVP = initHelpViewport(m.width, m.height, "Groups", m.helpKeys())
 			}
 			return m, nil
 		}
-		if key.Matches(msg, m.keymap.FocusSearch) {
-			m.focus = focusSearch
-			m.search.Focus()
-			setSearchBarFocused(&m.search, true)
-			return m, nil
-		}
-		if key.Matches(msg, m.keymap.ToggleFocus) {
-			if m.focus == focusSearch {
-				m.focus = focusList
-				m.search.Blur()
-				setSearchBarFocused(&m.search, false)
-			} else {
-				m.focus = focusSearch
-				m.search.Focus()
-				setSearchBarFocused(&m.search, true)
-			}
+		if handleFocusKeys(msg, m.keymap, &m.focus, &m.search) {
 			return m, nil
 		}
 		if key.Matches(msg, m.keymap.Esc) {
-			if m.focus == focusSearch && m.search.Value() == "" {
-				m.focus = focusList
-				m.search.Blur()
-				setSearchBarFocused(&m.search, false)
-				return m, nil
-			}
-			if m.search.Value() != "" {
-				m.search.SetValue("")
-				m.applyFilter("")
-				m.prevSearch = ""
-				if m.focus == focusSearch {
-					m.focus = focusList
-					m.search.Blur()
-					setSearchBarFocused(&m.search, false)
-				}
-				return m, nil
-			}
+			handleEscChain(&m.focus, &m.search, &m.prevSearch, 0, nil, m.applyFilter)
 			return m, nil
 		}
 		if key.Matches(msg, m.keymap.NewGroup) && m.focus == focusList {
@@ -330,14 +268,7 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if key.Matches(msg, m.keymap.Connect) {
 			if m.focus == focusSearch {
-				if len(m.list.Items()) == 0 && m.search.Value() != "" {
-					m.search.SetValue("")
-					m.applyFilter("")
-					m.prevSearch = ""
-				}
-				m.focus = focusList
-				m.search.Blur()
-				setSearchBarFocused(&m.search, false)
+				acceptSearch(&m.focus, &m.search, &m.prevSearch, len(m.list.Items()), m.applyFilter)
 				return m, nil
 			}
 			row, ok := m.list.SelectedItem().(groupRow)
@@ -352,21 +283,7 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			m.cmdPromptCrumb = "Groups > " + row.name
-			in := textinput.New()
-			in.CharLimit = 512
-			in.Prompt = "cmd: "
-			in.Placeholder = "run on remote, keep session open"
-			mw, mh := modalSize(m.width, m.height, 88, 9, 6, 10)
-			innerW, _ := frameInnerSize(mw, mh)
-			avail := innerW - len(in.Prompt)
-			if avail < 1 {
-				avail = 1
-			}
-			in.Width = min(70, avail)
-			in.Focus()
-			configureSearch(&in)
-			setSearchFocused(&in, true)
-			m.cmdInput = in
+			m.cmdInput = newCmdPromptInput(m.width, m.height)
 			m.cmdPrompt = true
 			return m, nil
 		}
@@ -402,7 +319,7 @@ func (m *groupsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *groupsModel) View() string {
 	if m.showHelp {
-		return renderHelpModalWithVP(m.width, m.height, "Groups", m.help, m.helpKeys(), &m.helpVP)
+		return renderHelpModalWithVP(m.width, m.height, "Groups", m.helpKeys(), &m.helpVP)
 	}
 	if m.cmdPrompt {
 		return renderCmdPromptModal(m.width, m.height, m.cmdPromptCrumb,
@@ -461,52 +378,6 @@ func (m *groupsModel) helpKeys() helpMap {
 	)
 
 	return helpMap{
-		short: []key.Binding{
-			m.list.KeyMap.CursorUp,
-			m.list.KeyMap.CursorDown,
-			m.keymap.ToggleFocus,
-			openGroup,
-			m.keymap.ConnectAll,
-			m.keymap.ConnectCmd,
-			m.keymap.OneWindow,
-			m.keymap.CustomHost,
-			m.keymap.NewGroup,
-			m.keymap.EditGroup,
-			m.keymap.Copy,
-			m.keymap.DeleteGroup,
-			m.keymap.AddHosts,
-			m.keymap.HostsTab,
-			m.keymap.Settings,
-			m.keymap.Help,
-			m.keymap.Quit,
-		},
-		full: [][]key.Binding{{
-			m.list.KeyMap.CursorUp,
-			m.list.KeyMap.CursorDown,
-			m.list.KeyMap.PrevPage,
-			m.list.KeyMap.NextPage,
-			m.list.KeyMap.GoToStart,
-			m.list.KeyMap.GoToEnd,
-		}, {
-			m.keymap.ToggleFocus,
-			m.keymap.FocusSearch,
-			m.keymap.HostsTab,
-			m.keymap.Settings,
-			m.keymap.Esc,
-			m.keymap.NewGroup,
-			m.keymap.EditGroup,
-			m.keymap.Copy,
-			m.keymap.DeleteGroup,
-		}, {
-			openGroup,
-			m.keymap.ConnectAll,
-			m.keymap.ConnectCmd,
-			m.keymap.OneWindow,
-			m.keymap.CustomHost,
-			m.keymap.AddHosts,
-			m.keymap.Help,
-			m.keymap.Quit,
-		}},
 		sections: []helpSection{
 			{title: "Navigation", keys: []key.Binding{
 				m.list.KeyMap.CursorUp,
@@ -562,11 +433,7 @@ func (m *groupsModel) applyFilter(query string) {
 	if query == "" {
 		rows = append([]groupRow(nil), m.allRows...)
 	} else {
-		names := make([]string, 0, len(m.allRows))
-		for _, r := range m.allRows {
-			names = append(names, r.name)
-		}
-		matches := fuzzy.Find(query, names)
+		matches := fuzzy.Find(query, groupNames(m.allRows))
 		rows = make([]groupRow, 0, len(matches))
 		for _, mt := range matches {
 			r := m.allRows[mt.Index]
@@ -588,46 +455,15 @@ func (m *groupsModel) applyFilter(query string) {
 			}
 		}
 	}
-	if prevName != "" {
-		for i, r := range rows {
-			if r.name == prevName {
-				m.list.Select(i)
-				return
-			}
-		}
-		rowSet := make(map[string]int, len(rows))
-		for i, r := range rows {
-			rowSet[r.name] = i
-		}
-		past := false
-		for _, r := range m.allRows {
-			if r.name == prevName {
-				past = true
-				continue
-			}
-			if past {
-				if idx, ok := rowSet[r.name]; ok {
-					m.list.Select(idx)
-					return
-				}
-			}
-		}
-		// Nothing after — try walking backward to the nearest item before prevName.
-		prevIdx := -1
-		for i, r := range m.allRows {
-			if r.name == prevName {
-				prevIdx = i
-				break
-			}
-		}
-		for j := prevIdx - 1; j >= 0; j-- {
-			if idx, ok := rowSet[m.allRows[j].name]; ok {
-				m.list.Select(idx)
-				return
-			}
-		}
+	restoreCursor(&m.list, groupNames(m.allRows), groupNames(rows), prevName)
+}
+
+func groupNames(rows []groupRow) []string {
+	names := make([]string, 0, len(rows))
+	for _, r := range rows {
+		names = append(names, r.name)
 	}
-	m.list.Select(0)
+	return names
 }
 
 func (m *groupsModel) connectAllCmd(oneWindow bool, remoteCmd string) tea.Cmd {
@@ -645,52 +481,7 @@ func (m *groupsModel) connectAllCmd(oneWindow bool, remoteCmd string) tea.Cmd {
 		m.toast = toast{text: "group has no hosts", level: toastWarn}
 		return nil
 	}
-	if oneWindow && !tmx.InTmux() {
-		m.toast = toast{text: "requires an active tmux session", level: toastWarn}
-		return nil
-	}
-
-	if len(g.Hosts) > connectThreshold(m.opts.Config.Defaults) {
-		m.confirmConnect = true
-		m.confirmConnectCount = len(g.Hosts)
-		m.confirmConnectHosts = append([]string(nil), g.Hosts...)
-		m.pendingConnectFn = func() tea.Cmd {
-			return m.doConnectAll(g, oneWindow, remoteCmd)
-		}
-		return nil
-	}
-	return m.doConnectAll(g, oneWindow, remoteCmd)
-}
-
-func (m *groupsModel) doConnectAll(g config.Group, oneWindow bool, remoteCmd string) tea.Cmd {
-	defaults := m.opts.Config.Defaults
-	rc := strings.TrimSpace(remoteCmd)
-
-	mode, inTmux := resolveConnectMode(defaults, &g)
-	if oneWindow {
-		// Force all hosts into a single tmux window with panes.
-		// Caller (connectAllCmd) already verified tmux is active when oneWindow=true.
-		mode = tmx.OpenPane
-	}
-
-	sshCmds := buildSSHCommands(g.Hosts, defaults, m.opts.Inventory, &g, func(s *sshcmd.Settings) {
-		if rc == "" {
-			return
-		}
-		s.ExtraArgs = ensureSSHForceTTY(s.ExtraArgs)
-		s.RemoteCommand = keepSessionOpenRemoteCmd(rc)
-	})
-
-	result, cmd := dispatchConnect(g.Hosts, sshCmds, defaults, &g, mode, inTmux)
-	if result.quit {
-		m.execCmd = result.execCmd
-		return tea.Quit
-	}
-	if !result.toast.empty() {
-		m.toast = result.toast
-		return nil
-	}
-	return cmd
+	return m.connect(append([]string(nil), g.Hosts...), m.opts, &g, oneWindow, remoteCmd)
 }
 
 func (m *groupsModel) IsQuitting() bool  { return m.quitting }

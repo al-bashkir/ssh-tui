@@ -9,7 +9,7 @@ import (
 
 func (m *hostsModel) View() string {
 	if m.showHelp {
-		return renderHelpModalWithVP(m.width, m.height, "Hosts", m.help, m.helpKeys(), &m.helpVP)
+		return renderHelpModalWithVP(m.width, m.height, "Hosts", m.helpKeys(), &m.helpVP)
 	}
 	if m.cmdPrompt {
 		return renderCmdPromptModal(m.width, m.height, m.cmdPromptCrumb,

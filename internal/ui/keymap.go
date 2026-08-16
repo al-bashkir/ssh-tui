@@ -23,7 +23,6 @@ type keyMap struct {
 	Connect     key.Binding
 	ConnectAll  key.Binding
 	OneWindow   key.Binding
-	Back        key.Binding
 	NewGroup    key.Binding
 	EditGroup   key.Binding
 	DeleteGroup key.Binding
@@ -115,10 +114,6 @@ func defaultKeyMap() keyMap {
 			key.WithKeys("o"),
 			key.WithHelp("o", "connect"),
 		),
-		Back: key.NewBinding(
-			key.WithKeys("backspace"),
-			key.WithHelp("backspace", "back"),
-		),
 		NewGroup: key.NewBinding(
 			key.WithKeys("n", "N"),
 			key.WithHelp("n", "new"),
@@ -148,12 +143,4 @@ func defaultKeyMap() keyMap {
 			key.WithHelp("H", "show hidden"),
 		),
 	}
-}
-
-func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.FocusSearch, k.ToggleSel, k.Connect, k.ConnectSame, k.ConnectAll, k.CustomHost, k.ConnectCmd, k.OneWindow, k.Settings, k.Reload, k.Help, k.Quit}
-}
-
-func (k keyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.FocusSearch, k.ToggleFocus, k.HostsTab, k.GroupsTab, k.Settings, k.Esc}, {k.ToggleSel, k.SelectAll, k.ClearSel, k.Connect, k.ConnectSame, k.ConnectAll, k.CustomHost, k.ConnectCmd, k.OneWindow}, {k.NewGroup, k.EditGroup, k.DeleteGroup, k.AddHosts, k.Back}, {k.Reload, k.Help, k.Quit}}
 }

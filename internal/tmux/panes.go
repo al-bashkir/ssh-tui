@@ -41,14 +41,10 @@ func ResolvePaneSettings(defaults config.Defaults, group *config.Group, paneCoun
 		}
 	}
 
+	// Anything that is not an explicit "vertical" splits horizontally.
 	splitFlag := "-h"
-	switch strings.ToLower(strings.TrimSpace(split)) {
-	case "vertical", "v":
+	if v := strings.ToLower(strings.TrimSpace(split)); v == "vertical" || v == "v" {
 		splitFlag = "-v"
-	case "horizontal", "h", "":
-		splitFlag = "-h"
-	default:
-		splitFlag = "-h"
 	}
 
 	layoutName := ""
@@ -73,14 +69,11 @@ func ResolvePaneSettings(defaults config.Defaults, group *config.Group, paneCoun
 		layoutName = strings.TrimSpace(layout)
 	}
 
+	// Sync is on unless explicitly disabled.
 	syncOn := true
 	switch strings.ToLower(strings.TrimSpace(sync)) {
 	case "off", "false", "0", "no":
 		syncOn = false
-	case "", "on", "true", "1", "yes":
-		syncOn = true
-	default:
-		syncOn = true
 	}
 
 	return PaneSettings{

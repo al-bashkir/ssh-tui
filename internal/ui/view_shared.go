@@ -4,9 +4,30 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/lipgloss"
 )
+
+// pickerStatusLine renders a modal picker's footer: caller-supplied counts,
+// then page indicator, toast, and the current search query.
+func pickerStatusLine(left string, l *list.Model, query string, t toast) string {
+	if l.Paginator.TotalPages > 1 {
+		left += "  " + dim.Render(fmt.Sprintf("pg:%d/%d", l.Paginator.Page+1, l.Paginator.TotalPages))
+	}
+	if !t.empty() {
+		left += "  " + renderToast(t)
+	}
+
+	searchInfo := "search"
+	if q := strings.TrimSpace(query); q != "" {
+		if len(q) > 40 {
+			q = q[:40] + "..."
+		}
+		searchInfo = "search: " + q
+	}
+	return left + "  " + statusOK.Render(searchInfo)
+}
 
 // renderCmdPromptModal renders the "connect with remote command" modal overlay.
 // parentCrumb is the breadcrumb prefix (e.g. "Hosts", "Groups > web").

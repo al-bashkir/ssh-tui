@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/al-bashkir/ssh-tui/internal/sshcmd"
-	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -31,7 +30,6 @@ type hostPickerModel struct {
 	focus  focusState
 
 	keymap   keyMap
-	help     help.Model
 	showHelp bool
 	toast    toast
 
@@ -53,19 +51,14 @@ func newHostPickerModel(opts Options) *hostPickerModel {
 	search := newSearchInput()
 
 	m := &hostPickerModel{
-		hostSelectList: hostSelectList{
-			allHosts: all,
-			filtered: append([]string(nil), all...),
-			selected: make(map[string]bool),
-		},
-		opts:     opts,
-		list:     l,
-		search:   search,
-		focus:    focusList,
-		keymap:   defaultKeyMap(),
-		help:     help.New(),
-		showHelp: false,
+		hostSelectList: newHostSelectList(all),
+		opts:           opts,
+		list:           l,
+		search:         search,
+		focus:          focusList,
+		keymap:         defaultKeyMap(),
 	}
+	m.bindList(&m.list)
 	return m
 }
 
@@ -96,42 +89,12 @@ func (m *hostPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if key.Matches(msg, m.keymap.Esc) {
-			if m.focus == focusSearch {
-				if m.search.Value() != "" {
-					m.search.SetValue("")
-					m.applyFilter("")
-					m.prevSearch = ""
-					return m, nil
-				}
-				m.focus = focusList
-				m.search.Blur()
-				setSearchBarFocused(&m.search, false)
-				return m, nil
-			}
-			if m.search.Value() != "" {
-				m.search.SetValue("")
-				m.applyFilter("")
-				m.prevSearch = ""
+			if handlePickerEsc(&m.focus, &m.search, &m.prevSearch, m.applyFilter) {
 				return m, nil
 			}
 			return m, func() tea.Msg { return hostPickerCancelMsg{} }
 		}
-		if key.Matches(msg, m.keymap.FocusSearch) {
-			m.focus = focusSearch
-			m.search.Focus()
-			setSearchBarFocused(&m.search, true)
-			return m, nil
-		}
-		if key.Matches(msg, m.keymap.ToggleFocus) {
-			if m.focus == focusSearch {
-				m.focus = focusList
-				m.search.Blur()
-				setSearchBarFocused(&m.search, false)
-			} else {
-				m.focus = focusSearch
-				m.search.Focus()
-				setSearchBarFocused(&m.search, true)
-			}
+		if handleFocusKeys(msg, m.keymap, &m.focus, &m.search) {
 			return m, nil
 		}
 		if key.Matches(msg, m.keymap.ToggleSel) && m.focus == focusList {
@@ -139,31 +102,19 @@ func (m *hostPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if key.Matches(msg, m.keymap.SelectAll) && m.focus == focusList {
-			for _, h := range m.filtered {
-				m.selected[h] = true
-			}
-			m.refreshVisibleSelection()
+			m.selectAllFiltered()
 			return m, nil
 		}
 		if key.Matches(msg, m.keymap.ClearSel) && m.focus == focusList {
-			m.selected = make(map[string]bool)
-			m.refreshVisibleSelection()
+			m.clearSelection()
 			return m, nil
 		}
 		if key.Matches(msg, m.keymap.Connect) {
 			if m.focus == focusSearch {
-				m.focus = focusList
-				m.search.Blur()
-				setSearchBarFocused(&m.search, false)
+				setFocus(&m.focus, &m.search, focusList)
 				return m, nil
 			}
-			picked := m.selectedHosts()
-			if len(picked) == 0 {
-				row, ok := m.list.SelectedItem().(hostRow)
-				if ok && row.host != "" {
-					picked = []string{row.host}
-				}
-			}
+			picked := m.hostsToOpen()
 			return m, func() tea.Msg { return hostPickerDoneMsg{hosts: picked} }
 		}
 	}
@@ -173,7 +124,7 @@ func (m *hostPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *hostPickerModel) View() string {
 	if m.showHelp {
-		return renderHelpModal(m.width, m.height, "Add Hosts", m.help, m.helpKeys())
+		return renderHelpModal(m.width, m.height, "Add Hosts", m.helpKeys())
 	}
 	innerW, _ := frameInnerSize(m.width, m.height)
 	sep := dim.Render(strings.Repeat("─", innerW))
@@ -194,33 +145,6 @@ func (m *hostPickerModel) helpKeys() helpMap {
 	)
 
 	return helpMap{
-		short: []key.Binding{
-			m.list.KeyMap.CursorUp,
-			m.list.KeyMap.CursorDown,
-			m.keymap.FocusSearch,
-			m.keymap.ToggleSel,
-			add,
-			esc,
-			m.keymap.Help,
-		},
-		full: [][]key.Binding{{
-			m.list.KeyMap.CursorUp,
-			m.list.KeyMap.CursorDown,
-			m.list.KeyMap.PrevPage,
-			m.list.KeyMap.NextPage,
-		}, {
-			m.keymap.FocusSearch,
-			m.keymap.ToggleFocus,
-			esc,
-		}, {
-			m.keymap.ToggleSel,
-			m.keymap.SelectAll,
-			m.keymap.ClearSel,
-			add,
-		}, {
-			esc,
-			m.keymap.Help,
-		}},
 		sections: []helpSection{
 			{title: "Navigation", keys: []key.Binding{
 				m.list.KeyMap.CursorUp,
@@ -245,45 +169,10 @@ func (m *hostPickerModel) helpKeys() helpMap {
 }
 
 func (m *hostPickerModel) statusLine() string {
-	shown := len(m.list.Items())
-	total := len(m.allHosts)
-	sel := len(m.selected)
-	pg := ""
-	if m.list.Paginator.TotalPages > 1 {
-		pg = fmt.Sprintf("pg:%d/%d", m.list.Paginator.Page+1, m.list.Paginator.TotalPages)
-	}
-
-	q := strings.TrimSpace(m.search.Value())
-	searchInfo := "search"
-	if q != "" {
-		if len(q) > 40 {
-			q = q[:40] + "..."
-		}
-		searchInfo = "search: " + q
-	}
-
-	left := fmt.Sprintf("hosts: %d/%d  sel:%d", shown, total, sel)
-	if pg != "" {
-		left += "  " + dim.Render(pg)
-	}
-	if !m.toast.empty() {
-		left += "  " + renderToast(m.toast)
-	}
-	return left + "  " + statusOK.Render(searchInfo)
+	left := fmt.Sprintf("hosts: %d/%d  sel:%d", len(m.list.Items()), len(m.allHosts), len(m.selected))
+	return pickerStatusLine(left, &m.list, m.search.Value(), m.toast)
 }
 
 func (m *hostPickerModel) applyFilter(query string) {
-	m.hostSelectList.applyFilter(&m.list, query, m.opts.Inventory, nil, nil)
-}
-
-func (m *hostPickerModel) refreshVisibleSelection() {
-	m.hostSelectList.refreshVisibleSelection(&m.list)
-}
-
-func (m *hostPickerModel) refreshVisibleBadges() {
-	m.hostSelectList.refreshVisibleBadges(&m.list, m.opts.Inventory)
-}
-
-func (m *hostPickerModel) toggleCurrentSelection() {
-	m.hostSelectList.toggleCurrentSelection(&m.list)
+	m.filter(query, m.opts.Inventory, nil, nil)
 }

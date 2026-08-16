@@ -231,16 +231,12 @@ func (m *formModel) isFocusedFieldDisabled() bool {
 // ---------------------------------------------------------------------------
 
 // applyFocusStyles updates text input accent styling to match current focus.
+// Also used to re-apply styles after a theme/accent change.
 func (m *formModel) applyFocusStyles() {
 	focusedKey := m.focusedFieldKey()
 	for i := range m.inputs {
 		setSearchFocused(&m.inputs[i].input, m.inputs[i].key == focusedKey)
 	}
-}
-
-// refreshAccentStyles re-applies accent styles after a theme/accent change.
-func (m *formModel) refreshAccentStyles() {
-	m.applyFocusStyles()
 }
 
 // setFocusIdx moves focus to the given item index.

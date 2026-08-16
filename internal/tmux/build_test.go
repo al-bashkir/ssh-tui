@@ -37,12 +37,6 @@ func TestCmdBuilders(t *testing.T) {
 	if got, want := NewWindowCmd("h", ssh), []string{"tmux", "new-window", "-n", "h", "--", "ssh", "-p", "2222", "host"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("NewWindowCmd=%v want=%v", got, want)
 	}
-	if got, want := SplitPaneCmd(ssh), []string{"tmux", "split-window", "-h", "--", "ssh", "-p", "2222", "host"}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("SplitPaneCmd=%v want=%v", got, want)
-	}
-	if got, want := SplitPaneCmdFlag("-v", ssh), []string{"tmux", "split-window", "-v", "--", "ssh", "-p", "2222", "host"}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("SplitPaneCmdFlag=%v want=%v", got, want)
-	}
 	if got, want := NewSessionCmd("sess", ssh), []string{"tmux", "new-session", "-A", "-s", "sess", "--", "ssh", "-p", "2222", "host"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("NewSessionCmd=%v want=%v", got, want)
 	}

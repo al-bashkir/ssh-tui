@@ -27,18 +27,7 @@ type groupFormSaveMsg struct {
 // ---------------------------------------------------------------------------
 
 func groupSchema(defs config.Defaults) formSchema {
-	portPlaceholder := "22"
-	if defs.Port != 0 {
-		portPlaceholder = strconv.Itoa(defs.Port)
-	}
-	identPlaceholder := strings.TrimSpace(defs.IdentityFile)
-	if identPlaceholder == "" {
-		identPlaceholder = "~/.ssh/id_ed25519"
-	}
-	extraPlaceholder := strings.Join(defs.ExtraArgs, " ")
-	if extraPlaceholder == "" {
-		extraPlaceholder = "-o Option=value ..."
-	}
+	portPlaceholder, identPlaceholder, extraPlaceholder := sshPlaceholders(defs)
 
 	return formSchema{
 		Sections: []sectionDef{
@@ -163,7 +152,7 @@ type groupFormModel struct {
 }
 
 func (m *groupFormModel) refreshAccentStyles() {
-	m.form.refreshAccentStyles()
+	m.form.applyFocusStyles()
 	if m.borderPicker != nil {
 		m.borderPicker.refreshAccentStyles()
 	}
@@ -278,56 +267,11 @@ func (m *groupFormModel) View() string {
 	if m.borderPicker != nil {
 		return placeCentered(m.width, m.height, m.borderPicker.View())
 	}
-	if m.width <= 0 || m.height <= 0 {
-		return ""
+
+	name := m.group.Name
+	if strings.TrimSpace(name) == "" {
+		name = m.form.value("name")
 	}
-
-	innerW := max(0, m.width-2)
-
-	// Build content lines from the form.
-	lines, focusLine := m.form.renderFormContent(innerW)
-
-	// Footer.
-	footer := m.form.renderFooter()
-
-	// Scroll.
-	innerH := max(0, m.height-2)
-	reserved := 2 // sep + footer
-	if !m.toast.empty() {
-		reserved++
-	}
-	visibleH := innerH - reserved
-	if visibleH < 1 {
-		visibleH = 1
-	}
-	start, end := formScrollWindow(len(lines), visibleH, focusLine)
-	visible := lines[start:end]
-
-	// Overlay picker popup as a dropdown below the focused field.
-	if m.form.picker != nil {
-		focusRow := focusLine - start
-		visible = m.form.overlayPickerOnVisible(visible, focusRow, innerW)
-	}
-
-	// Title / breadcrumb.
-	title := "Create Group"
-	if m.index >= 0 {
-		name := strings.TrimSpace(m.group.Name)
-		if name == "" {
-			name = strings.TrimSpace(m.form.value("name"))
-		}
-		if name != "" {
-			title = breadcrumbTitle(m.parentCrumb, name)
-		} else {
-			title = breadcrumbTitle(m.parentCrumb, "Edit Group")
-		}
-	} else {
-		title = breadcrumbTitle(m.parentCrumb, "Create Group")
-	}
-
-	toastStr := ""
-	if !m.toast.empty() {
-		toastStr = renderToast(m.toast)
-	}
-	return renderFormBox(m.width, title, visible, visibleH, toastStr, footer)
+	title := formTitle(m.parentCrumb, m.index, name, "Create Group", "Edit Group")
+	return renderModalForm(&m.form, m.width, m.height, title, m.toast)
 }

@@ -9,9 +9,7 @@ import (
 	"github.com/al-bashkir/ssh-tui/internal/config"
 	"github.com/al-bashkir/ssh-tui/internal/hosts"
 	"github.com/al-bashkir/ssh-tui/internal/sshcmd"
-	tmx "github.com/al-bashkir/ssh-tui/internal/tmux"
 
-	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -60,13 +58,13 @@ type knownHostsReloadMsg struct {
 
 type hostsModel struct {
 	hostSelectList
+	connectActions
 	opts Options
 
 	width  int
 	height int
 
 	keymap keyMap
-	help   help.Model
 
 	list   list.Model
 	search textinput.Model
@@ -76,21 +74,13 @@ type hostsModel struct {
 	showHidden  bool
 	prevSearch  string
 	navPendingG bool
-	toast       toast
 	confirmQuit bool
 
-	confirmConnect      bool
-	confirmConnectCount int
-	confirmConnectHosts []string
-	pendingConnectFn    func() tea.Cmd
-
-	quitting       bool
 	showHelp       bool
 	helpVP         viewport.Model
 	cmdPrompt      bool
 	cmdPromptCrumb string
 	cmdInput       textinput.Model
-	execCmd        []string
 }
 
 func newHostsModel(opts Options) *hostsModel {
@@ -108,18 +98,14 @@ func newHostsModel(opts Options) *hostsModel {
 	search := newSearchInput()
 
 	m := &hostsModel{
-		hostSelectList: hostSelectList{
-			allHosts: append([]string(nil), opts.Hosts...),
-			filtered: append([]string(nil), opts.Hosts...),
-			selected: make(map[string]bool),
-		},
-		opts:   opts,
-		keymap: defaultKeyMap(),
-		help:   help.New(),
-		list:   l,
-		search: search,
-		focus:  focusList,
+		hostSelectList: newHostSelectList(opts.Hosts),
+		opts:           opts,
+		keymap:         defaultKeyMap(),
+		list:           l,
+		search:         search,
+		focus:          focusList,
 	}
+	m.bindList(&m.list)
 	if !opts.Config.Defaults.LoadKnownHosts {
 		m.keymap.Reload.SetEnabled(false)
 	}
@@ -176,27 +162,7 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if m.cmdPrompt {
-			s := msg.String()
-			switch s {
-			case "esc":
-				m.cmdPrompt = false
-				m.cmdInput.Blur()
-				return m, nil
-			case "enter":
-				cmd := strings.TrimSpace(m.cmdInput.Value())
-				m.cmdPrompt = false
-				m.cmdInput.Blur()
-				m.cmdInput.SetValue("")
-				if cmd == "" {
-					return m, nil
-				}
-				m.toast = toast{}
-				return m, m.handleConnectWithRemoteCommand(cmd)
-			default:
-				var cmdTea tea.Cmd
-				m.cmdInput, cmdTea = m.cmdInput.Update(msg)
-				return m, cmdTea
-			}
+			return m, handleCmdPromptKey(msg, &m.cmdPrompt, &m.cmdInput, &m.toast, m.handleConnectWithRemoteCommand)
 		}
 
 		if handled, cmd := handleConfirmQuit(msg, &m.confirmQuit, &m.toast, &m.quitting, true); handled {
@@ -234,52 +200,17 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, m.keymap.Help) {
 			m.showHelp = !m.showHelp
 			if m.showHelp && m.width > 0 && m.height > 0 {
-				m.helpVP = initHelpViewport(m.width, m.height, "Hosts", m.help, m.helpKeys())
+				m.helpVP = initHelpViewport(m.width, m.height, "Hosts", m.helpKeys())
 			}
 			return m, nil
 		}
-		if key.Matches(msg, m.keymap.FocusSearch) {
-			m.focus = focusSearch
-			m.search.Focus()
-			setSearchBarFocused(&m.search, true)
-			return m, nil
-		}
-		if key.Matches(msg, m.keymap.ToggleFocus) {
-			if m.focus == focusSearch {
-				m.focus = focusList
-				m.search.Blur()
-				setSearchBarFocused(&m.search, false)
-			} else {
-				m.focus = focusSearch
-				m.search.Focus()
-				setSearchBarFocused(&m.search, true)
-			}
+		if handleFocusKeys(msg, m.keymap, &m.focus, &m.search) {
 			return m, nil
 		}
 		if key.Matches(msg, m.keymap.Esc) {
 			// Esc priority: blur search → clear selection → clear search.
-			if m.focus == focusSearch && m.search.Value() == "" {
-				m.focus = focusList
-				m.search.Blur()
-				setSearchBarFocused(&m.search, false)
-				return m, nil
-			}
-			if len(m.selected) > 0 {
-				m.selected = make(map[string]bool)
-				m.refreshVisibleSelection()
-				return m, nil
-			}
-			if m.search.Value() != "" {
-				m.search.SetValue("")
-				m.applyFilter("")
-				m.prevSearch = ""
-				if m.focus == focusSearch {
-					m.focus = focusList
-					m.search.Blur()
-					setSearchBarFocused(&m.search, false)
-				}
-				return m, nil
-			}
+			handleEscChain(&m.focus, &m.search, &m.prevSearch, len(m.selected), m.clearSelection, m.applyFilter)
+			return m, nil
 		}
 
 		if key.Matches(msg, m.keymap.Reload) && m.focus != focusSearch {
@@ -300,15 +231,11 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if key.Matches(msg, m.keymap.SelectAll) && m.focus == focusList {
-			for _, h := range m.filtered {
-				m.selected[h] = true
-			}
-			m.refreshVisibleSelection()
+			m.selectAllFiltered()
 			return m, nil
 		}
 		if key.Matches(msg, m.keymap.ClearSel) && m.focus == focusList {
-			m.selected = make(map[string]bool)
-			m.refreshVisibleSelection()
+			m.clearSelection()
 			return m, nil
 		}
 		if key.Matches(msg, m.keymap.ConnectCmd) && m.focus == focusList {
@@ -316,62 +243,30 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(targets) == 0 {
 				return m, nil
 			}
-			switch len(targets) {
-			case 1:
-				m.cmdPromptCrumb = "Hosts > " + targets[0]
-			default:
-				m.cmdPromptCrumb = fmt.Sprintf("Hosts > %d selected", len(targets))
-			}
-			in := textinput.New()
-			in.CharLimit = 512
-			in.Prompt = "cmd: "
-			in.Placeholder = "run on remote, keep session open"
-			mw, mh := modalSize(m.width, m.height, 88, 9, 6, 10)
-			innerW, _ := frameInnerSize(mw, mh)
-			avail := innerW - len(in.Prompt)
-			if avail < 1 {
-				avail = 1
-			}
-			in.Width = min(70, avail)
-			in.Focus()
-			configureSearch(&in)
-			setSearchFocused(&in, true)
-			m.cmdInput = in
+			m.cmdPromptCrumb = cmdPromptCrumb("Hosts", targets)
+			m.cmdInput = newCmdPromptInput(m.width, m.height)
 			m.cmdPrompt = true
 			return m, nil
 		}
 		if key.Matches(msg, m.keymap.Connect) {
 			// In search focus, Enter should accept the query and go back to list.
 			if m.focus == focusSearch {
-				if len(m.list.Items()) == 0 && m.search.Value() != "" {
-					m.search.SetValue("")
-					m.applyFilter("")
-					m.prevSearch = ""
-				}
-				m.focus = focusList
-				m.search.Blur()
-				setSearchBarFocused(&m.search, false)
+				acceptSearch(&m.focus, &m.search, &m.prevSearch, len(m.list.Items()), m.applyFilter)
 				return m, nil
 			}
 			m.toast = toast{}
-			return m, m.handleConnect()
+			return m, m.connect(m.hostsToOpen(), m.opts, nil, false, "")
 		}
 		if key.Matches(msg, m.keymap.OneWindow) && m.focus == focusList {
 			m.toast = toast{}
-			return m, m.openOneWindow()
+			return m, m.connect(m.hostsToOpen(), m.opts, nil, true, "")
 		}
 		if key.Matches(msg, m.keymap.ConnectSame) && m.focus == focusList {
 			m.toast = toast{}
-			return m, m.handleConnectSame()
+			return m, m.connectSameWindow(m.hostsToOpen(), m.opts, nil)
 		}
 		if key.Matches(msg, m.keymap.AddHosts) && m.focus == focusList {
-			hostsToAdd := m.selectedHosts()
-			if len(hostsToAdd) == 0 {
-				row, ok := m.list.SelectedItem().(hostRow)
-				if ok && row.host != "" {
-					hostsToAdd = []string{row.host}
-				}
-			}
+			hostsToAdd := m.hostsToOpen()
 			if len(hostsToAdd) == 0 {
 				m.toast = toast{text: "no host selected", level: toastWarn}
 				return m, nil
@@ -382,26 +277,10 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return openCustomHostMsg{returnTo: screenHosts, groupIndex: -1} }
 		}
 		if key.Matches(msg, m.keymap.HostConfig) && m.focus == focusList {
-			row, ok := m.list.SelectedItem().(hostRow)
-			if !ok || strings.TrimSpace(row.host) == "" {
-				m.toast = toast{text: "no host selected", level: toastWarn}
-				return m, nil
-			}
-			return m, func() tea.Msg { return openHostFormMsg{host: row.host, returnTo: screenHosts} }
+			return m, openHostConfigCmd(m.currentHost(), screenHosts, &m.toast)
 		}
 		if key.Matches(msg, m.keymap.Copy) && m.focus == focusList {
-			row, ok := m.list.SelectedItem().(hostRow)
-			if !ok || strings.TrimSpace(row.host) == "" {
-				m.toast = toast{text: "no host selected", level: toastWarn}
-				return m, nil
-			}
-			hc, ok := sshcmd.FindHostConfig(m.opts.Inventory.Hosts, row.host)
-			if !ok {
-				m.toast = toast{text: "no host config", level: toastWarn}
-				return m, nil
-			}
-			hc.Host = suggestCopyHostKey(m.opts.Inventory, hc.Host)
-			return m, func() tea.Msg { return openHostFormPrefillMsg{host: hc, returnTo: screenHosts} }
+			return m, copyHostConfigCmd(m.opts.Inventory, m.currentHost(), screenHosts, &m.toast)
 		}
 		if key.Matches(msg, m.keymap.HideHost) && m.focus == focusList {
 			return m, m.toggleCurrentHidden()
@@ -429,30 +308,18 @@ func (m *hostsModel) applyFilter(query string) {
 	if !m.showHidden {
 		excludeFn = isHostHidden
 	}
-	m.hostSelectList.applyFilter(&m.list, query, m.opts.Inventory, excludeFn, isHostHidden)
+	m.filter(query, m.opts.Inventory, excludeFn, isHostHidden)
 }
 
 type toastMsg toast
 
-func (m *hostsModel) refreshVisibleSelection() {
-	m.hostSelectList.refreshVisibleSelection(&m.list)
-}
-
-func (m *hostsModel) refreshVisibleBadges() {
-	m.hostSelectList.refreshVisibleBadges(&m.list, m.opts.Inventory)
-}
-
-func (m *hostsModel) toggleCurrentSelection() {
-	m.hostSelectList.toggleCurrentSelection(&m.list)
-}
-
 func (m *hostsModel) toggleCurrentHidden() tea.Cmd {
-	row, ok := m.list.SelectedItem().(hostRow)
-	if !ok || row.host == "" {
+	host := m.currentHost()
+	if host == "" {
 		return nil
 	}
-	hide := !isHostHidden(m.opts.Inventory, row.host)
-	return func() tea.Msg { return toggleHiddenHostMsg{host: row.host, hide: hide} }
+	hide := !isHostHidden(m.opts.Inventory, host)
+	return func() tea.Msg { return toggleHiddenHostMsg{host: host, hide: hide} }
 }
 
 func (m *hostsModel) reapplyFilter() {
@@ -469,210 +336,16 @@ func (m *hostsModel) hiddenCount() int {
 	return count
 }
 
-func (m *hostsModel) hostsToOpen() []string {
-	if sel := m.selectedHosts(); len(sel) > 0 {
-		return sel
-	}
-	row, ok := m.list.SelectedItem().(hostRow)
-	if ok && row.host != "" {
-		return []string{row.host}
-	}
-	return nil
-}
-
-func (m *hostsModel) buildSSHCmds(hosts []string, modifySettings func(*sshcmd.Settings)) [][]string {
-	return buildSSHCommands(hosts, m.opts.Config.Defaults, m.opts.Inventory, nil, modifySettings)
-}
-
-func connectThreshold(d config.Defaults) int {
-	if d.ConnectConfirmThreshold < 0 {
-		return 5
-	}
-	return d.ConnectConfirmThreshold
-}
-
-func (m *hostsModel) handleConnect() tea.Cmd {
-	hosts := m.hostsToOpen()
-	if len(hosts) == 0 {
-		m.toast = toast{text: "no host selected", level: toastWarn}
-		return nil
-	}
-
-	doConnect := func() tea.Cmd {
-		defaults := m.opts.Config.Defaults
-		mode, inTmux := resolveConnectMode(defaults, nil)
-		sshCmds := m.buildSSHCmds(hosts, nil)
-
-		res, cmd := dispatchConnect(hosts, sshCmds, defaults, nil, mode, inTmux)
-		if !res.toast.empty() {
-			m.toast = res.toast
-		}
-		if res.quit {
-			m.execCmd = res.execCmd
-			return tea.Quit
-		}
-		return cmd
-	}
-
-	if len(hosts) > connectThreshold(m.opts.Config.Defaults) {
-		m.confirmConnect = true
-		m.confirmConnectCount = len(hosts)
-		m.confirmConnectHosts = hosts
-		m.pendingConnectFn = doConnect
-		return nil
-	}
-	return doConnect()
-}
-
 func (m *hostsModel) handleConnectWithRemoteCommand(remoteCmd string) tea.Cmd {
-	hosts := m.hostsToOpen()
-	if len(hosts) == 0 {
-		m.toast = toast{text: "no host selected", level: toastWarn}
-		return nil
-	}
-
-	remoteCmd = strings.TrimSpace(remoteCmd)
-	if remoteCmd == "" {
+	if strings.TrimSpace(remoteCmd) == "" {
 		m.toast = toast{text: "command required", level: toastWarn}
 		return nil
 	}
-
-	doConnect := func() tea.Cmd {
-		defaults := m.opts.Config.Defaults
-		mode, inTmux := resolveConnectMode(defaults, nil)
-		sshCmds := m.buildSSHCmds(hosts, func(s *sshcmd.Settings) {
-			s.ExtraArgs = ensureSSHForceTTY(s.ExtraArgs)
-			s.RemoteCommand = keepSessionOpenRemoteCmd(remoteCmd)
-		})
-
-		res, cmd := dispatchConnect(hosts, sshCmds, defaults, nil, mode, inTmux)
-		if !res.toast.empty() {
-			m.toast = res.toast
-		}
-		if res.quit {
-			m.execCmd = res.execCmd
-			return tea.Quit
-		}
-		return cmd
-	}
-
-	if len(hosts) > connectThreshold(m.opts.Config.Defaults) {
-		m.confirmConnect = true
-		m.confirmConnectCount = len(hosts)
-		m.confirmConnectHosts = hosts
-		m.pendingConnectFn = doConnect
-		return nil
-	}
-	return doConnect()
-}
-
-func (m *hostsModel) handleConnectSame() tea.Cmd {
-	hosts := m.hostsToOpen()
-	if len(hosts) == 0 {
-		m.toast = toast{text: "no host selected", level: toastWarn}
-		return nil
-	}
-	if len(hosts) > 1 {
-		m.toast = toast{text: "select single host for same-window connect", level: toastWarn}
-		return nil
-	}
-	sshCmds := m.buildSSHCmds(hosts, nil)
-	m.execCmd = sshCmds[0]
-	return tea.Quit
-}
-
-func (m *hostsModel) openOneWindow() tea.Cmd {
-	hosts := m.hostsToOpen()
-	if len(hosts) == 0 {
-		m.toast = toast{text: "no host selected", level: toastWarn}
-		return nil
-	}
-	if !tmx.InTmux() {
-		m.toast = toast{text: "requires an active tmux session", level: toastWarn}
-		return nil
-	}
-
-	doConnect := func() tea.Cmd {
-		sshCmds := m.buildSSHCmds(hosts, nil)
-		defaults := m.opts.Config.Defaults
-		return func() tea.Msg {
-			ps := tmx.ResolvePaneSettings(defaults, nil, len(sshCmds))
-			err := tmx.OpenOneWindow(sshCmds, tmx.OneWindowOpts{
-				WindowName:       tmx.WindowName(hosts[0]),
-				PaneTitles:       hosts,
-				SplitFlag:        ps.SplitFlag,
-				Layout:           ps.Layout,
-				SyncPanes:        ps.SyncPanes,
-				PaneBorderFormat: ps.BorderFormat,
-				PaneBorderStatus: ps.BorderStatus,
-			})
-			if err != nil {
-				return toastMsg(toast{text: err.Error(), level: toastErr})
-			}
-			return toastMsg(toast{text: fmt.Sprintf("opened %d in one window", len(sshCmds)), level: toastInfo})
-		}
-	}
-
-	if len(hosts) > connectThreshold(m.opts.Config.Defaults) {
-		m.confirmConnect = true
-		m.confirmConnectCount = len(hosts)
-		m.confirmConnectHosts = hosts
-		m.pendingConnectFn = doConnect
-		return nil
-	}
-	return doConnect()
+	return m.connect(m.hostsToOpen(), m.opts, nil, false, remoteCmd)
 }
 
 func (m *hostsModel) helpKeys() helpMap {
 	return helpMap{
-		short: []key.Binding{
-			m.list.KeyMap.CursorUp,
-			m.list.KeyMap.CursorDown,
-			m.keymap.ToggleFocus,
-			m.keymap.ToggleSel,
-			m.keymap.Connect,
-			m.keymap.ConnectSame,
-			m.keymap.ConnectCmd,
-			m.keymap.OneWindow,
-			m.keymap.AddHosts,
-			m.keymap.CustomHost,
-			m.keymap.HostConfig,
-			m.keymap.Copy,
-			m.keymap.Settings,
-			m.keymap.Reload,
-			m.keymap.GroupsTab,
-			m.keymap.Help,
-			m.keymap.Quit,
-		},
-		full: [][]key.Binding{{
-			m.list.KeyMap.CursorUp,
-			m.list.KeyMap.CursorDown,
-			m.list.KeyMap.PrevPage,
-			m.list.KeyMap.NextPage,
-			m.list.KeyMap.GoToStart,
-			m.list.KeyMap.GoToEnd,
-		}, {
-			m.keymap.ToggleFocus,
-			m.keymap.FocusSearch,
-			m.keymap.GroupsTab,
-			m.keymap.Settings,
-			m.keymap.Esc,
-			m.keymap.ToggleSel,
-			m.keymap.SelectAll,
-			m.keymap.ClearSel,
-		}, {
-			m.keymap.Connect,
-			m.keymap.ConnectSame,
-			m.keymap.ConnectCmd,
-			m.keymap.OneWindow,
-			m.keymap.AddHosts,
-			m.keymap.CustomHost,
-			m.keymap.HostConfig,
-			m.keymap.Copy,
-			m.keymap.Reload,
-			m.keymap.Help,
-			m.keymap.Quit,
-		}},
 		sections: []helpSection{
 			{title: "Navigation", keys: []key.Binding{
 				m.list.KeyMap.CursorUp,

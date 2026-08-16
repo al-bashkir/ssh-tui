@@ -274,7 +274,7 @@ type defaultsFormModel struct {
 }
 
 func (m *defaultsFormModel) refreshAccentStyles() {
-	m.form.refreshAccentStyles()
+	m.form.applyFocusStyles()
 	if m.borderPicker != nil {
 		m.borderPicker.refreshAccentStyles()
 	}

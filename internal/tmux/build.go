@@ -57,21 +57,6 @@ func NewWindowCmd(name string, sshCmd []string) []string {
 	return cmd
 }
 
-func SplitPaneCmd(sshCmd []string) []string {
-	return SplitPaneCmdFlag("-h", sshCmd)
-}
-
-func SplitPaneCmdFlag(splitFlag string, sshCmd []string) []string {
-	splitFlag = strings.TrimSpace(splitFlag)
-	if splitFlag != "-h" && splitFlag != "-v" {
-		splitFlag = "-h"
-	}
-
-	cmd := []string{"tmux", "split-window", splitFlag, "--"}
-	cmd = append(cmd, sshCmd...)
-	return cmd
-}
-
 func NewSessionCmd(session string, sshCmd []string) []string {
 	session = strings.TrimSpace(session)
 	if session == "" {

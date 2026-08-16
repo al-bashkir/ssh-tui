@@ -1,8 +1,66 @@
 package ui
 
 import (
+	"strconv"
 	"strings"
+
+	"github.com/al-bashkir/ssh-tui/internal/config"
 )
+
+// sshPlaceholders returns the placeholders for the shared SSH fields, showing
+// the inherited defaults where they are set.
+func sshPlaceholders(defs config.Defaults) (port, identity, extraArgs string) {
+	port = "22"
+	if defs.Port != 0 {
+		port = strconv.Itoa(defs.Port)
+	}
+	identity = strings.TrimSpace(defs.IdentityFile)
+	if identity == "" {
+		identity = "~/.ssh/id_ed25519"
+	}
+	extraArgs = strings.Join(defs.ExtraArgs, " ")
+	if extraArgs == "" {
+		extraArgs = "-o Option=value ..."
+	}
+	return port, identity, extraArgs
+}
+
+// formTitle builds the modal title: the edited item's name under its parent
+// crumb, or a create/edit label when there is no name yet.
+func formTitle(parentCrumb string, index int, name, createTitle, editTitle string) string {
+	if index < 0 {
+		return breadcrumbTitle(parentCrumb, createTitle)
+	}
+	if n := strings.TrimSpace(name); n != "" {
+		return breadcrumbTitle(parentCrumb, n)
+	}
+	return breadcrumbTitle(parentCrumb, editTitle)
+}
+
+// renderModalForm renders a form into its modal box: scrolled content with the
+// focused field visible, any open picker overlaid, then toast and footer.
+func renderModalForm(f *formModel, width, height int, title string, t toast) string {
+	if width <= 0 || height <= 0 {
+		return ""
+	}
+	innerW := max(0, width-2)
+	lines, focusLine := f.renderFormContent(innerW)
+
+	reserved := 2 // sep + footer
+	toastStr := ""
+	if !t.empty() {
+		toastStr = renderToast(t)
+		reserved++
+	}
+	visibleH := max(1, max(0, height-2)-reserved)
+
+	start, end := formScrollWindow(len(lines), visibleH, focusLine)
+	visible := lines[start:end]
+	if f.picker != nil {
+		visible = f.overlayPickerOnVisible(visible, focusLine-start, innerW)
+	}
+	return renderFormBox(width, title, visible, visibleH, toastStr, f.renderFooter())
+}
 
 // formLabel renders a padded label for a form field.
 // When focused, the label is rendered in accent style.

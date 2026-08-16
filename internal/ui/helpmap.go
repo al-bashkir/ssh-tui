@@ -9,10 +9,5 @@ type helpSection struct {
 }
 
 type helpMap struct {
-	short    []key.Binding
-	full     [][]key.Binding
 	sections []helpSection // named sections for grouped rendering
 }
-
-func (h helpMap) ShortHelp() []key.Binding  { return h.short }
-func (h helpMap) FullHelp() [][]key.Binding { return h.full }

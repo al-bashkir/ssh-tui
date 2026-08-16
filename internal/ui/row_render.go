@@ -101,13 +101,64 @@ func truncateFade(s string, max int) string {
 	return normal + dim.Render(dimChar+"…")
 }
 
-func renderHostLikeRow(width int, active bool, selected bool, host string, hasCfg bool, hidden bool, matchedIndexes []int) string {
-	cur := " "
+// rowCursor is the leading cursor cell. It carries no ANSI of its own so
+// rowActiveStyle fills the active row uniformly.
+func rowCursor(active bool) string {
 	if active {
-		// Plain cursor — no inner ANSI so rowActiveStyle background fills uniformly.
-		cur = "▸"
+		return "▸ "
+	}
+	return "  "
+}
+
+// composeRow assembles one list row: prefix + text + right-aligned suffix.
+// text is truncated to the remaining width (hard cut when active, faded
+// otherwise), fuzzy matches are highlighted, and the active row is padded to
+// the full width so its highlight bar is solid. suffixW is the *styled* width
+// of suffix, so columns do not shift as the cursor moves.
+func composeRow(width int, active bool, prefix, text, suffix string, suffixW int, matched []int, dimText bool) string {
+	if width > 0 {
+		avail := width - lipgloss.Width(prefix) - suffixW
+		if avail < 0 {
+			// Not enough room for the badge — drop it.
+			suffix = ""
+			avail = max(0, width-lipgloss.Width(prefix))
+		}
+		if active {
+			text = truncateTail(text, avail)
+		} else {
+			text = truncateFade(text, avail)
+		}
 	}
 
+	if len(matched) > 0 {
+		visibleLen := len([]rune(text))
+		shown := make([]int, 0, len(matched))
+		for _, idx := range matched {
+			if idx >= 0 && idx < visibleLen {
+				shown = append(shown, idx)
+			}
+		}
+		if len(shown) > 0 {
+			text = highlightMatches(text, shown, active)
+		}
+	}
+	if dimText {
+		text = dim.Render(text)
+	}
+
+	line := prefix + text + suffix
+	if active {
+		if width > 0 {
+			if need := width - lipgloss.Width(line); need > 0 {
+				line += strings.Repeat(" ", need)
+			}
+		}
+		return rowActiveStyle.Render(line)
+	}
+	return line
+}
+
+func renderHostLikeRow(width int, active bool, selected bool, host string, hasCfg bool, hidden bool, matchedIndexes []int) string {
 	checked := "◻"
 	if selected {
 		checked = "◼"
@@ -120,196 +171,41 @@ func renderHostLikeRow(width int, active bool, selected bool, host string, hasCf
 			checked = uncheckedStyle.Render(checked)
 		}
 	}
+	prefix := rowCursor(active) + checked + " "
 
-	prefix := cur + " " + checked + " "
-
-	// Always reserve the same width for the cfg badge regardless of active
-	// state so the host name column does not shift when the cursor moves.
-	suffix := ""
-	suffixW := 0
+	// Always reserve the badge's styled width, active or not, so the host
+	// name column does not shift when the cursor moves.
+	suffix, suffixW := "", 0
 	if hasCfg {
 		styledCfg := " " + badgeCfgStyle.Render("⚙")
 		suffixW = lipgloss.Width(styledCfg)
+		suffix = styledCfg
 		if active {
-			// Same visual width as the styled badge (padding 0,1 = 1 space each side).
+			// Same visual width as the styled badge (padding 0,1).
 			suffix = "  ⚙ "
-		} else {
-			suffix = styledCfg
 		}
 	}
 
-	// Compute host width budget.
-	hostAvail := 0
-	if width > 0 {
-		hostAvail = width - lipgloss.Width(prefix) - suffixW
-		if hostAvail < 0 {
-			hostAvail = 0
-			suffix = ""
-			suffixW = 0
-		}
-	}
-
-	// For hidden hosts, prepend ⊘ prefix to the display string.
-	displayHost := host
+	// Hidden hosts get a ⊘ marker. That shifts the display string, so their
+	// match indexes (relative to the raw name) no longer apply.
 	if hidden {
-		displayHost = "⊘ " + host
+		return composeRow(width, active, prefix, "⊘ "+host, suffix, suffixW, nil, !active)
 	}
-
-	hostStr := displayHost
-	if width > 0 {
-		if active {
-			hostStr = truncateTail(displayHost, hostAvail)
-		} else {
-			hostStr = truncateFade(displayHost, hostAvail)
-		}
-	}
-
-	// Apply search match highlighting (before dim/active styling).
-	// Hidden rows are skipped because their ⊘ prefix shifts the display string
-	// but matchedIndexes are relative to the raw host name.
-	if len(matchedIndexes) > 0 && !hidden {
-		visibleLen := len([]rune(hostStr))
-		adjusted := make([]int, 0, len(matchedIndexes))
-		for _, idx := range matchedIndexes {
-			if idx >= 0 && idx < visibleLen {
-				adjusted = append(adjusted, idx)
-			}
-		}
-		if len(adjusted) > 0 {
-			hostStr = highlightMatches(hostStr, adjusted, active)
-		}
-	}
-
-	if !active && hidden {
-		hostStr = dim.Render(hostStr)
-	}
-
-	line := prefix + hostStr + suffix
-	if width > 0 && active {
-		// Fill to width for a full-row highlight.
-		need := width - lipgloss.Width(line)
-		if need > 0 {
-			line = line + strings.Repeat(" ", need)
-		}
-	}
-
-	if active {
-		line = rowActiveStyle.Render(line)
-	}
-	return line
+	return composeRow(width, active, prefix, host, suffix, suffixW, matchedIndexes, false)
 }
 
 func renderSimpleRow(width int, active bool, text string, matchedIndexes []int) string {
-	cur := " "
-	if active {
-		cur = "▸"
-	}
-	prefix := cur + " "
-	if width > 0 {
-		avail := width - lipgloss.Width(prefix)
-		if avail < 0 {
-			avail = 0
-		}
-		if active {
-			text = truncateTail(text, avail)
-		} else {
-			text = truncateFade(text, avail)
-		}
-		if len(matchedIndexes) > 0 {
-			visibleLen := len([]rune(text))
-			filtered := make([]int, 0, len(matchedIndexes))
-			for _, idx := range matchedIndexes {
-				if idx >= 0 && idx < visibleLen {
-					filtered = append(filtered, idx)
-				}
-			}
-			if len(filtered) > 0 {
-				text = highlightMatches(text, filtered, active)
-			}
-		}
-		line := prefix + text
-		if active {
-			need := width - lipgloss.Width(line)
-			if need > 0 {
-				line += strings.Repeat(" ", need)
-			}
-			return rowActiveStyle.Render(line)
-		}
-		return line
-	}
-
-	line := prefix + text
-	if active {
-		return rowActiveStyle.Render(line)
-	}
-	return line
+	return composeRow(width, active, rowCursor(active), text, "", 0, matchedIndexes, false)
 }
 
 func renderGroupRow(width int, active bool, name string, hostCount int, _ bool, matchedIndexes []int) string {
-	cur := " "
-	if active {
-		cur = "▸"
-	}
-	prefix := cur + " "
-
-	// Right-side badge: host count.
-	// Always compute layout width from the styled (inactive) version so the
-	// name column does not shift when the cursor moves onto or off the row.
 	countStr := fmt.Sprintf("%d", hostCount)
-	styledCountBadge := " " + badgeCountStyle.Render(countStr)
-	countBadgeW := lipgloss.Width(styledCountBadge)
-	var countBadge string
+	styledBadge := " " + badgeCountStyle.Render(countStr)
+	suffix := styledBadge
 	if active {
-		// Plain text occupying the same width as the styled badge.
-		// badgeCountStyle has Padding(0,1) = 1 space on each side.
-		countBadge = "  " + countStr + " "
-	} else {
-		countBadge = styledCountBadge
+		// Plain text occupying the same width as the styled badge
+		// (badgeCountStyle has Padding(0,1) = 1 space each side).
+		suffix = "  " + countStr + " "
 	}
-
-	suffix := countBadge
-	suffixW := countBadgeW
-
-	if width > 0 {
-		availName := width - lipgloss.Width(prefix) - suffixW
-		if availName < 0 {
-			availName = width - lipgloss.Width(prefix)
-			suffix = ""
-		}
-		if availName < 0 {
-			availName = 0
-		}
-		if active {
-			name = truncateTail(name, availName)
-		} else {
-			name = truncateFade(name, availName)
-		}
-		if len(matchedIndexes) > 0 {
-			visibleLen := len([]rune(name))
-			filtered := make([]int, 0, len(matchedIndexes))
-			for _, idx := range matchedIndexes {
-				if idx >= 0 && idx < visibleLen {
-					filtered = append(filtered, idx)
-				}
-			}
-			if len(filtered) > 0 {
-				name = highlightMatches(name, filtered, active)
-			}
-		}
-		line := prefix + name + suffix
-		if active {
-			pad := width - lipgloss.Width(line)
-			if pad > 0 {
-				line += strings.Repeat(" ", pad)
-			}
-			return rowActiveStyle.Render(line)
-		}
-		return line
-	}
-
-	line := prefix + name + suffix
-	if active {
-		return rowActiveStyle.Render(line)
-	}
-	return line
+	return composeRow(width, active, rowCursor(active), name, suffix, lipgloss.Width(styledBadge), matchedIndexes, false)
 }

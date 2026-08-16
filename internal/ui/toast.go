@@ -39,24 +39,10 @@ func toastDuration(l toastLevel) time.Duration {
 }
 
 // renderToast returns the styled string for a toast.
-func renderToast(t toast) string {
-	if t.empty() {
-		return ""
-	}
-	switch t.level {
-	case toastOK:
-		return toastOKStyle.Render(t.text)
-	case toastInfo:
-		return toastInfoStyle.Render(t.text)
-	case toastWarn:
-		return statusWarn.Render(t.text)
-	case toastErr:
-		return toastErrStyle.Render(t.text)
-	}
-	return statusWarn.Render(t.text)
-}
+func renderToast(t toast) string { return renderToastWithSpinner(t, false) }
 
-// renderToastWithSpinner returns the styled string for a toast, optionally prepended with a spinner frame.
+// renderToastWithSpinner returns the styled string for a toast, optionally
+// prepended with a spinner frame.
 func renderToastWithSpinner(t toast, spinner bool) string {
 	if t.empty() {
 		if spinner {
@@ -64,21 +50,19 @@ func renderToastWithSpinner(t toast, spinner bool) string {
 		}
 		return ""
 	}
-	prefix := ""
+	text := t.text
 	if spinner {
-		prefix = spinnerFrame() + " "
+		text = spinnerFrame() + " " + text
 	}
 	switch t.level {
 	case toastOK:
-		return toastOKStyle.Render(prefix + t.text)
+		return toastOKStyle.Render(text)
 	case toastInfo:
-		return toastInfoStyle.Render(prefix + t.text)
-	case toastWarn:
-		return statusWarn.Render(prefix + t.text)
+		return toastInfoStyle.Render(text)
 	case toastErr:
-		return toastErrStyle.Render(prefix + t.text)
+		return toastErrStyle.Render(text)
 	}
-	return statusWarn.Render(prefix + t.text)
+	return statusWarn.Render(text)
 }
 
 // breadcrumbTitle builds a breadcrumb-style title:

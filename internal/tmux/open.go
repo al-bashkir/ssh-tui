@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/al-bashkir/ssh-tui/internal/config"
 )
 
 // OneWindowOpts controls how tmuxOpenOneWindow creates panes in a single tmux window.
@@ -51,7 +53,7 @@ func OpenOneWindow(sshCmds [][]string, opts OneWindowOpts) error {
 	}
 	borderFormat := strings.TrimSpace(opts.PaneBorderFormat)
 	if borderFormat == "" {
-		borderFormat = "#[bg=green,fg=black] #T#{?pane_synchronized, #[fg=colour196]#[bold][SYNC]#[default],} #[default]"
+		borderFormat = config.DefaultPaneBorderFormat
 	}
 
 	// Create window and capture both window_id and pane_id.
