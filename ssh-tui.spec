@@ -8,7 +8,6 @@ Summary:        Terminal UI for managing SSH connections
 # Disable the empty debuginfo subpackage that Go stripped binaries produce.
 %global debug_package %{nil}
 
-# No LICENSE file exists yet; update this field when one is added.
 License:        MIT
 URL:            https://github.com/al-bashkir/ssh-tui
 
@@ -58,12 +57,23 @@ install -Dpm 0644 _ssh_tui %{buildroot}%{_datadir}/zsh/site-functions/_ssh_tui
 %{_bindir}/%{name} completion zsh  > %{_datadir}/zsh/site-functions/_ssh_tui         2>/dev/null || :
 
 %files
+%license LICENSE
 %doc README.md
 %{_bindir}/%{name}
 %{_datadir}/bash-completion/completions/%{name}
 %{_datadir}/zsh/site-functions/_ssh_tui
 
 %changelog
+* Thu Aug 27 2026 Pavel Aksenov <41126916+al-bashkir@users.noreply.github.com> - 1.3.3-1
+- Extract shared connect logic into internal/connect
+- Remove dead sshcmd/ui wrappers and empty doc files
+- Ship the MIT license file in the package
+- Document Homebrew installation
+
+* Tue May 12 2026 Pavel Aksenov <41126916+al-bashkir@users.noreply.github.com> - 1.3.2-1
+- Do not quit the app when the search bar has focus
+- Add MIT license
+
 * Sat Apr 25 2026 Pavel Aksenov <41126916+al-bashkir@users.noreply.github.com> - 1.3.1-1
 - Move tab and settings navigation to Alt shortcuts
 - Add vim-style g/G list navigation
