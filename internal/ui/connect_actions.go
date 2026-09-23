@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"strings"
+
 	"github.com/al-bashkir/ssh-tui/internal/config"
 	"github.com/al-bashkir/ssh-tui/internal/connect"
 	"github.com/al-bashkir/ssh-tui/internal/sshcmd"
@@ -18,10 +20,11 @@ type connectActions struct {
 	quitting bool
 
 	confirmConnect      bool
-	confirmConnectCount int
 	confirmConnectHosts []string
 	pendingConnectFn    func() tea.Cmd
 }
+
+type toastMsg toast
 
 func connectThreshold(d config.Defaults) int {
 	if d.ConnectConfirmThreshold < 0 {
@@ -52,20 +55,27 @@ func (c *connectActions) connect(hosts []string, opts Options, group *config.Gro
 		}
 		sshCmds := connect.BuildCommands(hosts, defaults, opts.Inventory, group, remoteCmdModifier(remoteCmd))
 
-		res, cmd := dispatchConnect(hosts, sshCmds, defaults, group, mode, inTmux)
-		if !res.toast.empty() {
-			c.toast = res.toast
+		if connect.NeedsTmux(mode, inTmux) {
+			// tmux work runs in a tea.Cmd so it never blocks the update loop.
+			return func() tea.Msg {
+				_, msg, err := connect.Open(hosts, sshCmds, defaults, group, mode, inTmux)
+				if err != nil {
+					return toastMsg{text: err.Error(), level: toastErr}
+				}
+				return toastMsg{text: msg, level: toastInfo}
+			}
 		}
-		if res.quit {
-			c.execCmd = res.execCmd
-			return tea.Quit
+		execCmd, _, err := connect.Open(hosts, sshCmds, defaults, group, mode, inTmux)
+		if err != nil {
+			c.toast = toast{text: err.Error(), level: toastWarn}
+			return nil
 		}
-		return cmd
+		c.execCmd = execCmd
+		return tea.Quit
 	}
 
 	if len(hosts) > connectThreshold(defaults) {
 		c.confirmConnect = true
-		c.confirmConnectCount = len(hosts)
 		c.confirmConnectHosts = hosts
 		c.pendingConnectFn = doConnect
 		return nil
@@ -90,11 +100,26 @@ func (c *connectActions) connectSameWindow(hosts []string, opts Options, group *
 // remoteCmdModifier returns the settings tweak that runs cmd on the remote
 // host and drops into a shell afterwards, or nil when cmd is empty.
 func remoteCmdModifier(cmd string) func(*sshcmd.Settings) {
-	if keepSessionOpenRemoteCmd(cmd) == "" {
+	cmd = strings.TrimSpace(cmd)
+	if cmd == "" {
 		return nil
+	}
+	// Avoid doubling when the caller already includes it.
+	if !strings.Contains(cmd, "exec ${SHELL") && !strings.Contains(cmd, "exec $SHELL") {
+		cmd += "; exec ${SHELL:-sh}"
 	}
 	return func(s *sshcmd.Settings) {
 		s.ExtraArgs = ensureSSHForceTTY(s.ExtraArgs)
-		s.RemoteCommand = keepSessionOpenRemoteCmd(cmd)
+		s.RemoteCommand = cmd
 	}
+}
+
+func ensureSSHForceTTY(extraArgs []string) []string {
+	out := append([]string(nil), extraArgs...)
+	for _, a := range out {
+		if a == "-t" || a == "-tt" {
+			return out
+		}
+	}
+	return append(out, "-t")
 }

@@ -23,7 +23,7 @@ func FindHostConfig(hosts []config.Host, host string) (config.Host, bool) {
 	}
 
 	// Fallback: known_hosts uses "[host]:port".
-	if base, ok := parseBracketHostConfig(h); ok {
+	if base, _, ok := parseBracketHost(h); ok {
 		for i := range hosts {
 			if strings.TrimSpace(hosts[i].Host) == base {
 				return hosts[i], true
@@ -32,9 +32,4 @@ func FindHostConfig(hosts []config.Host, host string) (config.Host, bool) {
 	}
 
 	return config.Host{}, false
-}
-
-func parseBracketHostConfig(s string) (host string, ok bool) {
-	h, _, ok := parseBracketHost(strings.TrimSpace(s))
-	return h, ok
 }

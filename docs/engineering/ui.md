@@ -91,8 +91,8 @@ Notes:
 The router model does not call other models directly; it mostly uses messages:
 
 - Open messages (start a modal/screen):
-  - `openGroupFormMsg`, `openGroupFormPrefillMsg`
-  - `openHostFormMsg`, `openHostFormPrefillMsg`
+  - `openGroupFormMsg` (edit by index, or create prefilled from `group`)
+  - `openHostFormMsg` (edit by host, or create from `prefill`)
   - `openHostPickerMsg`
   - `openGroupPickerMsg`
   - `openDefaultsFormMsg`
@@ -113,7 +113,7 @@ The router model does not call other models directly; it mostly uses messages:
   - `removeHostsMsg`
   - `hostPickerDoneMsg`
   - `groupPickerDoneMsg`
-  - `customHostConnectMsg`, `customHostDoneMsg`, `customHostPickGroupMsg`
+  - `customHostConnectMsg`, `customHostDoneMsg`
   - `toggleHiddenHostMsg`
 
 Return-to is explicit:

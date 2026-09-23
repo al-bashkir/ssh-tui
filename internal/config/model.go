@@ -96,23 +96,16 @@ func DefaultConfig() Config {
 	return Config{
 		Version: 1,
 		Defaults: Defaults{
-			Colorscheme:             "",
-			AccentColor:             "",
 			LoadKnownHosts:          true,
-			User:                    "",
 			Port:                    22,
-			IdentityFile:            "",
-			ExtraArgs:               nil,
 			PaneSplit:               "vertical",
 			PaneLayout:              "even-vertical",
 			PaneSync:                "on",
 			PaneBorderFmt:           DefaultPaneBorderFormat,
-			PaneBorderFmts:          nil,
 			PaneBorderPos:           "bottom",
 			Tmux:                    "auto",
 			OpenMode:                "auto",
 			TmuxSession:             "ssh-tui",
-			ConfirmQuit:             false,
 			ConnectConfirmThreshold: 5,
 			ShowFieldHelp:           true,
 		},
@@ -121,9 +114,5 @@ func DefaultConfig() Config {
 
 // DefaultInventory returns an empty inventory with version 1.
 func DefaultInventory() Inventory {
-	return Inventory{
-		Version: 1,
-		Hosts:   nil,
-		Groups:  nil,
-	}
+	return Inventory{Version: 1}
 }

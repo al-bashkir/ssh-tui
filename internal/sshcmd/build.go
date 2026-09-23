@@ -70,10 +70,10 @@ func ApplyHost(base Settings, host config.Host) Settings {
 }
 
 // BuildCommand returns the full command slice starting with "ssh".
-func BuildCommand(host string, s Settings) ([]string, error) {
+func BuildCommand(host string, s Settings) []string {
 	baseHost := strings.TrimSpace(host)
 	if baseHost == "" {
-		return []string{"ssh"}, nil
+		return []string{"ssh"}
 	}
 
 	sshPort := s.Port
@@ -107,7 +107,7 @@ func BuildCommand(host string, s Settings) ([]string, error) {
 		cmd = append(cmd, "sh -c "+shellQuotePOSIX(rc))
 	}
 
-	return cmd, nil
+	return cmd
 }
 
 func parseBracketHost(s string) (host string, port int, ok bool) {

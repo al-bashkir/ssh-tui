@@ -8,11 +8,11 @@ import (
 
 // PaneSettings holds resolved tmux pane display options.
 type PaneSettings struct {
-	SplitFlag    string
-	Layout       string
+	SplitFlag    string // "-h" or "-v", passed to split-window
+	Layout       string // tmux layout name, applied after creating panes
 	SyncPanes    bool
-	BorderFormat string
-	BorderStatus string
+	BorderFormat string // tmux pane-border-format
+	BorderStatus string // off|top|bottom
 }
 
 // ResolvePaneSettings merges defaults and optional group overrides into PaneSettings.
@@ -40,15 +40,21 @@ func ResolvePaneSettings(defaults config.Defaults, group *config.Group, paneCoun
 			borderPos = v
 		}
 	}
+	if borderFmt == "" {
+		borderFmt = config.DefaultPaneBorderFormat
+	}
+	if borderPos == "" {
+		borderPos = "bottom"
+	}
 
 	// Anything that is not an explicit "vertical" splits horizontally.
 	splitFlag := "-h"
-	if v := strings.ToLower(strings.TrimSpace(split)); v == "vertical" || v == "v" {
+	if v := strings.ToLower(split); v == "vertical" || v == "v" {
 		splitFlag = "-v"
 	}
 
-	layoutName := ""
-	switch strings.ToLower(strings.TrimSpace(layout)) {
+	layoutName := layout
+	switch strings.ToLower(layout) {
 	case "", "auto":
 		if paneCount >= 4 {
 			layoutName = "tiled"
@@ -65,13 +71,11 @@ func ResolvePaneSettings(defaults config.Defaults, group *config.Group, paneCoun
 		layoutName = "main-horizontal"
 	case "mv", "main-vertical":
 		layoutName = "main-vertical"
-	default:
-		layoutName = strings.TrimSpace(layout)
 	}
 
 	// Sync is on unless explicitly disabled.
 	syncOn := true
-	switch strings.ToLower(strings.TrimSpace(sync)) {
+	switch strings.ToLower(sync) {
 	case "off", "false", "0", "no":
 		syncOn = false
 	}

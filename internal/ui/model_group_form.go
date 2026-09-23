@@ -1,8 +1,6 @@
 package ui
 
 import (
-	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/al-bashkir/ssh-tui/internal/config"
@@ -30,42 +28,40 @@ func groupSchema(defs config.Defaults) formSchema {
 	portPlaceholder, identPlaceholder, extraPlaceholder := sshPlaceholders(defs)
 
 	return formSchema{
-		Sections: []sectionDef{
-			{Key: "group", Label: "Group", Fields: []fieldDef{
-				{Key: "name", Label: "Name", Kind: fieldText,
-					Placeholder: "prod", CharLimit: 128},
-			}},
-			{Key: "ssh", Label: "SSH", Fields: []fieldDef{
-				{Key: "user", Label: "User", Kind: fieldText,
-					Placeholder: strings.TrimSpace(defs.User), CharLimit: 128},
-				{Key: "port", Label: "Port", Kind: fieldNumber,
-					Placeholder: portPlaceholder, CharLimit: 16, Narrow: true,
-					Validate: validatePort},
-				{Key: "identity", Label: "Identity file", Kind: fieldText,
-					Placeholder: identPlaceholder, CharLimit: 512},
-				{Key: "extra_args", Label: "Extra args", Kind: fieldText,
-					Placeholder: extraPlaceholder, CharLimit: 1024},
-				{Key: "remote_cmd", Label: "Remote cmd", Kind: fieldText,
-					Placeholder: "command to run on connect", CharLimit: 1024},
-			}},
-			{Key: "tmux", Label: "Tmux", Fields: []fieldDef{
-				{Key: "open_mode", Label: "Open mode", Kind: fieldPicker,
-					Options: optsInherit("auto", "current", "tmux-window", "tmux-pane")},
-				{Key: "tmux", Label: "Tmux", Kind: fieldPicker,
-					Options: optsInherit("auto", "force", "never")},
-			}},
-			{Key: "panes", Label: "Panes", Fields: []fieldDef{
-				{Key: "pane_split", Label: "Pane split", Kind: fieldPicker,
-					Options: optsInherit("horizontal", "vertical")},
-				{Key: "pane_layout", Label: "Pane layout", Kind: fieldPicker,
-					Options: optsInherit("auto", "tiled", "even-horizontal", "even-vertical", "main-horizontal", "main-vertical")},
-				{Key: "pane_sync", Label: "Pane sync", Kind: fieldPicker,
-					Options: optsInherit("on", "off")},
-				{Key: "border_pos", Label: "Pane border", Kind: fieldPicker,
-					Options: optsInherit("bottom", "top", "off")},
-				{Key: "border_fmt", Label: "Border format", Kind: fieldSubModal},
-			}},
-		},
+		{Label: "Group", Fields: []fieldDef{
+			{Key: "name", Label: "Name", Kind: fieldText,
+				Placeholder: "prod", CharLimit: 128},
+		}},
+		{Label: "SSH", Fields: []fieldDef{
+			{Key: "user", Label: "User", Kind: fieldText,
+				Placeholder: strings.TrimSpace(defs.User), CharLimit: 128},
+			{Key: "port", Label: "Port", Kind: fieldNumber,
+				Placeholder: portPlaceholder, CharLimit: 16, Narrow: true,
+				Validate: validatePort},
+			{Key: "identity", Label: "Identity file", Kind: fieldText,
+				Placeholder: identPlaceholder, CharLimit: 512},
+			{Key: "extra_args", Label: "Extra args", Kind: fieldText,
+				Placeholder: extraPlaceholder, CharLimit: 1024},
+			{Key: "remote_cmd", Label: "Remote cmd", Kind: fieldText,
+				Placeholder: "command to run on connect", CharLimit: 1024},
+		}},
+		{Label: "Tmux", Fields: []fieldDef{
+			{Key: "open_mode", Label: "Open mode", Kind: fieldPicker,
+				Options: optsInherit("auto", "current", "tmux-window", "tmux-pane")},
+			{Key: "tmux", Label: "Tmux", Kind: fieldPicker,
+				Options: optsInherit("auto", "force", "never")},
+		}},
+		{Label: "Panes", Fields: []fieldDef{
+			{Key: "pane_split", Label: "Pane split", Kind: fieldPicker,
+				Options: optsInherit("horizontal", "vertical")},
+			{Key: "pane_layout", Label: "Pane layout", Kind: fieldPicker,
+				Options: optsInherit("auto", "tiled", "even-horizontal", "even-vertical", "main-horizontal", "main-vertical")},
+			{Key: "pane_sync", Label: "Pane sync", Kind: fieldPicker,
+				Options: optsInherit("on", "off")},
+			{Key: "border_pos", Label: "Pane border", Kind: fieldPicker,
+				Options: optsInherit("bottom", "top", "off")},
+			{Key: "border_fmt", Label: "Border format", Kind: fieldSubModal},
+		}},
 	}
 }
 
@@ -74,14 +70,10 @@ func groupSchema(defs config.Defaults) formSchema {
 // ---------------------------------------------------------------------------
 
 func groupToValues(g config.Group) map[string]string {
-	portStr := ""
-	if g.Port != 0 {
-		portStr = strconv.Itoa(g.Port)
-	}
 	return map[string]string{
 		"name":        strings.TrimSpace(g.Name),
 		"user":        strings.TrimSpace(g.User),
-		"port":        portStr,
+		"port":        formatPort(g.Port),
 		"identity":    strings.TrimSpace(g.IdentityFile),
 		"extra_args":  strings.Join(g.ExtraArgs, " "),
 		"remote_cmd":  strings.TrimSpace(g.RemoteCommand),
@@ -108,25 +100,12 @@ func applyGroupValues(values map[string]string, base config.Group) (config.Group
 	g.PaneLayout = values["pane_layout"]
 	g.PaneSync = values["pane_sync"]
 	g.PaneBorderPos = values["border_pos"]
+	g.ExtraArgs = parseArgs(values["extra_args"])
 
-	portStr := strings.TrimSpace(values["port"])
-	if portStr == "" {
-		g.Port = 0
-	} else {
-		p, err := strconv.Atoi(portStr)
-		if err != nil || p <= 0 {
-			return g, fmt.Errorf("invalid port")
-		}
-		g.Port = p
+	var err error
+	if g.Port, err = parsePort(values["port"]); err != nil {
+		return g, err
 	}
-
-	extra := strings.TrimSpace(values["extra_args"])
-	if extra == "" {
-		g.ExtraArgs = nil
-	} else {
-		g.ExtraArgs = strings.Fields(extra)
-	}
-
 	return g, config.ValidateGroupName(g.Name)
 }
 
@@ -189,7 +168,7 @@ func (m *groupFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case paneBorderFormatsDoneMsg:
 		m.group.PaneBorderFmt = strings.TrimSpace(msg.value)
-		m.form.setValue("border_fmt", m.group.PaneBorderFmt)
+		m.form.values["border_fmt"] = m.group.PaneBorderFmt
 		m.borderPicker = nil
 		return m, nil
 
@@ -205,10 +184,7 @@ func (m *groupFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		if m.borderPicker != nil {
-			model, cmd := m.borderPicker.Update(msg)
-			if pm, ok := model.(*paneBorderFormatsModel); ok {
-				m.borderPicker = pm
-			}
+			_, cmd := m.borderPicker.Update(msg)
 			return m, cmd
 		}
 
@@ -270,7 +246,7 @@ func (m *groupFormModel) View() string {
 
 	name := m.group.Name
 	if strings.TrimSpace(name) == "" {
-		name = m.form.value("name")
+		name = m.form.values["name"]
 	}
 	title := formTitle(m.parentCrumb, m.index, name, "Create Group", "Edit Group")
 	return renderModalForm(&m.form, m.width, m.height, title, m.toast)

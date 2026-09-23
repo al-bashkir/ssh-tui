@@ -2,7 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/al-bashkir/ssh-tui/internal/config"
@@ -26,28 +25,16 @@ type paneBorderFormatRow struct {
 	deletable bool
 }
 
-func (r paneBorderFormatRow) Title() string       { return r.label }
-func (r paneBorderFormatRow) Description() string { return "" }
 func (r paneBorderFormatRow) FilterValue() string { return r.label }
 
-type paneBorderFormatsDelegate struct{}
-
-func (d paneBorderFormatsDelegate) Height() int                             { return 1 }
-func (d paneBorderFormatsDelegate) Spacing() int                            { return 0 }
-func (d paneBorderFormatsDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
-
-func (d paneBorderFormatsDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
-	row, ok := item.(paneBorderFormatRow)
-	if !ok {
-		fmt.Fprint(w, item.FilterValue())
-		return
-	}
+var paneBorderFormatsDelegate = rowDelegate(func(width int, active bool, item list.Item) string {
+	row := item.(paneBorderFormatRow)
 	text := row.label
 	if strings.TrimSpace(row.value) != "" {
 		text = row.label + "  " + row.value
 	}
-	fmt.Fprint(w, renderSimpleRow(m.Width(), index == m.Index(), text, nil))
-}
+	return renderSimpleRow(width, active, text, nil)
+})
 
 type paneBorderFormatsModel struct {
 	parentCrumb string
@@ -73,11 +60,7 @@ type paneBorderFormatsModel struct {
 }
 
 func (m *paneBorderFormatsModel) refreshAccentStyles() {
-	if m.adding {
-		setSearchFocused(&m.addInput, true)
-	} else {
-		setSearchFocused(&m.addInput, false)
-	}
+	setSearchFocused(&m.addInput, m.adding)
 }
 
 func newPaneBorderFormatsModel(defs config.Defaults, selected string, includeInherit bool, allowEdit bool) *paneBorderFormatsModel {
@@ -103,9 +86,8 @@ func newPaneBorderFormatsModel(defs config.Defaults, selected string, includeInh
 		}
 	}
 
-	l := list.New(items, paneBorderFormatsDelegate{}, 0, 0)
+	l := list.New(items, paneBorderFormatsDelegate, 0, 0)
 	configureList(&l)
-	l.SetDelegate(paneBorderFormatsDelegate{})
 	if len(items) > 0 {
 		l.Select(selectedIdx)
 	}
@@ -161,20 +143,14 @@ func (m *paneBorderFormatsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.KeyMsg:
 		if m.confirmDel {
-			s := msg.String()
-			switch s {
-			case "y", "Y", "enter":
-				m.confirmDel = false
-				m.deleteValue(m.delValue)
-				m.delValue = ""
-				return m, nil
-			case "n", "N", "esc":
+			if a := confirmAnswer(msg); a != unanswered {
+				if a == answerYes {
+					m.deleteValue(m.delValue)
+				}
 				m.confirmDel = false
 				m.delValue = ""
-				return m, nil
-			default:
-				return m, nil
 			}
+			return m, nil
 		}
 
 		if m.adding {

@@ -56,11 +56,11 @@ func renderToastWithSpinner(t toast, spinner bool) string {
 	}
 	switch t.level {
 	case toastOK:
-		return toastOKStyle.Render(text)
+		return statusOK.Render(text)
 	case toastInfo:
-		return toastInfoStyle.Render(text)
+		return dim.Render(text)
 	case toastErr:
-		return toastErrStyle.Render(text)
+		return statusErr.Render(text)
 	}
 	return statusWarn.Render(text)
 }
@@ -73,5 +73,5 @@ func breadcrumbTitle(parentCrumb, leafTitle string) string {
 	if parentCrumb == "" {
 		return leafTitle
 	}
-	return dim.Render(parentCrumb+" >") + " " + headerStyle.Render(leafTitle)
+	return dim.Render(parentCrumb+" >") + " " + accentStyle.Render(leafTitle)
 }

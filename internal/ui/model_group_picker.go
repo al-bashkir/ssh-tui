@@ -2,8 +2,7 @@ package ui
 
 import (
 	"fmt"
-	"io"
-	"sort"
+
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -15,30 +14,11 @@ import (
 	"github.com/sahilm/fuzzy"
 )
 
-type groupPickRow struct {
-	index          int
-	name           string
-	matchedIndexes []int
-}
-
-func (i groupPickRow) Title() string       { return i.name }
-func (i groupPickRow) Description() string { return "" }
-func (i groupPickRow) FilterValue() string { return i.name }
-
-type groupPickerDelegate struct{}
-
-func (d groupPickerDelegate) Height() int                             { return 1 }
-func (d groupPickerDelegate) Spacing() int                            { return 0 }
-func (d groupPickerDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
-
-func (d groupPickerDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
-	row, ok := item.(groupPickRow)
-	if !ok {
-		fmt.Fprint(w, item.FilterValue())
-		return
-	}
-	fmt.Fprint(w, renderSimpleRow(m.Width(), index == m.Index(), row.name, row.matchedIndexes))
-}
+// groupPickerDelegate renders groupRows as plain names.
+var groupPickerDelegate = rowDelegate(func(width int, active bool, item list.Item) string {
+	row := item.(groupRow)
+	return renderSimpleRow(width, active, row.name, row.matchedIndexes)
+})
 
 type groupPickerModel struct {
 	opts        Options
@@ -51,7 +31,7 @@ type groupPickerModel struct {
 	width  int
 	height int
 
-	all      []groupPickRow
+	all      []groupRow
 	names    []string // cached for fuzzy search, parallel to all
 	keymap   keyMap
 	showHelp bool
@@ -64,35 +44,20 @@ type groupPickerModel struct {
 }
 
 func newGroupPickerModel(opts Options) *groupPickerModel {
-	all := make([]groupPickRow, 0, len(opts.Inventory.Groups))
-	names := make([]string, 0, len(opts.Inventory.Groups))
-	items := make([]list.Item, 0, len(opts.Inventory.Groups))
-	for i, g := range opts.Inventory.Groups {
-		all = append(all, groupPickRow{index: i, name: g.Name})
-	}
-	sort.SliceStable(all, func(i, j int) bool {
-		return strings.ToLower(all[i].name) < strings.ToLower(all[j].name)
-	})
-	for _, row := range all {
-		names = append(names, row.name)
-		items = append(items, row)
-	}
-
-	l := list.New(items, groupPickerDelegate{}, 0, 0)
+	l := list.New(nil, groupPickerDelegate, 0, 0)
 	configureList(&l)
 
-	search := newSearchInput()
-
+	all := groupsRows(opts.Inventory)
 	m := &groupPickerModel{
-		opts:     opts,
-		all:      all,
-		names:    names,
-		keymap:   defaultKeyMap(),
-		showHelp: false,
-		list:     l,
-		search:   search,
-		focus:    focusList,
+		opts:   opts,
+		all:    all,
+		names:  groupNames(all),
+		keymap: defaultKeyMap(),
+		list:   l,
+		search: newSearchInput(),
+		focus:  focusList,
 	}
+	m.applyFilter("")
 	return m
 }
 
@@ -101,11 +66,9 @@ func (m *groupPickerModel) Init() tea.Cmd { return nil }
 func (m *groupPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		w := msg.Width
-		h := msg.Height
-		m.width = w
-		m.height = h
-		innerW, innerH := frameInnerSize(w, h)
+		m.width = msg.Width
+		m.height = msg.Height
+		innerW, innerH := frameInnerSize(msg.Width, msg.Height)
 		m.cachedAddingLines = m.addingLines(innerW)
 		m.list.SetSize(innerW, max(1, innerH-5-len(m.cachedAddingLines)))
 		m.search.Width = max(10, innerW-len(m.search.Prompt))
@@ -114,13 +77,12 @@ func (m *groupPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.showHelp {
 			if key.Matches(msg, m.keymap.Help) || msg.String() == "esc" {
 				m.showHelp = false
-				return m, nil
 			}
 			return m, nil
 		}
 
 		if key.Matches(msg, m.keymap.Help) {
-			m.showHelp = !m.showHelp
+			m.showHelp = true
 			return m, nil
 		}
 		if handleFocusKeys(msg, m.keymap, &m.focus, &m.search) {
@@ -137,7 +99,7 @@ func (m *groupPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				setFocus(&m.focus, &m.search, focusList)
 				return m, nil
 			}
-			row, ok := m.list.SelectedItem().(groupPickRow)
+			row, ok := m.list.SelectedItem().(groupRow)
 			if !ok {
 				return m, nil
 			}
@@ -242,7 +204,7 @@ func (m *groupPickerModel) addingLines(innerW int) []string {
 
 func (m *groupPickerModel) View() string {
 	if m.showHelp {
-		return renderHelpModal(m.width, m.height, "Select Group", m.helpKeys())
+		return renderHelpModal(m.width, m.height, "Select Group", m.helpKeys(), nil)
 	}
 	innerW, _ := frameInnerSize(m.width, m.height)
 	sep := dim.Render(strings.Repeat("─", innerW))
@@ -259,7 +221,7 @@ func (m *groupPickerModel) View() string {
 	return renderFocusedFrame(m.width, m.height, breadcrumbTitle(m.parentCrumb, "Select group"), "", body, m.statusLine())
 }
 
-func (m *groupPickerModel) helpKeys() helpMap {
+func (m *groupPickerModel) helpKeys() []helpSection {
 	esc := key.NewBinding(
 		key.WithKeys("esc"),
 		key.WithHelp("esc", "back/clear"),
@@ -269,24 +231,22 @@ func (m *groupPickerModel) helpKeys() helpMap {
 		key.WithHelp("enter", "select"),
 	)
 
-	return helpMap{
-		sections: []helpSection{
-			{title: "Navigation", keys: []key.Binding{
-				m.list.KeyMap.CursorUp,
-				m.list.KeyMap.CursorDown,
-				m.list.KeyMap.PrevPage,
-				m.list.KeyMap.NextPage,
-				m.keymap.FocusSearch,
-				m.keymap.ToggleFocus,
-			}},
-			{title: "Selection", keys: []key.Binding{
-				selectGroup,
-			}},
-			{title: "General", keys: []key.Binding{
-				esc,
-				m.keymap.Help,
-			}},
-		},
+	return []helpSection{
+		{title: "Navigation", keys: []key.Binding{
+			m.list.KeyMap.CursorUp,
+			m.list.KeyMap.CursorDown,
+			m.list.KeyMap.PrevPage,
+			m.list.KeyMap.NextPage,
+			m.keymap.FocusSearch,
+			m.keymap.ToggleFocus,
+		}},
+		{title: "Selection", keys: []key.Binding{
+			selectGroup,
+		}},
+		{title: "General", keys: []key.Binding{
+			esc,
+			m.keymap.Help,
+		}},
 	}
 }
 
@@ -296,26 +256,17 @@ func (m *groupPickerModel) statusLine() string {
 }
 
 func (m *groupPickerModel) applyFilter(query string) {
-	query = strings.TrimSpace(query)
-	if query == "" {
-		items := make([]list.Item, len(m.all))
-		for i, r := range m.all {
-			r.matchedIndexes = nil
-			items[i] = r
+	var items []list.Item
+	if query = strings.TrimSpace(query); query == "" {
+		for _, r := range m.all {
+			items = append(items, r)
 		}
-		m.list.SetItems(items)
-		if len(items) > 0 {
-			m.list.Select(0)
+	} else {
+		for _, mt := range fuzzy.Find(query, m.names) {
+			r := m.all[mt.Index]
+			r.matchedIndexes = mt.MatchedIndexes
+			items = append(items, r)
 		}
-		return
-	}
-
-	matches := fuzzy.Find(query, m.names)
-	items := make([]list.Item, len(matches))
-	for i, mt := range matches {
-		r := m.all[mt.Index]
-		r.matchedIndexes = mt.MatchedIndexes
-		items[i] = r
 	}
 	m.list.SetItems(items)
 	if len(items) > 0 {

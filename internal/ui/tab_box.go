@@ -14,9 +14,6 @@ func boxRule(st lipgloss.Style, w int, left, right string) string {
 	if w <= 1 {
 		return ""
 	}
-	if w == 2 {
-		return st.Render(left + right)
-	}
 	return st.Render(left + strings.Repeat("─", w-2) + right)
 }
 
@@ -87,28 +84,17 @@ func padVisible(s string, width int) string {
 	return s
 }
 
-func renderTabsLine(active int, tabs []string) string {
-	parts := make([]string, 0, len(tabs))
-	for i, t := range tabs {
-		if i == active {
-			parts = append(parts, tabActiveStyle.Render(t))
+// renderMainTabBox is renderTabBox with the main tabs as its top line.
+func renderMainTabBox(width, height int, activeTab int, headerLeft string, headerRight string, listView string, footer string) string {
+	parts := make([]string, len(mainTabs))
+	for i, t := range mainTabs {
+		if i == activeTab {
+			parts[i] = accentStyle.Render(t)
 		} else {
-			parts = append(parts, tabInactiveStyle.Render(t))
+			parts[i] = dim.Render(t)
 		}
 	}
-	return strings.Join(parts, "  ")
-}
-
-func renderMainTabBox(width, height int, activeTab int, headerLeft string, headerRight string, listView string) string {
-	return renderMainTabBoxWithFooter(width, height, activeTab, headerLeft, headerRight, listView, "")
-}
-
-func renderMainTabBoxWithFooter(width, height int, activeTab int, headerLeft string, headerRight string, listView string, footer string) string {
-	return renderTabBox(width, height, renderTabsLine(activeTab, mainTabs), headerLeft, headerRight, listView, footer)
-}
-
-func renderBreadcrumbTabBox(width, height int, breadcrumb string, headerLeft string, headerRight string, listView string, footer string) string {
-	return renderTabBox(width, height, breadcrumb, headerLeft, headerRight, listView, footer)
+	return renderTabBox(width, height, strings.Join(parts, "  "), headerLeft, headerRight, listView, footer)
 }
 
 // renderTabBox draws the full-screen box: a top line (tabs or breadcrumb),

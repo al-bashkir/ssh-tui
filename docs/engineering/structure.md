@@ -45,11 +45,10 @@ UI files map (non-exhaustive — covers main models, shared helpers, and key uti
 - `internal/ui/modal.go`: modal sizing + centering
 - `internal/ui/keymap.go`: shared key bindings
 - `internal/ui/row_render.go`: host/group row rendering with badges
-- `internal/ui/help_modal.go`: help overlay (accent-colored key labels)
-- `internal/ui/helpmap.go`: `helpMap` type used by help modal
+- `internal/ui/help_modal.go`: help overlay and `helpSection`
 - `internal/ui/confirm_modal.go`: quit/connect/delete confirm dialogs
-- `internal/ui/dispatch_tmux.go`: `dispatchConnect`, `buildSSHCommands`, `resolveConnectMode`
-- `internal/ui/ssh_helpers.go`: `ensureSSHForceTTY`, `keepSessionOpenRemoteCmd`
+- `internal/ui/connect_actions.go`: `connectActions` (connect, confirm threshold, remote-command wrapping)
+- `internal/ui/list_screen.go`: `listScreen` base embedded by the Hosts/Groups/Group Hosts screens, `rowDelegate`
 - `internal/ui/host_config.go`: `hostConfigFor`, `findHostConfig`, `isHostHidden`
 - `internal/ui/host_select.go`: shared `hostSelectList` struct (filter, selection, badges)
 - `internal/ui/update_helpers.go`: shared Update() helpers (`handleConfirmQuit`, `handleConfirmConnect`, `updateSearchOrList`)
@@ -64,7 +63,6 @@ UI files map (non-exhaustive — covers main models, shared helpers, and key uti
 - `internal/ui/toast.go`: `toast` type, levels, `renderToast`, `toastMsg`
 - `internal/ui/form_schema.go`: `fieldKind`, `fieldDef`, form field descriptors
 - `internal/ui/form_model.go`: generic form model shared by defaults/host/group editors
-- `internal/ui/form_helpers.go`: `formLabel` and other form rendering utilities
+- `internal/ui/form_helpers.go`: form rendering, value parsing and field validators (`validatePort`, etc.)
 - `internal/ui/form_render.go`: field-level rendering (text, picker, toggle rows)
-- `internal/ui/form_validate.go`: field validators (`validatePort`, etc.)
 - `internal/ui/option_picker_popup.go`: inline option-picker popup used by `formModel`

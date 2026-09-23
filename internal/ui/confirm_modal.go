@@ -91,9 +91,9 @@ func renderHostListConfirmBox(maxWidth int, title, footer string, hosts []string
 	return strings.Join(parts, "\n")
 }
 
-func connectConfirmBox(maxWidth int, count int, hostNames []string) string {
+func connectConfirmBox(maxWidth int, hostNames []string) string {
 	return renderHostListConfirmBox(maxWidth,
-		confirmTitleStyle.Render(fmt.Sprintf("Connect %d hosts?", count)),
+		confirmTitleStyle.Render(fmt.Sprintf("Connect %d hosts?", len(hostNames))),
 		styledFooter("y/⏎ connect  n/Esc cancel"),
 		hostNames, "")
 }

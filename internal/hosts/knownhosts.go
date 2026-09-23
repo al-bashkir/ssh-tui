@@ -5,7 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -39,7 +39,7 @@ func LoadKnownHosts(paths []string) (LoadResult, []PathError) {
 		paths = DefaultKnownHostsPaths()
 	}
 
-	set := make(map[string]struct{})
+	var out []string
 	var skipped int
 	var errs []PathError
 
@@ -62,19 +62,10 @@ func LoadKnownHosts(paths []string) (LoadResult, []PathError) {
 			errs = append(errs, PathError{Path: p, Err: perr})
 			continue
 		}
-
-		for _, h := range hosts {
-			set[h] = struct{}{}
-		}
+		out = append(out, hosts...)
 	}
 
-	out := make([]string, 0, len(set))
-	for h := range set {
-		out = append(out, h)
-	}
-	sort.Strings(out)
-
-	return LoadResult{Hosts: out, SkippedLines: skipped}, errs
+	return LoadResult{Hosts: sortedUnique(out), SkippedLines: skipped}, errs
 }
 
 func ParseKnownHosts(r io.Reader) ([]string, int, error) {
@@ -82,53 +73,35 @@ func ParseKnownHosts(r io.Reader) ([]string, int, error) {
 	// known_hosts lines can be long because of key material; bump buffer.
 	s.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
-	set := make(map[string]struct{})
+	var hosts []string
 	skipped := 0
 
 	for s.Scan() {
 		line := strings.TrimSpace(s.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			skipped++
-			continue
-		}
-		if strings.HasPrefix(line, "@") {
-			skipped++
-			continue
-		}
-
-		fields := strings.Fields(line)
-		if len(fields) == 0 {
-			skipped++
-			continue
-		}
-		first := fields[0]
-		if strings.HasPrefix(first, "|1|") {
+		// Blank lines, comments, markers (@cert-authority/@revoked) and
+		// hashed hostnames are not displayable.
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "@") || strings.HasPrefix(line, "|1|") {
 			skipped++
 			continue
 		}
 
+		first := strings.Fields(line)[0]
 		for _, raw := range strings.Split(first, ",") {
 			h := strings.TrimSpace(raw)
-			if h == "" {
+			if h == "" || strings.HasPrefix(h, "|1|") {
 				continue
 			}
-			// Hashed hostnames are not displayable in MVP.
-			if strings.HasPrefix(h, "|1|") {
-				continue
-			}
-			set[h] = struct{}{}
+			hosts = append(hosts, h)
 		}
 	}
 
 	if err := s.Err(); err != nil {
 		return nil, skipped, err
 	}
+	return sortedUnique(hosts), skipped, nil
+}
 
-	hosts := make([]string, 0, len(set))
-	for h := range set {
-		hosts = append(hosts, h)
-	}
-	sort.Strings(hosts)
-
-	return hosts, skipped, nil
+func sortedUnique(s []string) []string {
+	slices.Sort(s)
+	return slices.Compact(s)
 }

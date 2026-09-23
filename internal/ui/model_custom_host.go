@@ -63,27 +63,23 @@ func (m *customHostModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, m.keymap.Esc) {
 			return m, func() tea.Msg { return customHostCancelMsg{} }
 		}
-		if key.Matches(msg, m.keymap.SelectAll) {
-			m.toast = toast{}
-			hosts := strings.Fields(strings.TrimSpace(m.input.Value()))
+		addToGroup := key.Matches(msg, m.keymap.SelectAll)
+		if addToGroup || msg.String() == "enter" {
+			hosts := strings.Fields(m.input.Value())
 			if len(hosts) == 0 {
 				m.toast = toast{text: "host required", level: toastWarn}
 				return m, nil
 			}
-			if m.groupIndex >= 0 {
+			m.toast = toast{}
+			switch {
+			case !addToGroup:
+				return m, func() tea.Msg {
+					return customHostConnectMsg{returnTo: m.returnTo, groupIndex: m.groupIndex, hosts: hosts}
+				}
+			case m.groupIndex >= 0:
 				return m, func() tea.Msg { return customHostDoneMsg{returnTo: m.returnTo, groupIndex: m.groupIndex, hosts: hosts} }
-			}
-			return m, func() tea.Msg { return customHostPickGroupMsg{returnTo: m.returnTo, hosts: hosts} }
-		}
-		if msg.String() == "enter" {
-			m.toast = toast{}
-			hosts := strings.Fields(strings.TrimSpace(m.input.Value()))
-			if len(hosts) == 0 {
-				m.toast = toast{text: "host required", level: toastWarn}
-				return m, nil
-			}
-			return m, func() tea.Msg {
-				return customHostConnectMsg{returnTo: m.returnTo, groupIndex: m.groupIndex, hosts: hosts}
+			default:
+				return m, func() tea.Msg { return openGroupPickerMsg{returnTo: m.returnTo, hosts: hosts} }
 			}
 		}
 	}

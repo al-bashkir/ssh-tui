@@ -27,47 +27,19 @@ func placeCentered(fullW, fullH int, box string) string {
 }
 
 func modalSize(fullW, fullH int, maxW, maxH int, marginW, marginH int) (w, h int) {
-	// width
-	w = maxW
-	if fullW > 0 {
-		w = fullW - marginW
-		if w < 0 {
-			w = 0
-		}
-	}
-	if maxW > 0 && w > maxW {
-		w = maxW
-	}
-	if fullW > 0 {
-		if w <= 0 {
-			w = fullW
-		}
-		if w > fullW {
-			w = fullW
-		}
-	}
+	return modalDim(fullW, maxW, marginW), modalDim(fullH, maxH, marginH)
+}
 
-	// height
-	h = maxH
-	if fullH > 0 {
-		h = fullH - marginH
-		if h < 0 {
-			h = 0
-		}
+// modalDim is full minus margin, capped at maxV. Unknown size (full <= 0)
+// gives maxV; a margin that leaves nothing gives full.
+func modalDim(full, maxV, margin int) int {
+	if full <= 0 {
+		return maxV
 	}
-	if maxH > 0 && h > maxH {
-		h = maxH
+	if v := min(maxV, full-margin); v > 0 {
+		return v
 	}
-	if fullH > 0 {
-		if h <= 0 {
-			h = fullH
-		}
-		if h > fullH {
-			h = fullH
-		}
-	}
-
-	return w, h
+	return full
 }
 
 func groupFormModalSize(fullW, fullH int) (w, h int) {

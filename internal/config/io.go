@@ -128,9 +128,6 @@ func Load(path string) (Config, string, error) {
 	if err != nil {
 		return DefaultConfig(), used, err
 	}
-	if cfg.Version == 0 {
-		cfg.Version = 1
-	}
 	return cfg, used, nil
 }
 
@@ -148,9 +145,6 @@ func LoadInventory(path string) (Inventory, string, error) {
 	used, err := loadTOML(path, defaultHostsPath, "hosts", &inv)
 	if err != nil {
 		return DefaultInventory(), used, err
-	}
-	if inv.Version == 0 {
-		inv.Version = 1
 	}
 	for _, g := range inv.Groups {
 		if err := ValidateGroupName(g.Name); err != nil {

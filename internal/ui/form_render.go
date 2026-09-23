@@ -18,7 +18,7 @@ func (m *formModel) renderFormContent(innerW int) ([]string, int) {
 
 	for i, item := range m.items {
 		focused := i == m.focusIdx
-		sec := &m.schema.Sections[item.sectionIdx]
+		sec := &m.schema[item.sectionIdx]
 
 		// Render a section separator before the first field of each section.
 		if item.sectionIdx != prevSectionIdx {
@@ -92,13 +92,13 @@ func (m *formModel) renderFieldLines(fd *fieldDef, focused bool, innerW, fieldW 
 
 	switch fd.Kind {
 	case fieldText, fieldNumber:
-		in := m.input(fd.Key)
+		in := m.inputs[fd.Key]
 		w := fieldW
 		if fd.Narrow {
 			w = min(12, fieldW)
 		}
 		if in != nil {
-			lines = append(lines, prefix+labelStr+" "+underlineInput(*in, focused, w))
+			lines = append(lines, prefix+labelStr+" "+underlineText(in.View(), false, w))
 		} else {
 			lines = append(lines, prefix+labelStr+" "+underlineText(m.values[fd.Key], focused, w))
 		}
@@ -115,7 +115,7 @@ func (m *formModel) renderFieldLines(fd *fieldDef, focused bool, innerW, fieldW 
 		}
 		rendered := padVisible(displayVal, fieldW)
 		if focused {
-			rendered = checkedStyle.Render(rendered)
+			rendered = accentStyle.Render(rendered)
 		} else {
 			rendered = dim.Render(rendered)
 		}
@@ -155,7 +155,7 @@ func renderPickerInline(options []fieldOption, cur string, focused bool, maxW in
 
 	indicator := dim.Render(" ▾")
 	if focused {
-		display = checkedStyle.Render(display)
+		display = accentStyle.Render(display)
 	}
 
 	text := display + indicator

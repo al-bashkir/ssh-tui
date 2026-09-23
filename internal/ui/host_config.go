@@ -30,7 +30,7 @@ func copyHostConfigCmd(inv config.Inventory, host string, returnTo screen, t *to
 		return nil
 	}
 	hc.Host = suggestCopyHostKey(inv, hc.Host)
-	return func() tea.Msg { return openHostFormPrefillMsg{host: hc, returnTo: returnTo} }
+	return func() tea.Msg { return openHostFormMsg{prefill: &hc, returnTo: returnTo} }
 }
 
 func findHostConfig(inv config.Inventory, host string) (index int, hc config.Host) {

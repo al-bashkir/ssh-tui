@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -25,6 +26,35 @@ func sshPlaceholders(defs config.Defaults) (port, identity, extraArgs string) {
 	return port, identity, extraArgs
 }
 
+// parsePort parses an optional port field; an empty field gives 0.
+func parsePort(s string) (int, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, nil
+	}
+	p, err := strconv.Atoi(s)
+	if err != nil || p <= 0 {
+		return 0, fmt.Errorf("invalid port")
+	}
+	return p, nil
+}
+
+// formatPort is the form value for port; 0 (unset) gives "".
+func formatPort(p int) string {
+	if p == 0 {
+		return ""
+	}
+	return strconv.Itoa(p)
+}
+
+// parseArgs splits a space-separated args field; an empty field gives nil.
+func parseArgs(s string) []string {
+	if f := strings.Fields(s); len(f) > 0 {
+		return f
+	}
+	return nil
+}
+
 // formTitle builds the modal title: the edited item's name under its parent
 // crumb, or a create/edit label when there is no name yet.
 func formTitle(parentCrumb string, index int, name, createTitle, editTitle string) string {
@@ -44,8 +74,6 @@ func renderModalForm(f *formModel, width, height int, title string, t toast) str
 		return ""
 	}
 	innerW := max(0, width-2)
-	lines, focusLine := f.renderFormContent(innerW)
-
 	reserved := 2 // sep + footer
 	toastStr := ""
 	if !t.empty() {
@@ -53,13 +81,19 @@ func renderModalForm(f *formModel, width, height int, title string, t toast) str
 		reserved++
 	}
 	visibleH := max(1, max(0, height-2)-reserved)
+	return renderFormBox(width, title, f.visibleLines(innerW, visibleH), visibleH, toastStr, f.renderFooter())
+}
 
+// visibleLines renders the form content scrolled so the focused field shows
+// within visibleH lines, with any open picker overlaid.
+func (f *formModel) visibleLines(innerW, visibleH int) []string {
+	lines, focusLine := f.renderFormContent(innerW)
 	start, end := formScrollWindow(len(lines), visibleH, focusLine)
 	visible := lines[start:end]
 	if f.picker != nil {
 		visible = f.overlayPickerOnVisible(visible, focusLine-start, innerW)
 	}
-	return renderFormBox(width, title, visible, visibleH, toastStr, f.renderFooter())
+	return visible
 }
 
 // formLabel renders a padded label for a form field.
@@ -69,7 +103,7 @@ func formLabel(s string, labelW int, focused bool) string {
 		s += strings.Repeat(" ", labelW-len(s))
 	}
 	if focused {
-		return headerStyle.Render(s)
+		return accentStyle.Render(s)
 	}
 	return s
 }
@@ -93,4 +127,30 @@ func renderFormBox(totalW int, title string, visibleLines []string, visibleH int
 	out = append(out, focusedBoxLine(totalW, padVisible(footer, innerW)))
 	out = append(out, focusedBoxBottom(totalW))
 	return strings.Join(out, "\n")
+}
+
+// validatePort checks that a port string is empty or a valid port number.
+func validatePort(s string) error {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	p, err := strconv.Atoi(s)
+	if err != nil || p <= 0 || p > 65535 {
+		return fmt.Errorf("must be a number 1-65535")
+	}
+	return nil
+}
+
+// validateNonNegativeInt checks that a string is empty or a non-negative integer.
+func validateNonNegativeInt(s string) error {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 0 {
+		return fmt.Errorf("must be a number >= 0")
+	}
+	return nil
 }

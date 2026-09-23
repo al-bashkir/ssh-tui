@@ -29,11 +29,6 @@ type Options struct {
 	Popup         bool // quit after any tmux connect (for tmux popup use)
 }
 
-type exitState interface {
-	IsQuitting() bool
-	ExecCmd() []string
-}
-
 func Run(opts Options) error {
 	if len(opts.KnownHosts) == 0 && opts.Config.Defaults.LoadKnownHosts {
 		opts.KnownHosts = hosts.DefaultKnownHostsPaths()
@@ -48,11 +43,11 @@ func Run(opts Options) error {
 	if err != nil {
 		return err
 	}
-	if st, ok := model.(exitState); ok {
-		if cmd := st.ExecCmd(); len(cmd) != 0 {
-			return &ExecRequest{Cmd: cmd}
+	if st, ok := model.(*appModel); ok {
+		if len(st.execCmd) != 0 {
+			return &ExecRequest{Cmd: st.execCmd}
 		}
-		if st.IsQuitting() {
+		if st.quitting {
 			return ErrQuit
 		}
 	}

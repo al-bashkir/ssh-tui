@@ -22,16 +22,6 @@ type formNavItem struct {
 }
 
 // ---------------------------------------------------------------------------
-// Text input entry
-// ---------------------------------------------------------------------------
-
-// formTextInput pairs a field key with its textinput.Model.
-type formTextInput struct {
-	key   string
-	input textinput.Model
-}
-
-// ---------------------------------------------------------------------------
 // formModel
 // ---------------------------------------------------------------------------
 
@@ -49,7 +39,7 @@ type formModel struct {
 	focusIdx int           // index into items
 	editing  bool          // true when in insert mode
 
-	inputs []formTextInput // text inputs for text/number fields
+	inputs map[string]*textinput.Model // text inputs for text/number fields, by key
 
 	picker *optionPickerPopup // non-nil when a picker popup is open
 
@@ -75,15 +65,16 @@ func newFormModel(schema formSchema, values map[string]string, labelWidth int, s
 		values:         values,
 		originals:      originals,
 		validationErrs: make(map[string]string),
+		inputs:         make(map[string]*textinput.Model),
 		labelWidth:     labelWidth,
 		fieldIndent:    2,
 		showFieldHelp:  showFieldHelp,
 	}
 
 	// Create text inputs for text/number fields.
-	for si := range schema.Sections {
-		for fi := range schema.Sections[si].Fields {
-			fd := &schema.Sections[si].Fields[fi]
+	for si := range schema {
+		for fi := range schema[si].Fields {
+			fd := &schema[si].Fields[fi]
 			if !fd.isTextField() {
 				continue
 			}
@@ -97,7 +88,7 @@ func newFormModel(schema formSchema, values map[string]string, labelWidth int, s
 			in.SetValue(values[fd.Key])
 			in.Placeholder = fd.Placeholder
 			configureSearch(&in)
-			m.inputs = append(m.inputs, formTextInput{key: fd.Key, input: in})
+			m.inputs[fd.Key] = &in
 		}
 	}
 
@@ -109,7 +100,7 @@ func newFormModel(schema formSchema, values map[string]string, labelWidth int, s
 		// Skip disabled fields.
 		for i := 0; i < len(m.items); i++ {
 			item := m.items[i]
-			fd := &m.schema.Sections[item.sectionIdx].Fields[item.fieldIdx]
+			fd := &m.schema[item.sectionIdx].Fields[item.fieldIdx]
 			if m.isFieldDisabled(fd) == "" {
 				m.focusIdx = i
 				break
@@ -124,26 +115,6 @@ func newFormModel(schema formSchema, values map[string]string, labelWidth int, s
 // ---------------------------------------------------------------------------
 // Value access
 // ---------------------------------------------------------------------------
-
-// input returns a pointer to the textinput.Model for the given field key.
-func (m *formModel) input(key string) *textinput.Model {
-	for i := range m.inputs {
-		if m.inputs[i].key == key {
-			return &m.inputs[i].input
-		}
-	}
-	return nil
-}
-
-// value returns the current form value for a field key.
-func (m *formModel) value(key string) string {
-	return m.values[key]
-}
-
-// setValue updates the current form value for a field key.
-func (m *formModel) setValue(key, val string) {
-	m.values[key] = val
-}
 
 // isDirty returns true if any value differs from the original snapshot.
 func (m *formModel) isDirty() bool {
@@ -170,7 +141,7 @@ func (m *formModel) resetOriginals() {
 // rebuildItems constructs the flat navigation list of fields.
 func (m *formModel) rebuildItems() {
 	m.items = m.items[:0]
-	for si, sec := range m.schema.Sections {
+	for si, sec := range m.schema {
 		for fi := range sec.Fields {
 			m.items = append(m.items, formNavItem{sectionIdx: si, fieldIdx: fi})
 		}
@@ -192,8 +163,8 @@ func (m *formModel) focusedItem() formNavItem {
 // focusedField returns the definition of the focused field, or nil.
 func (m *formModel) focusedField() *fieldDef {
 	item := m.focusedItem()
-	if item.sectionIdx < len(m.schema.Sections) {
-		sec := &m.schema.Sections[item.sectionIdx]
+	if item.sectionIdx < len(m.schema) {
+		sec := &m.schema[item.sectionIdx]
 		if item.fieldIdx < len(sec.Fields) {
 			return &sec.Fields[item.fieldIdx]
 		}
@@ -234,8 +205,8 @@ func (m *formModel) isFocusedFieldDisabled() bool {
 // Also used to re-apply styles after a theme/accent change.
 func (m *formModel) applyFocusStyles() {
 	focusedKey := m.focusedFieldKey()
-	for i := range m.inputs {
-		setSearchFocused(&m.inputs[i].input, m.inputs[i].key == focusedKey)
+	for key, in := range m.inputs {
+		setSearchFocused(in, key == focusedKey)
 	}
 }
 
@@ -267,7 +238,7 @@ func (m *formModel) moveFocus(delta int) {
 		}
 		// Check if the candidate is enabled.
 		item := m.items[pos]
-		sec := &m.schema.Sections[item.sectionIdx]
+		sec := &m.schema[item.sectionIdx]
 		fd := &sec.Fields[item.fieldIdx]
 		if m.isFieldDisabled(fd) == "" {
 			m.setFocusIdx(pos)
@@ -288,7 +259,7 @@ func (m *formModel) enterEdit() {
 		return
 	}
 	m.editing = true
-	if in := m.input(fd.Key); in != nil {
+	if in := m.inputs[fd.Key]; in != nil {
 		_ = in.Focus()
 	}
 }
@@ -300,7 +271,7 @@ func (m *formModel) exitEdit() {
 	}
 	m.editing = false
 	if fd := m.focusedField(); fd != nil && fd.isTextField() {
-		if in := m.input(fd.Key); in != nil {
+		if in := m.inputs[fd.Key]; in != nil {
 			m.values[fd.Key] = in.Value()
 			in.Blur()
 		}
@@ -315,7 +286,7 @@ func (m *formModel) updateFocusedInput(msg tea.Msg) tea.Cmd {
 	if fd == nil || !fd.isTextField() {
 		return nil
 	}
-	in := m.input(fd.Key)
+	in := m.inputs[fd.Key]
 	if in == nil {
 		return nil
 	}
@@ -498,12 +469,10 @@ func (m *formModel) handleResize(w, h int) {
 	m.height = h
 	innerW := max(0, w-2)
 	fieldW := max(10, innerW-m.fieldIndent-m.labelWidth-1)
-	for i := range m.inputs {
-		fd := m.schema.fieldByKey(m.inputs[i].key)
-		if fd != nil && fd.Narrow {
-			m.inputs[i].input.Width = min(12, fieldW)
-		} else {
-			m.inputs[i].input.Width = fieldW
+	for key, in := range m.inputs {
+		in.Width = fieldW
+		if fd := m.schema.fieldByKey(key); fd != nil && fd.Narrow {
+			in.Width = min(12, fieldW)
 		}
 	}
 }
@@ -518,7 +487,7 @@ func (m *formModel) positionInfo() string {
 		return ""
 	}
 	item := m.items[m.focusIdx]
-	sec := &m.schema.Sections[item.sectionIdx]
+	sec := &m.schema[item.sectionIdx]
 	return fmt.Sprintf("%d/%d %s", item.fieldIdx+1, len(sec.Fields), sec.Label)
 }
 
@@ -550,9 +519,9 @@ func (m *formModel) footerHints() string {
 func (m *formModel) renderFooter() string {
 	pos := m.positionInfo()
 	if m.editing {
-		return footerStyle.Render(pos) + "  " + headerStyle.Render("INSERT") + "  " + styledFooter("Ctrl+S save  Esc done")
+		return dim.Render(pos) + "  " + accentStyle.Render("INSERT") + "  " + styledFooter("Ctrl+S save  Esc done")
 	}
-	return footerStyle.Render(pos) + "  " + styledFooter(m.footerHints())
+	return dim.Render(pos) + "  " + styledFooter(m.footerHints())
 }
 
 // ---------------------------------------------------------------------------
