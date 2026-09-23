@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"github.com/al-bashkir/ssh-tui/internal/config"
-	"github.com/al-bashkir/ssh-tui/internal/hosts"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -25,20 +24,11 @@ type Options struct {
 	KnownHosts    []string
 	Hosts         []string
 	SkippedLines  int
-	LoadErrors    []hosts.PathError
+	LoadErrors    []error
 	Popup         bool // quit after any tmux connect (for tmux popup use)
 }
 
-type exitState interface {
-	IsQuitting() bool
-	ExecCmd() []string
-}
-
 func Run(opts Options) error {
-	if len(opts.KnownHosts) == 0 && opts.Config.Defaults.LoadKnownHosts {
-		opts.KnownHosts = hosts.DefaultKnownHostsPaths()
-	}
-
 	ApplyColorScheme(opts.Config.Defaults.Colorscheme, opts.Config.Defaults.AccentColor)
 
 	m := newAppModel(opts)
@@ -48,11 +38,11 @@ func Run(opts Options) error {
 	if err != nil {
 		return err
 	}
-	if st, ok := model.(exitState); ok {
-		if cmd := st.ExecCmd(); len(cmd) != 0 {
-			return &ExecRequest{Cmd: cmd}
+	if st, ok := model.(*appModel); ok {
+		if len(st.execCmd) != 0 {
+			return &ExecRequest{Cmd: st.execCmd}
 		}
-		if st.IsQuitting() {
+		if st.quitting {
 			return ErrQuit
 		}
 	}

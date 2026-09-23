@@ -6,18 +6,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Modal size constants.
-const (
-	modalMaxWGroup  = 110
-	modalMaxHGroup  = 26
-	modalMaxWHost   = 96
-	modalMaxHHost   = 20
-	modalMaxWPicker = 90
-	modalMaxHPicker = 22
-	modalMaxWCustom = 76
-	modalMaxHCustom = 9
-)
-
 func placeCentered(fullW, fullH int, box string) string {
 	box = strings.TrimRight(box, "\n")
 	if fullW <= 0 || fullH <= 0 {
@@ -26,80 +14,34 @@ func placeCentered(fullW, fullH int, box string) string {
 	return lipgloss.Place(fullW, fullH, lipgloss.Center, lipgloss.Center, box)
 }
 
-func modalSize(fullW, fullH int, maxW, maxH int, marginW, marginH int) (w, h int) {
-	// width
-	w = maxW
-	if fullW > 0 {
-		w = fullW - marginW
-		if w < 0 {
-			w = 0
-		}
-	}
-	if maxW > 0 && w > maxW {
-		w = maxW
-	}
-	if fullW > 0 {
-		if w <= 0 {
-			w = fullW
-		}
-		if w > fullW {
-			w = fullW
-		}
-	}
+// modalSpec sizes a modal: capped at maxW x maxH with margins kept free, and
+// as tall as the terminal allows (up to maxH) once it would drop below minH.
+type modalSpec struct{ maxW, maxH, marginW, marginH, minH int }
 
-	// height
-	h = maxH
-	if fullH > 0 {
-		h = fullH - marginH
-		if h < 0 {
-			h = 0
-		}
-	}
-	if maxH > 0 && h > maxH {
-		h = maxH
-	}
-	if fullH > 0 {
-		if h <= 0 {
-			h = fullH
-		}
-		if h > fullH {
-			h = fullH
-		}
-	}
+var (
+	groupFormModal  = modalSpec{110, 26, 4, 1, 16}
+	hostFormModal   = modalSpec{96, 20, 6, 4, 12}
+	pickerModal     = modalSpec{90, 22, 6, 6, 10}
+	customHostModal = modalSpec{76, 9, 6, 10, 8}
+	cmdPromptModal  = modalSpec{88, 9, 6, 10, 0}
+)
 
-	return w, h
-}
-
-func groupFormModalSize(fullW, fullH int) (w, h int) {
-	// Big form: keep almost full height if needed.
-	w, h = modalSize(fullW, fullH, modalMaxWGroup, modalMaxHGroup, 4, 1)
-	if fullH > 0 && h < 16 {
-		// Fallback to full height in very small terminals.
-		h = fullH
+func (s modalSpec) size(fullW, fullH int) (w, h int) {
+	w, h = modalDim(fullW, s.maxW, s.marginW), modalDim(fullH, s.maxH, s.marginH)
+	if fullH > 0 && h < s.minH {
+		h = min(s.maxH, fullH)
 	}
 	return w, h
 }
 
-func hostFormModalSize(fullW, fullH int) (w, h int) {
-	w, h = modalSize(fullW, fullH, modalMaxWHost, modalMaxHHost, 6, 4)
-	if fullH > 0 && h < 12 {
-		h = fullH
+// modalDim is full minus margin, capped at maxV. Unknown size (full <= 0)
+// gives maxV; a margin that leaves nothing gives full.
+func modalDim(full, maxV, margin int) int {
+	if full <= 0 {
+		return maxV
 	}
-	return w, h
-}
-
-func pickerModalSize(fullW, fullH int) (w, h int) {
-	w, h = modalSize(fullW, fullH, modalMaxWPicker, modalMaxHPicker, 6, 6)
-	if fullH > 0 && h < 10 {
-		h = fullH
+	if v := min(maxV, full-margin); v > 0 {
+		return v
 	}
-	return w, h
-}
-
-func customHostModalSize(fullW, fullH int) (w, h int) {
-	w, h = modalSize(fullW, fullH, modalMaxWCustom, modalMaxHCustom, 6, 10)
-	if fullH > 0 && h < 8 {
-		h = min(9, fullH)
-	}
-	return w, h
+	return full
 }

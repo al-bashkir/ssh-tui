@@ -1,6 +1,9 @@
 package tmux
 
-import "strings"
+import (
+	"os"
+	"strings"
+)
 
 type OpenMode string
 
@@ -10,51 +13,36 @@ const (
 	OpenPane    OpenMode = "tmux-pane"
 )
 
+func InTmux() bool {
+	return os.Getenv("TMUX") != ""
+}
+
 func ResolveOpenMode(tmuxSetting string, openModeSetting string, inTmux bool) OpenMode {
 	tmuxSetting = strings.ToLower(strings.TrimSpace(tmuxSetting))
-	openModeSetting = strings.ToLower(strings.TrimSpace(openModeSetting))
+	openMode := OpenMode(strings.ToLower(strings.TrimSpace(openModeSetting)))
 
-	if tmuxSetting == "never" {
+	switch {
+	case tmuxSetting == "never":
 		return OpenCurrent
-	}
-
-	if tmuxSetting == "force" {
-		if openModeSetting == string(OpenPane) {
-			return OpenPane
-		}
-		return OpenWindow
-	}
-
-	switch openModeSetting {
-	case string(OpenCurrent):
-		return OpenCurrent
-	case string(OpenWindow):
-		return OpenWindow
-	case string(OpenPane):
+	case tmuxSetting == "force" && openMode == OpenPane:
 		return OpenPane
-	case "", "auto":
-		if inTmux {
-			return OpenWindow
-		}
-		return OpenCurrent
-	default:
-		// Unknown value: keep MVP behavior predictable.
-		if inTmux {
-			return OpenWindow
-		}
-		return OpenCurrent
+	case tmuxSetting == "force":
+		return OpenWindow
 	}
+
+	switch openMode {
+	case OpenCurrent, OpenWindow, OpenPane:
+		return openMode
+	}
+	// "", "auto" and unknown values.
+	if inTmux {
+		return OpenWindow
+	}
+	return OpenCurrent
 }
 
 func NewWindowCmd(name string, sshCmd []string) []string {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		name = "ssh"
-	}
-
-	cmd := []string{"tmux", "new-window", "-n", name, "--"}
-	cmd = append(cmd, sshCmd...)
-	return cmd
+	return append([]string{"tmux", "new-window", "-n", name, "--"}, sshCmd...)
 }
 
 func NewSessionCmd(session string, sshCmd []string) []string {
@@ -62,8 +50,5 @@ func NewSessionCmd(session string, sshCmd []string) []string {
 	if session == "" {
 		session = "ssh-tui"
 	}
-
-	cmd := []string{"tmux", "new-session", "-A", "-s", session, "--"}
-	cmd = append(cmd, sshCmd...)
-	return cmd
+	return append([]string{"tmux", "new-session", "-A", "-s", session, "--"}, sshCmd...)
 }

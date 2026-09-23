@@ -15,4 +15,3 @@ Useful flags:
 - `--config <path>`
 - `--known-hosts <path>` (repeatable)
 - `--no-tmux`
-- `--debug`

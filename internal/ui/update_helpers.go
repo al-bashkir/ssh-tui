@@ -95,9 +95,7 @@ func clearSearch(focus *focusState, search *textinput.Model, prevSearch *string,
 // matched nothing, then return to the list.
 func acceptSearch(focus *focusState, search *textinput.Model, prevSearch *string, itemCount int, applyFilter func(string)) {
 	if itemCount == 0 && search.Value() != "" {
-		search.SetValue("")
-		applyFilter("")
-		*prevSearch = ""
+		clearSearch(focus, search, prevSearch, applyFilter, false)
 	}
 	setFocus(focus, search, focusList)
 }
@@ -117,7 +115,7 @@ func newCmdPromptInput(totalW, totalH int) textinput.Model {
 	in.Prompt = "cmd: "
 	in.Placeholder = "run on remote, keep session open"
 
-	mw, mh := modalSize(totalW, totalH, cmdPromptMaxW, cmdPromptMaxH, cmdPromptMarginW, cmdPromptMarginH)
+	mw, mh := cmdPromptModal.size(totalW, totalH)
 	innerW, _ := frameInnerSize(mw, mh)
 	in.Width = min(70, max(1, innerW-len(in.Prompt)))
 
@@ -152,65 +150,62 @@ func handleCmdPromptKey(msg tea.KeyMsg, open *bool, in *textinput.Model, t *toas
 	}
 }
 
+type answer int
+
+const (
+	unanswered answer = iota
+	answerYes
+	answerNo
+)
+
+// confirmAnswer reads a key pressed in a y/n confirm dialog.
+func confirmAnswer(msg tea.KeyMsg) answer {
+	switch msg.String() {
+	case "y", "Y", "enter":
+		return answerYes
+	case "n", "N", "esc":
+		return answerNo
+	}
+	return unanswered
+}
+
 // handleConfirmQuit processes a key when the quit-confirm dialog is shown.
 // It returns (true, cmd) if the key was consumed, (false, nil) otherwise.
-// quitting may be nil for models that don't track a quitting state (e.g. pickers).
-// clearToast controls whether the toast is cleared when the user cancels.
-func handleConfirmQuit(
-	msg tea.KeyMsg,
-	confirmQuit *bool,
-	t *toast,
-	quitting *bool,
-	clearToast bool,
-) (handled bool, cmd tea.Cmd) {
+func handleConfirmQuit(msg tea.KeyMsg, confirmQuit *bool, t *toast, quitting *bool) (handled bool, cmd tea.Cmd) {
 	if !*confirmQuit {
 		return false, nil
 	}
-	switch msg.String() {
-	case "y", "Y", "enter":
-		if quitting != nil {
-			*quitting = true
-		}
+	switch confirmAnswer(msg) {
+	case answerYes:
+		*quitting = true
 		return true, tea.Quit
-	case "n", "N", "esc":
+	case answerNo:
 		*confirmQuit = false
-		if clearToast {
-			*t = toast{}
-		}
-		return true, nil
-	default:
-		return true, nil
+		*t = toast{}
 	}
+	return true, nil
 }
 
 // handleConfirmConnect processes a key when the connect-confirm dialog is shown.
 // Returns (true, cmd) if the key was consumed, (false, nil) otherwise.
-func handleConfirmConnect(
-	msg tea.KeyMsg,
-	confirmConnect *bool,
-	pendingFn *func() tea.Cmd,
-	t *toast,
-) (handled bool, cmd tea.Cmd) {
+func handleConfirmConnect(msg tea.KeyMsg, confirmConnect *bool, pendingFn *func() tea.Cmd, t *toast) (handled bool, cmd tea.Cmd) {
 	if !*confirmConnect {
 		return false, nil
 	}
-	switch msg.String() {
-	case "y", "Y", "enter":
+	switch confirmAnswer(msg) {
+	case answerYes:
 		*confirmConnect = false
 		fn := *pendingFn
 		*pendingFn = nil
 		if fn != nil {
 			return true, fn()
 		}
-		return true, nil
-	case "n", "N", "esc":
+	case answerNo:
 		*confirmConnect = false
 		*pendingFn = nil
 		*t = toast{}
-		return true, nil
-	default:
-		return true, nil
 	}
+	return true, nil
 }
 
 func handleVimListNav(msg tea.KeyMsg, l *list.Model, pendingG *bool) bool {

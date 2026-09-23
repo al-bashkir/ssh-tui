@@ -4,22 +4,27 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
+// helpSection is a named group of key bindings shown in the help modal.
+type helpSection struct {
+	title string
+	keys  []key.Binding
+}
+
 // helpContent generates the rendered help text body (without the box).
-func helpContent(title string, keys helpMap) string {
-	header := helpTitleStyle.Render(title + " keybindings")
-	body := renderHelpSections(keys.sections)
+func helpContent(title string, sections []helpSection) string {
+	header := accentStyle.Render(title + " keybindings")
 	footer := styledFooter("Esc/? close  j/k scroll")
-	return header + "\n\n" + body + "\n\n" + footer
+	return header + "\n\n" + renderHelpSections(sections) + "\n\n" + footer
 }
 
 // renderHelpSections renders keybindings grouped by named sections.
 func renderHelpSections(sections []helpSection) string {
-	keyStyle := lipgloss.NewStyle().Foreground(cAccent).Bold(true)
 	sectionStyle := secondaryStyle.Bold(true)
 
 	var sb strings.Builder
@@ -34,56 +39,39 @@ func renderHelpSections(sections []helpSection) string {
 				continue
 			}
 			help := k.Help()
-			sb.WriteString("  ")
-			sb.WriteString(keyStyle.Render(help.Key))
-			sb.WriteString(hintStyle.Render("  " + help.Desc))
-			sb.WriteByte('\n')
+			sb.WriteString("  " + accentStyle.Render(help.Key) + hintStyle.Render("  "+help.Desc) + "\n")
 		}
 	}
 	return strings.TrimRight(sb.String(), "\n")
 }
 
 func helpBoxWidth(termW int) int {
-	boxW := min(helpMaxBoxWidth, termW-confirmDialogMargin)
+	boxW := min(88, termW-4)
 	if boxW < 30 {
 		boxW = min(termW, 30)
 	}
 	return boxW
 }
 
-func helpInnerWidth(boxW int) int {
-	// Subtract border (2) + horizontal padding (2*2) = 6.
-	innerW := boxW - confirmDialogPadding
+// initHelpViewport creates a viewport sized for the help modal and sets its content.
+func initHelpViewport(width, height int, title string, sections []helpSection) viewport.Model {
+	// Subtract border (2) + horizontal padding (2*2).
+	innerW := helpBoxWidth(width) - 6
 	if innerW < 20 {
 		innerW = 0
 	}
-	return innerW
-}
-
-// initHelpViewport creates a viewport sized for the help modal and sets its content.
-func initHelpViewport(width, height int, title string, keys helpMap) viewport.Model {
-	boxW := helpBoxWidth(width)
-	innerW := helpInnerWidth(boxW)
-
-	content := helpContent(title, keys)
+	content := helpContent(title, sections)
 
 	// Size viewport to fit content, but cap at available terminal height.
 	contentLines := strings.Count(content, "\n") + 1
-	maxVPH := height - helpBoxOverhead
-	if maxVPH < 3 {
-		maxVPH = 3
-	}
-	vpH := min(contentLines, maxVPH)
-
-	vp := viewport.New(innerW, vpH)
+	vp := viewport.New(innerW, min(contentLines, max(3, height-4)))
 	vp.SetContent(content)
 	return vp
 }
 
 // updateHelpViewport sends a key message to the viewport for scrolling.
 func updateHelpViewport(vp *viewport.Model, msg tea.KeyMsg) {
-	s := msg.String()
-	switch s {
+	switch msg.String() {
 	case "j", "down":
 		vp.ScrollDown(1)
 	case "k", "up":
@@ -95,45 +83,31 @@ func updateHelpViewport(vp *viewport.Model, msg tea.KeyMsg) {
 	}
 }
 
-func renderHelpModal(width, height int, title string, keys helpMap) string {
-	return renderHelpModalWithVP(width, height, title, keys, nil)
-}
-
-func renderHelpModalWithVP(width, height int, title string, keys helpMap, vp *viewport.Model) string {
-	title = strings.TrimSpace(title)
-	if title == "" {
-		title = "Help"
-	}
-
+// renderHelpModal renders the help overlay. vp may be nil for screens that
+// do not scroll their help; a fresh viewport is used then.
+func renderHelpModal(width, height int, title string, sections []helpSection, vp *viewport.Model) string {
 	// Fallback for very early render before we have window size.
 	if width <= 0 || height <= 0 {
-		return helpTitleStyle.Render(title) + "\n\n" + renderHelpSections(keys.sections)
+		return accentStyle.Render(title) + "\n\n" + renderHelpSections(sections)
+	}
+	if vp == nil {
+		v := initHelpViewport(width, height, title, sections)
+		vp = &v
 	}
 
-	boxW := helpBoxWidth(width)
-
-	if vp != nil {
-		content := vp.View()
-
-		// Scroll indicator when content overflows.
-		if vp.TotalLineCount() > vp.VisibleLineCount() {
-			pct := int(vp.ScrollPercent() * 100)
-			arrows := ""
-			if vp.ScrollPercent() > 0 {
-				arrows += "▲ "
-			}
-			if vp.ScrollPercent() < 1 {
-				arrows += "▼ "
-			}
-			content += "\n" + dim.Render(fmt.Sprintf("%s%d%%", arrows, pct))
+	content := vp.View()
+	// Scroll indicator when content overflows.
+	if vp.TotalLineCount() > vp.VisibleLineCount() {
+		arrows := ""
+		if vp.ScrollPercent() > 0 {
+			arrows += "▲ "
 		}
-
-		box := helpBoxStyle.Width(boxW).Render(content)
-		return withThemeBG(lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, box))
+		if vp.ScrollPercent() < 1 {
+			arrows += "▼ "
+		}
+		content += "\n" + dim.Render(fmt.Sprintf("%s%d%%", arrows, int(vp.ScrollPercent()*100)))
 	}
 
-	// Non-viewport fallback (legacy).
-	content := helpContent(title, keys)
-	box := helpBoxStyle.Width(boxW).Render(content)
+	box := helpBoxStyle.Width(helpBoxWidth(width)).Render(content)
 	return withThemeBG(lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, box))
 }

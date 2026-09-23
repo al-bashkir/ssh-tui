@@ -19,10 +19,7 @@ func TestApplyGroupOverDefaults(t *testing.T) {
 }
 
 func TestBuildCommandRemoteCommand(t *testing.T) {
-	cmd, err := BuildCommand("example.com", Settings{RemoteCommand: "echo hi"})
-	if err != nil {
-		t.Fatalf("error: %v", err)
-	}
+	cmd := BuildCommand("example.com", Settings{RemoteCommand: "echo hi"})
 	want := []string{"ssh", "example.com", "sh -c 'echo hi'"}
 	if !reflect.DeepEqual(cmd, want) {
 		t.Fatalf("cmd=%v, want %v", cmd, want)
@@ -30,10 +27,7 @@ func TestBuildCommandRemoteCommand(t *testing.T) {
 }
 
 func TestBuildCommandPlainHost(t *testing.T) {
-	cmd, err := BuildCommand("example.com", Settings{User: "me", Port: 2222, IdentityFile: "~/.ssh/id", ExtraArgs: []string{"-o", "StrictHostKeyChecking=no"}})
-	if err != nil {
-		t.Fatalf("error: %v", err)
-	}
+	cmd := BuildCommand("example.com", Settings{User: "me", Port: 2222, IdentityFile: "~/.ssh/id", ExtraArgs: []string{"-o", "StrictHostKeyChecking=no"}})
 
 	want := []string{"ssh", "-i", "~/.ssh/id", "-p", "2222", "-o", "StrictHostKeyChecking=no", "me@example.com"}
 	if !reflect.DeepEqual(cmd, want) {
@@ -42,10 +36,7 @@ func TestBuildCommandPlainHost(t *testing.T) {
 }
 
 func TestBuildCommandBracketHostForcesPort(t *testing.T) {
-	cmd, err := BuildCommand("[10.10.10.10]:2201", Settings{User: "", Port: 2222})
-	if err != nil {
-		t.Fatalf("error: %v", err)
-	}
+	cmd := BuildCommand("[10.10.10.10]:2201", Settings{User: "", Port: 2222})
 
 	want := []string{"ssh", "-p", "2201", "10.10.10.10"}
 	if !reflect.DeepEqual(cmd, want) {
@@ -54,10 +45,7 @@ func TestBuildCommandBracketHostForcesPort(t *testing.T) {
 }
 
 func TestBuildCommandPort22Omitted(t *testing.T) {
-	cmd, err := BuildCommand("example.com", Settings{Port: 22})
-	if err != nil {
-		t.Fatalf("error: %v", err)
-	}
+	cmd := BuildCommand("example.com", Settings{Port: 22})
 
 	want := []string{"ssh", "example.com"}
 	if !reflect.DeepEqual(cmd, want) {

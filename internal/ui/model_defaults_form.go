@@ -8,7 +8,6 @@ import (
 	"github.com/al-bashkir/ssh-tui/internal/config"
 
 	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/lipgloss"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -31,85 +30,83 @@ type defaultsFormSaveMsg struct {
 // screen, organized into five sections following Variant A layout.
 func settingsSchema() formSchema {
 	return formSchema{
-		Sections: []sectionDef{
-			{Key: "ssh", Label: "SSH", Fields: []fieldDef{
-				{Key: "user", Label: "User", Kind: fieldText,
-					Placeholder: "login username",
-					Helper:      "Default SSH username for all connections",
-					CharLimit:   128},
-				{Key: "port", Label: "Port", Kind: fieldNumber,
-					Default: "22", Placeholder: "22",
-					Helper:    "Default SSH port (1\u201365535)",
-					CharLimit: 6, Narrow: true,
-					Validate: validatePort},
-				{Key: "identity", Label: "Identity file", Kind: fieldText,
-					Placeholder: "~/.ssh/id_ed25519",
-					Helper:      "Path to SSH private key for authentication",
-					CharLimit:   512},
-				{Key: "extra_args", Label: "Extra arguments", Kind: fieldText,
-					Placeholder: "-o Option=value ...",
-					Helper:      "Additional ssh flags, space-separated",
-					CharLimit:   1024},
-				{Key: "load_known_hosts", Label: "Load known_hosts", Kind: fieldPicker,
-					Options: opts("yes", "no"), Default: "yes",
-					Helper: "Auto-import hosts from ~/.ssh/known_hosts"},
-			}},
-			{Key: "appearance", Label: "Appearance", Fields: []fieldDef{
-				{Key: "colorscheme", Label: "Colorscheme", Kind: fieldPicker,
-					Options: opts("default", "dracula", "nord", "gruvbox", "catppuccin", "kanagawa"),
-					Helper:  "Application color theme"},
-				{Key: "accent", Label: "Accent color", Kind: fieldPicker,
-					Options: opts("default", "blue", "cyan", "green", "amber", "red", "magenta"),
-					Helper:  "UI accent color (overridden when a colorscheme is active)",
-					DisabledWhen: func(values map[string]string) string {
-						if cs := values["colorscheme"]; cs != "" && cs != "default" {
-							return "overridden by " + cs + " theme"
-						}
-						return ""
-					}},
-				{Key: "show_field_help", Label: "Field help", Kind: fieldPicker,
-					Options: opts("yes", "no"), Default: "yes",
-					Helper: "Show helper text below focused form fields"},
-			}},
-			{Key: "tmux", Label: "Tmux", Fields: []fieldDef{
-				{Key: "tmux", Label: "Tmux mode", Kind: fieldPicker,
-					Options: opts("auto", "force", "never"),
-					Helper:  "auto: use tmux when available, force: require, never: disable"},
-				{Key: "open_mode", Label: "Open mode", Kind: fieldPicker,
-					Options: opts("auto", "current", "tmux-window", "tmux-pane"),
-					Helper:  "How to open new SSH sessions"},
-				{Key: "session", Label: "Session name", Kind: fieldText,
-					Default: "ssh-tui", Placeholder: "ssh-tui",
-					Helper:    "Name of the tmux session to use",
-					CharLimit: 128},
-			}},
-			{Key: "behavior", Label: "Behavior", Fields: []fieldDef{
-				{Key: "confirm_quit", Label: "Confirm quit", Kind: fieldPicker,
-					Options: opts("yes", "no"), Default: "no",
-					Helper: "Show confirmation dialog before quitting"},
-				{Key: "threshold", Label: "Confirm threshold", Kind: fieldNumber,
-					Default: "5", Placeholder: "5",
-					Helper:    "Ask before connecting to more than N hosts (0 = never)",
-					CharLimit: 6, Narrow: true,
-					Validate: validateNonNegativeInt},
-			}},
-			{Key: "panes", Label: "Panes", Fields: []fieldDef{
-				{Key: "pane_split", Label: "Split direction", Kind: fieldPicker,
-					Options: opts("horizontal", "vertical"),
-					Helper:  "Direction for splitting tmux panes"},
-				{Key: "pane_layout", Label: "Layout", Kind: fieldPicker,
-					Options: opts("auto", "tiled", "even-horizontal", "even-vertical", "main-horizontal", "main-vertical"),
-					Helper:  "Tmux pane arrangement algorithm"},
-				{Key: "pane_sync", Label: "Synchronize input", Kind: fieldPicker,
-					Options: opts("on", "off"), Default: "on",
-					Helper: "Send keystrokes to all panes simultaneously"},
-				{Key: "border_pos", Label: "Border position", Kind: fieldPicker,
-					Options: opts("bottom", "top", "off"),
-					Helper:  "Position of pane border status line"},
-				{Key: "border_fmt", Label: "Border format", Kind: fieldSubModal,
-					Helper: "Tmux format string for pane borders"},
-			}},
-		},
+		{Label: "SSH", Fields: []fieldDef{
+			{Key: "user", Label: "User", Kind: fieldText,
+				Placeholder: "login username",
+				Helper:      "Default SSH username for all connections",
+				CharLimit:   128},
+			{Key: "port", Label: "Port", Kind: fieldNumber,
+				Placeholder: "22",
+				Helper:      "Default SSH port (1\u201365535)",
+				CharLimit:   6, Narrow: true,
+				Validate: validatePort},
+			{Key: "identity", Label: "Identity file", Kind: fieldText,
+				Placeholder: "~/.ssh/id_ed25519",
+				Helper:      "Path to SSH private key for authentication",
+				CharLimit:   512},
+			{Key: "extra_args", Label: "Extra arguments", Kind: fieldText,
+				Placeholder: "-o Option=value ...",
+				Helper:      "Additional ssh flags, space-separated",
+				CharLimit:   1024},
+			{Key: "load_known_hosts", Label: "Load known_hosts", Kind: fieldPicker,
+				Options: opts("yes", "no"),
+				Helper:  "Auto-import hosts from ~/.ssh/known_hosts"},
+		}},
+		{Label: "Appearance", Fields: []fieldDef{
+			{Key: "colorscheme", Label: "Colorscheme", Kind: fieldPicker,
+				Options: opts("default", "dracula", "nord", "gruvbox", "catppuccin", "kanagawa"),
+				Helper:  "Application color theme"},
+			{Key: "accent", Label: "Accent color", Kind: fieldPicker,
+				Options: opts("default", "blue", "cyan", "green", "amber", "red", "magenta"),
+				Helper:  "UI accent color (overridden when a colorscheme is active)",
+				DisabledWhen: func(values map[string]string) string {
+					if cs := values["colorscheme"]; cs != "" && cs != "default" {
+						return "overridden by " + cs + " theme"
+					}
+					return ""
+				}},
+			{Key: "show_field_help", Label: "Field help", Kind: fieldPicker,
+				Options: opts("yes", "no"),
+				Helper:  "Show helper text below focused form fields"},
+		}},
+		{Label: "Tmux", Fields: []fieldDef{
+			{Key: "tmux", Label: "Tmux mode", Kind: fieldPicker,
+				Options: opts("auto", "force", "never"),
+				Helper:  "auto: use tmux when available, force: require, never: disable"},
+			{Key: "open_mode", Label: "Open mode", Kind: fieldPicker,
+				Options: opts("auto", "current", "tmux-window", "tmux-pane"),
+				Helper:  "How to open new SSH sessions"},
+			{Key: "session", Label: "Session name", Kind: fieldText,
+				Placeholder: "ssh-tui",
+				Helper:      "Name of the tmux session to use",
+				CharLimit:   128},
+		}},
+		{Label: "Behavior", Fields: []fieldDef{
+			{Key: "confirm_quit", Label: "Confirm quit", Kind: fieldPicker,
+				Options: opts("yes", "no"),
+				Helper:  "Show confirmation dialog before quitting"},
+			{Key: "threshold", Label: "Confirm threshold", Kind: fieldNumber,
+				Placeholder: "5",
+				Helper:      "Ask before connecting to more than N hosts (0 = never)",
+				CharLimit:   6, Narrow: true,
+				Validate: validateNonNegativeInt},
+		}},
+		{Label: "Panes", Fields: []fieldDef{
+			{Key: "pane_split", Label: "Split direction", Kind: fieldPicker,
+				Options: opts("horizontal", "vertical"),
+				Helper:  "Direction for splitting tmux panes"},
+			{Key: "pane_layout", Label: "Layout", Kind: fieldPicker,
+				Options: opts("auto", "tiled", "even-horizontal", "even-vertical", "main-horizontal", "main-vertical"),
+				Helper:  "Tmux pane arrangement algorithm"},
+			{Key: "pane_sync", Label: "Synchronize input", Kind: fieldPicker,
+				Options: opts("on", "off"),
+				Helper:  "Send keystrokes to all panes simultaneously"},
+			{Key: "border_pos", Label: "Border position", Kind: fieldPicker,
+				Options: opts("bottom", "top", "off"),
+				Helper:  "Position of pane border status line"},
+			{Key: "border_fmt", Label: "Border format", Kind: fieldSubModal,
+				Helper: "Tmux format string for pane borders"},
+		}},
 	}
 }
 
@@ -120,21 +117,11 @@ func settingsSchema() formSchema {
 // defaultsToValues maps a config.Defaults to the flat string map used by
 // the form model.
 func defaultsToValues(d config.Defaults) map[string]string {
-	loadKH := "no"
-	if d.LoadKnownHosts {
-		loadKH = "yes"
-	}
-	confirmQuit := "no"
-	if d.ConfirmQuit {
-		confirmQuit = "yes"
-	}
-	showFieldHelp := "no"
-	if d.ShowFieldHelp {
-		showFieldHelp = "yes"
-	}
-	portStr := ""
-	if d.Port != 0 {
-		portStr = strconv.Itoa(d.Port)
+	yesNo := func(b bool) string {
+		if b {
+			return "yes"
+		}
+		return "no"
 	}
 	threshStr := ""
 	if d.ConnectConfirmThreshold >= 0 {
@@ -142,17 +129,17 @@ func defaultsToValues(d config.Defaults) map[string]string {
 	}
 	return map[string]string{
 		"user":             strings.TrimSpace(d.User),
-		"port":             portStr,
+		"port":             formatPort(d.Port),
 		"identity":         strings.TrimSpace(d.IdentityFile),
 		"extra_args":       strings.Join(d.ExtraArgs, " "),
 		"colorscheme":      d.Colorscheme,
 		"accent":           d.AccentColor,
-		"load_known_hosts": loadKH,
+		"load_known_hosts": yesNo(d.LoadKnownHosts),
 		"tmux":             d.Tmux,
 		"open_mode":        d.OpenMode,
 		"session":          strings.TrimSpace(d.TmuxSession),
-		"confirm_quit":     confirmQuit,
-		"show_field_help":  showFieldHelp,
+		"confirm_quit":     yesNo(d.ConfirmQuit),
+		"show_field_help":  yesNo(d.ShowFieldHelp),
 		"threshold":        threshStr,
 		"pane_split":       d.PaneSplit,
 		"pane_layout":      d.PaneLayout,
@@ -183,25 +170,14 @@ func applySettingsValues(values map[string]string, base config.Defaults) (config
 	d.ConfirmQuit = values["confirm_quit"] == "yes"
 	d.ShowFieldHelp = values["show_field_help"] != "no"
 
-	// Port.
-	portStr := strings.TrimSpace(values["port"])
-	if portStr == "" {
+	var err error
+	if d.Port, err = parsePort(values["port"]); err != nil {
+		return d, err
+	}
+	if d.Port == 0 {
 		d.Port = 22
-	} else {
-		p, err := strconv.Atoi(portStr)
-		if err != nil || p <= 0 {
-			return d, fmt.Errorf("invalid port")
-		}
-		d.Port = p
 	}
-
-	// Extra args.
-	extra := strings.TrimSpace(values["extra_args"])
-	if extra == "" {
-		d.ExtraArgs = nil
-	} else {
-		d.ExtraArgs = strings.Fields(extra)
-	}
+	d.ExtraArgs = parseArgs(values["extra_args"])
 
 	// Tmux fields.
 	d.Tmux = strings.TrimSpace(values["tmux"])
@@ -211,16 +187,8 @@ func applySettingsValues(values map[string]string, base config.Defaults) (config
 		d.TmuxSession = "ssh-tui"
 	}
 
-	// Threshold.
-	threshStr := strings.TrimSpace(values["threshold"])
-	if threshStr == "" {
-		d.ConnectConfirmThreshold = 5
-	} else {
-		t, err := strconv.Atoi(threshStr)
-		if err != nil || t < 0 {
-			return d, fmt.Errorf("confirm threshold must be a number >= 0")
-		}
-		d.ConnectConfirmThreshold = t
+	if d.ConnectConfirmThreshold, err = parseNonNegative(values["threshold"], 5); err != nil {
+		return d, fmt.Errorf("confirm threshold %w", err)
 	}
 
 	// Pane fields.
@@ -235,18 +203,8 @@ func applySettingsValues(values map[string]string, base config.Defaults) (config
 		d.PaneBorderFmt = config.DefaultPaneBorderFormat
 	}
 
-	// Sanitize custom formats list.
-	clean := make([]string, 0, len(d.PaneBorderFmts))
-	seen := map[string]bool{strings.TrimSpace(config.DefaultPaneBorderFormat): true}
-	for _, s := range d.PaneBorderFmts {
-		v := strings.TrimSpace(s)
-		if v == "" || seen[v] {
-			continue
-		}
-		clean = append(clean, v)
-		seen[v] = true
-	}
-	d.PaneBorderFmts = clean
+	// Sanitize custom formats: the choices minus the built-in default.
+	d.PaneBorderFmts = paneBorderFormatChoices(config.Defaults{PaneBorderFmts: d.PaneBorderFmts})[1:]
 
 	return d, nil
 }
@@ -268,9 +226,8 @@ type defaultsFormModel struct {
 
 	keymap keyMap
 
-	confirmQuitEnabled bool
-	confirmQuit        bool
-	confirmDiscard     bool // discard unsaved changes?
+	confirmQuit    bool
+	confirmDiscard bool // discard unsaved changes? The toast is its only prompt.
 }
 
 func (m *defaultsFormModel) refreshAccentStyles() {
@@ -280,15 +237,11 @@ func (m *defaultsFormModel) refreshAccentStyles() {
 	}
 }
 
-func newDefaultsFormModel(d config.Defaults, confirmQuitEnabled bool) *defaultsFormModel {
-	values := defaultsToValues(d)
-	fm := newFormModel(settingsSchema(), values, defaultsFormLabelWidth, d.ShowFieldHelp)
-
+func newDefaultsFormModel(d config.Defaults) *defaultsFormModel {
 	return &defaultsFormModel{
-		form:               fm,
-		defaults:           d,
-		keymap:             defaultKeyMap(),
-		confirmQuitEnabled: confirmQuitEnabled,
+		form:     newFormModel(settingsSchema(), defaultsToValues(d), 16, d.ShowFieldHelp),
+		defaults: d,
+		keymap:   defaultKeyMap(),
 	}
 }
 
@@ -307,7 +260,7 @@ func (m *defaultsFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case paneBorderFormatsDoneMsg:
 		m.defaults.PaneBorderFmt = strings.TrimSpace(msg.value)
 		m.defaults.PaneBorderFmts = append([]string(nil), msg.customFmts...)
-		m.form.setValue("border_fmt", m.defaults.PaneBorderFmt)
+		m.form.values["border_fmt"] = m.defaults.PaneBorderFmt
 		m.borderPicker = nil
 		return m, nil
 
@@ -317,7 +270,7 @@ func (m *defaultsFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.form.handleResize(msg.Width, msg.Height)
 		if m.borderPicker != nil {
-			mw, mh := pickerModalSize(msg.Width, msg.Height)
+			mw, mh := pickerModal.size(msg.Width, msg.Height)
 			_, _ = m.borderPicker.Update(tea.WindowSizeMsg{Width: mw, Height: mh})
 		}
 		return m, nil
@@ -326,39 +279,32 @@ func (m *defaultsFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		// Sub-modal intercepts all keys.
 		if m.borderPicker != nil {
-			model, cmd := m.borderPicker.Update(msg)
-			if pm, ok := model.(*paneBorderFormatsModel); ok {
-				m.borderPicker = pm
-			}
+			_, cmd := m.borderPicker.Update(msg)
 			return m, cmd
 		}
 
 		// Confirm-quit dialog.
 		if m.confirmQuit {
-			switch msg.String() {
-			case "y", "Y", "enter":
+			switch confirmAnswer(msg) {
+			case answerYes:
 				return m, tea.Quit
-			case "n", "N", "esc":
+			case answerNo:
 				m.confirmQuit = false
 				m.toast = toast{}
-				return m, nil
-			default:
-				return m, nil
 			}
+			return m, nil
 		}
 
-		// Confirm-discard dialog.
+		// Confirm-discard dialog. Enter does not discard.
 		if m.confirmDiscard {
-			switch msg.String() {
-			case "y", "Y":
+			switch a := confirmAnswer(msg); {
+			case a == answerYes && msg.String() != "enter":
 				return m, func() tea.Msg { return defaultsFormCancelMsg{} }
-			case "n", "N", "esc":
+			case a == answerNo:
 				m.confirmDiscard = false
 				m.toast = toast{}
-				return m, nil
-			default:
-				return m, nil
 			}
+			return m, nil
 		}
 
 		// In insert mode or picker popup, delegate everything to the form.
@@ -397,7 +343,7 @@ func (m *defaultsFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Quit.
 		if key.Matches(msg, m.keymap.Quit) {
-			if !m.confirmQuitEnabled {
+			if !m.defaults.ConfirmQuit {
 				return m, tea.Quit
 			}
 			m.confirmQuit = true
@@ -419,7 +365,7 @@ func (m *defaultsFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		fk := m.form.focusedFieldKey()
 		s := msg.String()
 		if fk == "border_fmt" && (s == "enter" || s == " " || s == "l") {
-			mw, mh := pickerModalSize(m.width, m.height)
+			mw, mh := pickerModal.size(m.width, m.height)
 			m.borderPicker = newPaneBorderFormatsModel(m.defaults, m.defaults.PaneBorderFmt, false, true)
 			m.borderPicker.parentCrumb = "Settings"
 			if mw > 0 && mh > 0 {
@@ -452,60 +398,23 @@ func (m *defaultsFormModel) View() string {
 		return placeCentered(m.width, m.height, m.borderPicker.View())
 	}
 
-	innerW := max(0, m.width-2)
-	innerH := max(0, m.height-2)
-	contentH := max(0, innerH-tabBoxHeaderLines)
-
-	// Build content lines from the form model.
-	lines, focusLine := m.form.renderFormContent(innerW)
-
-	// Footer.
-	footer := m.form.renderFooter()
-
-	// Toast.
-	toastStr := ""
+	// Content rows below the tab header, less the footer and optional toast.
+	bottom := []string{m.form.renderFooter()}
 	if !m.toast.empty() {
-		toastStr = renderToast(m.toast)
+		bottom = []string{renderToast(m.toast), bottom[0]}
 	}
+	visibleH := max(1, max(0, m.height-2)-tabBoxHeaderLines-len(bottom))
 
-	// Reserve lines for toast + footer.
-	reservedBottom := 1 // footer
-	if toastStr != "" {
-		reservedBottom++
+	lines := m.form.visibleLines(max(0, m.width-2), visibleH)
+	// Pad so the toast and footer stay pinned to the bottom.
+	for len(lines) < visibleH {
+		lines = append(lines, "")
 	}
-	visibleH := contentH - reservedBottom
-	if visibleH < 1 {
-		visibleH = 1
-	}
+	lines = append(lines, bottom...)
 
-	// Scroll so focused field is visible.
-	start, end := formScrollWindow(len(lines), visibleH, focusLine)
-	visible := lines[start:end]
-
-	// Overlay picker popup as a dropdown below the focused field.
-	if m.form.picker != nil {
-		focusRow := focusLine - start
-		visible = m.form.overlayPickerOnVisible(visible, focusRow, innerW)
-	}
-
-	contentLines := make([]string, 0, contentH)
-	contentLines = append(contentLines, visible...)
-	// Fill remaining space.
-	for i := len(visible); i < visibleH; i++ {
-		contentLines = append(contentLines, "")
-	}
-	if toastStr != "" {
-		contentLines = append(contentLines, toastStr)
-	}
-	contentLines = append(contentLines, footer)
-
-	// Header.
-	headLeft := headerStyle.Render("Settings")
-	headRight := ""
+	headRight := statusDot(false)
 	if m.form.isDirty() {
-		headRight = lipgloss.NewStyle().Foreground(cWarn).Render("[mod]") + " "
+		headRight = statusWarn.Render("[mod]") + " " + headRight
 	}
-	headRight += statusDot(true, false)
-
-	return renderMainTabBox(m.width, m.height, 2, headLeft, headRight, strings.Join(contentLines, "\n"))
+	return renderMainTabBox(m.width, m.height, 2, accentStyle.Render("Settings"), headRight, strings.Join(lines, "\n"), "")
 }

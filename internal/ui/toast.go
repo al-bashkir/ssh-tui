@@ -39,28 +39,18 @@ func toastDuration(l toastLevel) time.Duration {
 }
 
 // renderToast returns the styled string for a toast.
-func renderToast(t toast) string { return renderToastWithSpinner(t, false) }
-
-// renderToastWithSpinner returns the styled string for a toast, optionally
-// prepended with a spinner frame.
-func renderToastWithSpinner(t toast, spinner bool) string {
+func renderToast(t toast) string {
 	if t.empty() {
-		if spinner {
-			return statusWarn.Render(spinnerFrame())
-		}
 		return ""
 	}
 	text := t.text
-	if spinner {
-		text = spinnerFrame() + " " + text
-	}
 	switch t.level {
 	case toastOK:
-		return toastOKStyle.Render(text)
+		return statusOK.Render(text)
 	case toastInfo:
-		return toastInfoStyle.Render(text)
+		return dim.Render(text)
 	case toastErr:
-		return toastErrStyle.Render(text)
+		return statusErr.Render(text)
 	}
 	return statusWarn.Render(text)
 }
@@ -73,5 +63,5 @@ func breadcrumbTitle(parentCrumb, leafTitle string) string {
 	if parentCrumb == "" {
 		return leafTitle
 	}
-	return dim.Render(parentCrumb+" >") + " " + headerStyle.Render(leafTitle)
+	return dim.Render(parentCrumb+" >") + " " + accentStyle.Render(leafTitle)
 }

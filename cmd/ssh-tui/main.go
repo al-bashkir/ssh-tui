@@ -60,13 +60,11 @@ func main() {
 		fatal(err)
 	}
 
-	knownPaths := []string(knownHosts)
 	res := hosts.LoadResult{}
-	var loadErrs []hosts.PathError
+	var loadErrs []error
 	if cfg.Defaults.LoadKnownHosts {
-		res, loadErrs = hosts.LoadKnownHosts(knownPaths)
+		res, loadErrs = hosts.LoadKnownHosts(knownHosts)
 	} else {
-		knownPaths = nil
 		res.Hosts = config.ConfigHosts(inv)
 	}
 
@@ -77,7 +75,7 @@ func main() {
 			Config:        cfg,
 			InventoryPath: invPathUsed,
 			Inventory:     inv,
-			KnownHosts:    knownPaths,
+			KnownHosts:    knownHosts,
 			Hosts:         res.Hosts,
 			SkippedLines:  res.SkippedLines,
 			LoadErrors:    loadErrs,
@@ -91,7 +89,7 @@ func main() {
 		runConnect(args[1:], cfg, inv, noTmux)
 	case "list", "l":
 		runList(args[1:], inv, res.Hosts)
-	case "completion", "comp":
+	case "completion":
 		runCompletion(args[1:])
 	case "__complete":
 		runInternalComplete(args[1:], inv, res.Hosts)

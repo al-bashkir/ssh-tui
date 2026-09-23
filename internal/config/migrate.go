@@ -60,13 +60,6 @@ func Migrate(configPath, hostsPath string) error {
 	}
 
 	// Re-save config.toml without host/group data.
-	cfg := Config{
-		Version:  1,
-		Defaults: legacy.Defaults,
-	}
-	if _, err := Save(configPath, cfg); err != nil {
-		return err
-	}
-
-	return nil
+	_, err := Save(configPath, Config{Version: 1, Defaults: legacy.Defaults})
+	return err
 }

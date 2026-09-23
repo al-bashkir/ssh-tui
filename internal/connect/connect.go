@@ -28,7 +28,7 @@ func BuildCommands(hosts []string, defaults config.Defaults, inv config.Inventor
 		if modifyFn != nil {
 			modifyFn(&s)
 		}
-		cmd, _ := sshcmd.BuildCommand(h, s)
+		cmd := sshcmd.BuildCommand(h, s)
 		out = append(out, cmd)
 	}
 	return out
@@ -77,15 +77,10 @@ func Open(hosts []string, sshCmds [][]string, defaults config.Defaults, group *c
 
 	case mode == tmx.OpenPane || (mode == tmx.OpenWindow && len(sshCmds) > 1):
 		// All hosts as panes in a single new tmux window.
-		ps := tmx.ResolvePaneSettings(defaults, group, len(sshCmds))
 		if err := tmx.OpenOneWindow(sshCmds, tmx.OneWindowOpts{
-			WindowName:       tmx.GroupWindowName(hosts, group),
-			PaneTitles:       hosts,
-			SplitFlag:        ps.SplitFlag,
-			Layout:           ps.Layout,
-			SyncPanes:        ps.SyncPanes,
-			PaneBorderFormat: ps.BorderFormat,
-			PaneBorderStatus: ps.BorderStatus,
+			WindowName:   tmx.GroupWindowName(hosts, group),
+			PaneTitles:   hosts,
+			PaneSettings: tmx.ResolvePaneSettings(defaults, group, len(sshCmds)),
 		}); err != nil {
 			return nil, "", err
 		}

@@ -23,7 +23,7 @@ func runConnect(args []string, cfg config.Config, inv config.Inventory, noTmux b
 		if len(args) < 2 {
 			fatal(fmt.Errorf("connect host requires a name\nUsage: ssh-tui connect host NAME"))
 		}
-		connectHost(args[1], cfg, inv)
+		open([]string{args[1]}, cfg, inv, nil)
 	default:
 		fatal(fmt.Errorf("unknown connect subcommand %q: use group|g or host|h", args[0]))
 	}
@@ -50,10 +50,6 @@ func connectGroup(name string, cfg config.Config, inv config.Inventory, noTmux b
 	}
 
 	open(group.Hosts, cfg, inv, &group)
-}
-
-func connectHost(name string, cfg config.Config, inv config.Inventory) {
-	open([]string{name}, cfg, inv, nil)
 }
 
 // open dispatches hosts the same way the TUI does, then either replaces this

@@ -24,7 +24,7 @@ func highlightMatches(s string, positions []int, active bool) string {
 	var sb strings.Builder
 	sb.Grow(len(s) * 2) // rough estimate
 
-	style := checkedStyle // accent bold
+	style := accentStyle // accent bold
 	if active {
 		style = lipgloss.NewStyle().Underline(true)
 	}
@@ -166,9 +166,9 @@ func renderHostLikeRow(width int, active bool, selected bool, host string, hasCf
 	if !active {
 		// Style only on inactive rows; active rows get uniform rowActiveStyle.
 		if selected {
-			checked = checkedStyle.Render(checked)
+			checked = accentStyle.Render(checked)
 		} else {
-			checked = uncheckedStyle.Render(checked)
+			checked = dim.Render(checked)
 		}
 	}
 	prefix := rowCursor(active) + checked + " "
@@ -198,7 +198,7 @@ func renderSimpleRow(width int, active bool, text string, matchedIndexes []int) 
 	return composeRow(width, active, rowCursor(active), text, "", 0, matchedIndexes, false)
 }
 
-func renderGroupRow(width int, active bool, name string, hostCount int, _ bool, matchedIndexes []int) string {
+func renderGroupRow(width int, active bool, name string, hostCount int, matchedIndexes []int) string {
 	countStr := fmt.Sprintf("%d", hostCount)
 	styledBadge := " " + badgeCountStyle.Render(countStr)
 	suffix := styledBadge

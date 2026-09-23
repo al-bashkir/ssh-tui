@@ -2,7 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/al-bashkir/ssh-tui/internal/config"
@@ -19,23 +18,21 @@ func hostSchema(defs config.Defaults) formSchema {
 	portPlaceholder, identPlaceholder, extraPlaceholder := sshPlaceholders(defs)
 
 	return formSchema{
-		Sections: []sectionDef{
-			{Key: "conn", Label: "Connection", Fields: []fieldDef{
-				{Key: "host", Label: "Host", Kind: fieldText,
-					Placeholder: "example.com or [10.0.0.1]:2222", CharLimit: 512},
-				{Key: "user", Label: "User", Kind: fieldText,
-					Placeholder: strings.TrimSpace(defs.User), CharLimit: 128},
-				{Key: "port", Label: "Port", Kind: fieldNumber,
-					Placeholder: portPlaceholder, CharLimit: 16, Narrow: true,
-					Validate: validatePort},
-			}},
-			{Key: "auth", Label: "Authentication", Fields: []fieldDef{
-				{Key: "identity", Label: "Identity file", Kind: fieldText,
-					Placeholder: identPlaceholder, CharLimit: 512},
-				{Key: "extra_args", Label: "Extra args", Kind: fieldText,
-					Placeholder: extraPlaceholder, CharLimit: 1024},
-			}},
-		},
+		{Label: "Connection", Fields: []fieldDef{
+			{Key: "host", Label: "Host", Kind: fieldText,
+				Placeholder: "example.com or [10.0.0.1]:2222", CharLimit: 512},
+			{Key: "user", Label: "User", Kind: fieldText,
+				Placeholder: strings.TrimSpace(defs.User), CharLimit: 128},
+			{Key: "port", Label: "Port", Kind: fieldNumber,
+				Placeholder: portPlaceholder, CharLimit: 16, Narrow: true,
+				Validate: validatePort},
+		}},
+		{Label: "Authentication", Fields: []fieldDef{
+			{Key: "identity", Label: "Identity file", Kind: fieldText,
+				Placeholder: identPlaceholder, CharLimit: 512},
+			{Key: "extra_args", Label: "Extra args", Kind: fieldText,
+				Placeholder: extraPlaceholder, CharLimit: 1024},
+		}},
 	}
 }
 
@@ -44,14 +41,10 @@ func hostSchema(defs config.Defaults) formSchema {
 // ---------------------------------------------------------------------------
 
 func hostToValues(h config.Host) map[string]string {
-	portStr := ""
-	if h.Port != 0 {
-		portStr = strconv.Itoa(h.Port)
-	}
 	return map[string]string{
 		"host":       strings.TrimSpace(h.Host),
 		"user":       strings.TrimSpace(h.User),
-		"port":       portStr,
+		"port":       formatPort(h.Port),
 		"identity":   strings.TrimSpace(h.IdentityFile),
 		"extra_args": strings.Join(h.ExtraArgs, " "),
 	}
@@ -62,26 +55,13 @@ func applyHostValues(values map[string]string, base config.Host) (config.Host, e
 	h.Host = strings.TrimSpace(values["host"])
 	h.User = strings.TrimSpace(values["user"])
 	h.IdentityFile = strings.TrimSpace(values["identity"])
+	h.ExtraArgs = parseArgs(values["extra_args"])
 
-	portStr := strings.TrimSpace(values["port"])
-	if portStr == "" {
-		h.Port = 0
-	} else {
-		p, err := strconv.Atoi(portStr)
-		if err != nil || p <= 0 {
-			return h, fmt.Errorf("invalid port")
-		}
-		h.Port = p
+	var err error
+	if h.Port, err = parsePort(values["port"]); err != nil {
+		return h, err
 	}
-
-	extra := strings.TrimSpace(values["extra_args"])
-	if extra == "" {
-		h.ExtraArgs = nil
-	} else {
-		h.ExtraArgs = strings.Fields(extra)
-	}
-
-	if strings.TrimSpace(h.Host) == "" {
+	if h.Host == "" {
 		return h, fmt.Errorf("host required")
 	}
 	return h, nil
@@ -111,7 +91,7 @@ func (m *hostFormModel) refreshAccentStyles() {
 
 func newHostFormModel(index int, h config.Host, defs config.Defaults) *hostFormModel {
 	values := hostToValues(h)
-	fm := newFormModel(hostSchema(defs), values, modalFormLabelWidth, defs.ShowFieldHelp)
+	fm := newFormModel(hostSchema(defs), values, 14, defs.ShowFieldHelp)
 
 	return &hostFormModel{
 		form:   fm,
@@ -177,7 +157,7 @@ func (m *hostFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *hostFormModel) View() string {
 	name := m.host.Host
 	if strings.TrimSpace(name) == "" {
-		name = m.form.value("host")
+		name = m.form.values["host"]
 	}
 	title := formTitle(m.parentCrumb, m.index, name, "Create Host", "Edit Host")
 	return renderModalForm(&m.form, m.width, m.height, title, m.toast)

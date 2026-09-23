@@ -2,26 +2,14 @@ package ui
 
 import (
 	"fmt"
-	"io"
 	"strings"
-	"time"
 
 	"github.com/al-bashkir/ssh-tui/internal/config"
 	"github.com/al-bashkir/ssh-tui/internal/hosts"
-	"github.com/al-bashkir/ssh-tui/internal/sshcmd"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-)
-
-type focusState int
-
-const (
-	focusList focusState = iota
-	focusSearch
 )
 
 type hostRow struct {
@@ -32,78 +20,29 @@ type hostRow struct {
 	matchedIndexes []int
 }
 
-func (i hostRow) Title() string       { return i.host }
-func (i hostRow) Description() string { return "" }
 func (i hostRow) FilterValue() string { return i.host }
 
-type hostDelegate struct{}
-
-func (d hostDelegate) Height() int                             { return 1 }
-func (d hostDelegate) Spacing() int                            { return 0 }
-func (d hostDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
-
-func (d hostDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
-	row, ok := item.(hostRow)
-	if !ok {
-		fmt.Fprint(w, item.FilterValue())
-		return
-	}
-	fmt.Fprint(w, renderHostLikeRow(m.Width(), index == m.Index(), row.selected, row.host, row.hasCfg, row.hidden, row.matchedIndexes))
-}
+var hostDelegate = rowDelegate(func(width int, active bool, item list.Item) string {
+	row := item.(hostRow)
+	return renderHostLikeRow(width, active, row.selected, row.host, row.hasCfg, row.hidden, row.matchedIndexes)
+})
 
 type knownHostsReloadMsg struct {
 	res  hosts.LoadResult
-	errs []hosts.PathError
+	errs []error
 }
 
 type hostsModel struct {
 	hostSelectList
-	connectActions
-	opts Options
+	listScreen
 
-	width  int
-	height int
-
-	keymap keyMap
-
-	list   list.Model
-	search textinput.Model
-	focus  focusState
-
-	reloading   bool
-	showHidden  bool
-	prevSearch  string
-	navPendingG bool
-	confirmQuit bool
-
-	showHelp       bool
-	helpVP         viewport.Model
-	cmdPrompt      bool
-	cmdPromptCrumb string
-	cmdInput       textinput.Model
+	showHidden bool
 }
 
 func newHostsModel(opts Options) *hostsModel {
-	items := make([]list.Item, 0, len(opts.Hosts))
-	for _, h := range opts.Hosts {
-		_, ok := sshcmd.FindHostConfig(opts.Inventory.Hosts, h)
-		items = append(items, hostRow{host: h, hasCfg: ok})
-	}
-
-	delegate := hostDelegate{}
-	l := list.New(items, delegate, 0, 0)
-	l.Title = "Hosts"
-	configureList(&l)
-
-	search := newSearchInput()
-
 	m := &hostsModel{
 		hostSelectList: newHostSelectList(opts.Hosts),
-		opts:           opts,
-		keymap:         defaultKeyMap(),
-		list:           l,
-		search:         search,
-		focus:          focusList,
+		listScreen:     newListScreen(opts, hostDelegate),
 	}
 	m.bindList(&m.list)
 	if !opts.Config.Defaults.LoadKnownHosts {
@@ -120,88 +59,43 @@ func (m *hostsModel) Init() tea.Cmd {
 func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		w := msg.Width
-		h := msg.Height
-		m.width = w
-		m.height = h
-		innerW := max(0, w-2)
-		m.list.SetSize(innerW, tabBoxListContentHeight(w, h))
-		promptW := len(m.search.Prompt)
-		reserve := 24
-		m.search.Width = max(10, innerW-reserve-promptW)
+		m.resize(msg, 24)
 		return m, nil
 
 	case knownHostsReloadMsg:
-		spinnerStop()
-		m.reloading = false
 		m.opts.Hosts = msg.res.Hosts
 		m.opts.SkippedLines = msg.res.SkippedLines
 		m.opts.LoadErrors = msg.errs
 		m.allHosts = append([]string(nil), msg.res.Hosts...)
-		present := make(map[string]struct{}, len(m.allHosts))
+		present := make(map[string]bool, len(m.allHosts))
 		for _, h := range m.allHosts {
-			present[h] = struct{}{}
+			present[h] = true
 		}
 		for h := range m.selected {
-			if _, ok := present[h]; !ok {
+			if !present[h] {
 				delete(m.selected, h)
 			}
 		}
-		m.applyFilter(m.search.Value())
+		m.reapplyFilter()
 		m.toast = toast{text: fmt.Sprintf("%d hosts loaded", len(m.allHosts)), level: toastInfo}
 		return m, nil
 
 	case tea.KeyMsg:
-		if m.showHelp {
-			if key.Matches(msg, m.keymap.Help) || msg.String() == "esc" {
-				m.showHelp = false
-				return m, nil
-			}
-			updateHelpViewport(&m.helpVP, msg)
+		if handled, cmd := m.handleOverlayKey(msg, m.handleConnectWithRemoteCommand); handled {
+			return m, cmd
+		}
+		if m.handleVimNav(msg) {
 			return m, nil
 		}
-
-		if m.cmdPrompt {
-			return m, handleCmdPromptKey(msg, &m.cmdPrompt, &m.cmdInput, &m.toast, m.handleConnectWithRemoteCommand)
-		}
-
-		if handled, cmd := handleConfirmQuit(msg, &m.confirmQuit, &m.toast, &m.quitting, true); handled {
+		if cmd := m.tabCmd(msg, screenHosts); cmd != nil {
 			return m, cmd
-		}
-
-		if handled, cmd := handleConfirmConnect(msg, &m.confirmConnect, &m.pendingConnectFn, &m.toast); handled {
-			return m, cmd
-		}
-
-		if m.focus == focusList {
-			if handleVimListNav(msg, &m.list, &m.navPendingG) {
-				return m, nil
-			}
-		} else {
-			m.navPendingG = false
-		}
-
-		if key.Matches(msg, m.keymap.GroupsTab) {
-			return m, func() tea.Msg { return switchScreenMsg{to: screenGroups} }
-		}
-		if key.Matches(msg, m.keymap.Settings) {
-			return m, func() tea.Msg { return openDefaultsFormMsg{returnTo: screenHosts} }
 		}
 
 		if key.Matches(msg, m.keymap.Quit) && m.focus != focusSearch {
-			if !m.opts.Config.Defaults.ConfirmQuit {
-				m.quitting = true
-				return m, tea.Quit
-			}
-			m.confirmQuit = true
-			m.toast = toast{text: "quit? (y/n)", level: toastWarn}
-			return m, nil
+			return m, m.quit()
 		}
 		if key.Matches(msg, m.keymap.Help) {
-			m.showHelp = !m.showHelp
-			if m.showHelp && m.width > 0 && m.height > 0 {
-				m.helpVP = initHelpViewport(m.width, m.height, "Hosts", m.helpKeys())
-			}
+			m.openHelp("Hosts", m.helpKeys())
 			return m, nil
 		}
 		if handleFocusKeys(msg, m.keymap, &m.focus, &m.search) {
@@ -210,42 +104,6 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, m.keymap.Esc) {
 			// Esc priority: blur search → clear selection → clear search.
 			handleEscChain(&m.focus, &m.search, &m.prevSearch, len(m.selected), m.clearSelection, m.applyFilter)
-			return m, nil
-		}
-
-		if key.Matches(msg, m.keymap.Reload) && m.focus != focusSearch {
-			if !m.opts.Config.Defaults.LoadKnownHosts {
-				m.toast = toast{text: "known_hosts disabled", level: toastWarn}
-				return m, nil
-			}
-			m.toast = toast{text: "reloading", level: toastInfo}
-			m.reloading = true
-			spinnerStart()
-			return m, tea.Batch(
-				reloadKnownHostsCmd(m.opts.KnownHosts),
-				tea.Tick(spinnerTickInterval, func(time.Time) tea.Msg { return spinnerTickMsg{} }),
-			)
-		}
-		if key.Matches(msg, m.keymap.ToggleSel) && m.focus == focusList {
-			m.toggleCurrentSelection()
-			return m, nil
-		}
-		if key.Matches(msg, m.keymap.SelectAll) && m.focus == focusList {
-			m.selectAllFiltered()
-			return m, nil
-		}
-		if key.Matches(msg, m.keymap.ClearSel) && m.focus == focusList {
-			m.clearSelection()
-			return m, nil
-		}
-		if key.Matches(msg, m.keymap.ConnectCmd) && m.focus == focusList {
-			targets := m.hostsToOpen()
-			if len(targets) == 0 {
-				return m, nil
-			}
-			m.cmdPromptCrumb = cmdPromptCrumb("Hosts", targets)
-			m.cmdInput = newCmdPromptInput(m.width, m.height)
-			m.cmdPrompt = true
 			return m, nil
 		}
 		if key.Matches(msg, m.keymap.Connect) {
@@ -257,50 +115,72 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.toast = toast{}
 			return m, m.connect(m.hostsToOpen(), m.opts, nil, false, "")
 		}
-		if key.Matches(msg, m.keymap.OneWindow) && m.focus == focusList {
-			m.toast = toast{}
-			return m, m.connect(m.hostsToOpen(), m.opts, nil, true, "")
-		}
-		if key.Matches(msg, m.keymap.ConnectSame) && m.focus == focusList {
-			m.toast = toast{}
-			return m, m.connectSameWindow(m.hostsToOpen(), m.opts, nil)
-		}
-		if key.Matches(msg, m.keymap.AddHosts) && m.focus == focusList {
-			hostsToAdd := m.hostsToOpen()
-			if len(hostsToAdd) == 0 {
-				m.toast = toast{text: "no host selected", level: toastWarn}
-				return m, nil
+		if m.focus == focusList {
+			if handled, cmd := m.handleListKey(msg); handled {
+				return m, cmd
 			}
-			return m, func() tea.Msg { return openGroupPickerMsg{hosts: hostsToAdd} }
-		}
-		if key.Matches(msg, m.keymap.CustomHost) && m.focus == focusList {
-			return m, func() tea.Msg { return openCustomHostMsg{returnTo: screenHosts, groupIndex: -1} }
-		}
-		if key.Matches(msg, m.keymap.HostConfig) && m.focus == focusList {
-			return m, openHostConfigCmd(m.currentHost(), screenHosts, &m.toast)
-		}
-		if key.Matches(msg, m.keymap.Copy) && m.focus == focusList {
-			return m, copyHostConfigCmd(m.opts.Inventory, m.currentHost(), screenHosts, &m.toast)
-		}
-		if key.Matches(msg, m.keymap.HideHost) && m.focus == focusList {
-			return m, m.toggleCurrentHidden()
-		}
-		if key.Matches(msg, m.keymap.ShowHidden) && m.focus == focusList {
-			m.showHidden = !m.showHidden
-			m.applyFilter(m.search.Value())
-			return m, nil
 		}
 
 	case toastMsg:
-		m.toast = toast(msg)
-		if m.opts.Popup && msg.level != toastErr {
-			m.quitting = true
-			return m, tea.Quit
-		}
-		return m, nil
+		return m, m.showToast(toast(msg))
 	}
 
 	return m, updateSearchOrList(m.focus, &m.search, &m.list, &m.prevSearch, msg, m.applyFilter)
+}
+
+// handleListKey handles the keys that act on the list while it has focus.
+func (m *hostsModel) handleListKey(msg tea.KeyMsg) (bool, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keymap.Reload):
+		if !m.opts.Config.Defaults.LoadKnownHosts {
+			m.toast = toast{text: "known_hosts disabled", level: toastWarn}
+			return true, nil
+		}
+		m.toast = toast{text: "reloading", level: toastInfo}
+		return true, reloadKnownHostsCmd(m.opts.KnownHosts)
+	case key.Matches(msg, m.keymap.ToggleSel):
+		m.toggleCurrentSelection()
+	case key.Matches(msg, m.keymap.SelectAll):
+		m.selectAllFiltered()
+	case key.Matches(msg, m.keymap.ClearSel):
+		m.clearSelection()
+	case key.Matches(msg, m.keymap.ConnectCmd):
+		if targets := m.hostsToOpen(); len(targets) > 0 {
+			m.openCmdPrompt(cmdPromptCrumb("Hosts", targets))
+		}
+	case key.Matches(msg, m.keymap.OneWindow):
+		m.toast = toast{}
+		return true, m.connect(m.hostsToOpen(), m.opts, nil, true, "")
+	case key.Matches(msg, m.keymap.ConnectSame):
+		m.toast = toast{}
+		return true, m.connectSameWindow(m.hostsToOpen(), m.opts, nil)
+	case key.Matches(msg, m.keymap.AddHosts):
+		hostsToAdd := m.hostsToOpen()
+		if len(hostsToAdd) == 0 {
+			m.toast = toast{text: "no host selected", level: toastWarn}
+			return true, nil
+		}
+		return true, func() tea.Msg { return openGroupPickerMsg{hosts: hostsToAdd, returnTo: screenHosts} }
+	case key.Matches(msg, m.keymap.CustomHost):
+		return true, func() tea.Msg { return openCustomHostMsg{returnTo: screenHosts, groupIndex: -1} }
+	case key.Matches(msg, m.keymap.HostConfig):
+		return true, openHostConfigCmd(m.currentHost(), screenHosts, &m.toast)
+	case key.Matches(msg, m.keymap.Copy):
+		return true, copyHostConfigCmd(m.opts.Inventory, m.currentHost(), screenHosts, &m.toast)
+	case key.Matches(msg, m.keymap.HideHost):
+		host := m.currentHost()
+		if host == "" {
+			return true, nil
+		}
+		hide := !isHostHidden(m.opts.Inventory, host)
+		return true, func() tea.Msg { return toggleHiddenHostMsg{host: host, hide: hide} }
+	case key.Matches(msg, m.keymap.ShowHidden):
+		m.showHidden = !m.showHidden
+		m.reapplyFilter()
+	default:
+		return false, nil
+	}
+	return true, nil
 }
 
 func (m *hostsModel) applyFilter(query string) {
@@ -309,17 +189,6 @@ func (m *hostsModel) applyFilter(query string) {
 		excludeFn = isHostHidden
 	}
 	m.filter(query, m.opts.Inventory, excludeFn, isHostHidden)
-}
-
-type toastMsg toast
-
-func (m *hostsModel) toggleCurrentHidden() tea.Cmd {
-	host := m.currentHost()
-	if host == "" {
-		return nil
-	}
-	hide := !isHostHidden(m.opts.Inventory, host)
-	return func() tea.Msg { return toggleHiddenHostMsg{host: host, hide: hide} }
 }
 
 func (m *hostsModel) reapplyFilter() {
@@ -344,48 +213,40 @@ func (m *hostsModel) handleConnectWithRemoteCommand(remoteCmd string) tea.Cmd {
 	return m.connect(m.hostsToOpen(), m.opts, nil, false, remoteCmd)
 }
 
-func (m *hostsModel) helpKeys() helpMap {
-	return helpMap{
-		sections: []helpSection{
-			{title: "Navigation", keys: []key.Binding{
-				m.list.KeyMap.CursorUp,
-				m.list.KeyMap.CursorDown,
-				m.list.KeyMap.PrevPage,
-				m.list.KeyMap.NextPage,
-				m.list.KeyMap.GoToStart,
-				m.list.KeyMap.GoToEnd,
-				m.keymap.FocusSearch,
-				m.keymap.ToggleFocus,
-				m.keymap.GroupsTab,
-				m.keymap.Settings,
-				m.keymap.Esc,
-			}},
-			{title: "Selection", keys: []key.Binding{
-				m.keymap.ToggleSel,
-				m.keymap.SelectAll,
-				m.keymap.ClearSel,
-			}},
-			{title: "Connection", keys: []key.Binding{
-				m.keymap.Connect,
-				m.keymap.ConnectSame,
-				m.keymap.ConnectCmd,
-				m.keymap.OneWindow,
-			}},
-			{title: "Editing", keys: []key.Binding{
-				m.keymap.CustomHost,
-				m.keymap.HostConfig,
-				m.keymap.AddHosts,
-				m.keymap.Copy,
-				m.keymap.HideHost,
-				m.keymap.ShowHidden,
-			}},
-			{title: "General", keys: []key.Binding{
-				m.keymap.Settings,
-				m.keymap.Reload,
-				m.keymap.Help,
-				m.keymap.Quit,
-			}},
-		},
+func (m *hostsModel) helpKeys() []helpSection {
+	return []helpSection{
+		{title: "Navigation", keys: append(m.listNavKeys(),
+			m.keymap.FocusSearch,
+			m.keymap.ToggleFocus,
+			m.keymap.GroupsTab,
+			m.keymap.Settings,
+			m.keymap.Esc,
+		)},
+		{title: "Selection", keys: []key.Binding{
+			m.keymap.ToggleSel,
+			m.keymap.SelectAll,
+			m.keymap.ClearSel,
+		}},
+		{title: "Connection", keys: []key.Binding{
+			m.keymap.Connect,
+			m.keymap.ConnectSame,
+			m.keymap.ConnectCmd,
+			m.keymap.OneWindow,
+		}},
+		{title: "Editing", keys: []key.Binding{
+			m.keymap.CustomHost,
+			m.keymap.HostConfig,
+			m.keymap.AddHosts,
+			m.keymap.Copy,
+			m.keymap.HideHost,
+			m.keymap.ShowHidden,
+		}},
+		{title: "General", keys: []key.Binding{
+			m.keymap.Settings,
+			m.keymap.Reload,
+			m.keymap.Help,
+			m.keymap.Quit,
+		}},
 	}
 }
 

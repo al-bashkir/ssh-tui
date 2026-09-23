@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/al-bashkir/ssh-tui/internal/config"
@@ -27,27 +28,13 @@ func suggestCopyName(name string, exists func(string) bool) string {
 }
 
 func suggestCopyGroupName(inv config.Inventory, from string) string {
-	exists := func(n string) bool {
-		n = strings.TrimSpace(n)
-		for _, g := range inv.Groups {
-			if strings.TrimSpace(g.Name) == n {
-				return true
-			}
-		}
-		return false
-	}
-	return suggestCopyName(from, exists)
+	return suggestCopyName(from, func(n string) bool {
+		return slices.ContainsFunc(inv.Groups, func(g config.Group) bool { return strings.TrimSpace(g.Name) == n })
+	})
 }
 
 func suggestCopyHostKey(inv config.Inventory, from string) string {
-	exists := func(n string) bool {
-		n = strings.TrimSpace(n)
-		for _, h := range inv.Hosts {
-			if strings.TrimSpace(h.Host) == n {
-				return true
-			}
-		}
-		return false
-	}
-	return suggestCopyName(from, exists)
+	return suggestCopyName(from, func(n string) bool {
+		return slices.ContainsFunc(inv.Hosts, func(h config.Host) bool { return strings.TrimSpace(h.Host) == n })
+	})
 }

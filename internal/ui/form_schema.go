@@ -22,7 +22,6 @@ type fieldDef struct {
 	Label       string             // display label (without trailing colon)
 	Kind        fieldKind          // control type
 	Options     []fieldOption      // for Picker: available choices
-	Default     string             // default value
 	Placeholder string             // placeholder for text/number inputs
 	Helper      string             // help text shown when field is focused
 	CharLimit   int                // max input chars (0 = use default 256)
@@ -41,22 +40,19 @@ func (f *fieldDef) isTextField() bool {
 
 // sectionDef groups related fields under a named section header.
 type sectionDef struct {
-	Key    string     // unique identifier
 	Label  string     // display label
 	Fields []fieldDef // ordered fields within the section
 }
 
 // formSchema is the complete declarative definition of a form's structure.
-type formSchema struct {
-	Sections []sectionDef
-}
+type formSchema []sectionDef
 
 // fieldByKey returns the field definition for the given key, or nil.
-func (s *formSchema) fieldByKey(key string) *fieldDef {
-	for si := range s.Sections {
-		for fi := range s.Sections[si].Fields {
-			if s.Sections[si].Fields[fi].Key == key {
-				return &s.Sections[si].Fields[fi]
+func (s formSchema) fieldByKey(key string) *fieldDef {
+	for si := range s {
+		for fi := range s[si].Fields {
+			if s[si].Fields[fi].Key == key {
+				return &s[si].Fields[fi]
 			}
 		}
 	}
