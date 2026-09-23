@@ -39,21 +39,11 @@ func toastDuration(l toastLevel) time.Duration {
 }
 
 // renderToast returns the styled string for a toast.
-func renderToast(t toast) string { return renderToastWithSpinner(t, false) }
-
-// renderToastWithSpinner returns the styled string for a toast, optionally
-// prepended with a spinner frame.
-func renderToastWithSpinner(t toast, spinner bool) string {
+func renderToast(t toast) string {
 	if t.empty() {
-		if spinner {
-			return statusWarn.Render(spinnerFrame())
-		}
 		return ""
 	}
 	text := t.text
-	if spinner {
-		text = spinnerFrame() + " " + text
-	}
 	switch t.level {
 	case toastOK:
 		return statusOK.Render(text)

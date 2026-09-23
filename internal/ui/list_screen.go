@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
@@ -186,5 +187,108 @@ func (s *listScreen) listNavKeys() []key.Binding {
 		s.list.KeyMap.NextPage,
 		s.list.KeyMap.GoToStart,
 		s.list.KeyMap.GoToEnd,
+	}
+}
+
+// pickerScreen is the state and behaviour shared by the modal pickers
+// (Add hosts, Select group). Pickers embed it, so its fields are promoted.
+type pickerScreen struct {
+	opts        Options
+	parentCrumb string
+
+	width  int
+	height int
+
+	keymap     keyMap
+	list       list.Model
+	search     textinput.Model
+	focus      focusState
+	prevSearch string
+	showHelp   bool
+	toast      toast
+}
+
+func newPickerScreen(opts Options, delegate list.ItemDelegate) pickerScreen {
+	l := list.New(nil, delegate, 0, 0)
+	configureList(&l)
+	return pickerScreen{
+		opts:   opts,
+		keymap: defaultKeyMap(),
+		list:   l,
+		search: newSearchInput(),
+		focus:  focusList,
+	}
+}
+
+// resize fits the list and search bar to the frame; topLines is the height
+// kept free above the search bar.
+func (p *pickerScreen) resize(msg tea.WindowSizeMsg, topLines int) {
+	p.width = msg.Width
+	p.height = msg.Height
+	innerW, innerH := frameInnerSize(msg.Width, msg.Height)
+	p.list.SetSize(innerW, max(1, innerH-5-topLines))
+	p.search.Width = max(10, innerW-len(p.search.Prompt))
+}
+
+// handleKey runs the keys every picker shares: help, focus switch, Esc and
+// Enter in the search bar. Esc with nothing left to clear sends cancel.
+func (p *pickerScreen) handleKey(msg tea.KeyMsg, applyFilter func(string), cancel tea.Msg) (bool, tea.Cmd) {
+	if p.showHelp {
+		if key.Matches(msg, p.keymap.Help) || msg.String() == "esc" {
+			p.showHelp = false
+		}
+		return true, nil
+	}
+	if key.Matches(msg, p.keymap.Help) {
+		p.showHelp = true
+		return true, nil
+	}
+	if handleFocusKeys(msg, p.keymap, &p.focus, &p.search) {
+		return true, nil
+	}
+	if key.Matches(msg, p.keymap.Esc) {
+		if handlePickerEsc(&p.focus, &p.search, &p.prevSearch, applyFilter) {
+			return true, nil
+		}
+		return true, func() tea.Msg { return cancel }
+	}
+	if key.Matches(msg, p.keymap.Connect) && p.focus == focusSearch {
+		setFocus(&p.focus, &p.search, focusList)
+		return true, nil
+	}
+	return false, nil
+}
+
+// view renders the picker frame: optional top line, search bar, list and a
+// status line starting with the caller's counts.
+func (p *pickerScreen) view(title string, helpKeys func() []helpSection, top, counts string) string {
+	if p.showHelp {
+		return renderHelpModal(p.width, p.height, title, helpKeys(), nil)
+	}
+	innerW, _ := frameInnerSize(p.width, p.height)
+	sep := dim.Render(strings.Repeat("─", innerW))
+	body := p.search.View() + "\n" + sep + "\n" + strings.TrimRight(p.list.View(), "\n") + "\n" + sep
+	if top != "" {
+		body = top + "\n" + body
+	}
+	status := pickerStatusLine(counts, &p.list, p.search.Value(), p.toast)
+	return renderFocusedFrame(p.width, p.height, breadcrumbTitle(p.parentCrumb, title), "", body, status)
+}
+
+// helpSections is the picker help: navigation, the picker's own selection
+// keys, then Esc and help.
+func (p *pickerScreen) helpSections(selection ...key.Binding) []helpSection {
+	esc := key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back/clear"))
+	return []helpSection{
+		{title: "Navigation", keys: []key.Binding{
+			p.list.KeyMap.CursorUp,
+			p.list.KeyMap.CursorDown,
+			p.list.KeyMap.PrevPage,
+			p.list.KeyMap.NextPage,
+			p.keymap.FocusSearch,
+			p.keymap.ToggleFocus,
+		}},
+		{title: "Selection", keys: selection},
+		{title: "General", keys: []key.Binding{esc, p.keymap.Help}},
 	}
 }

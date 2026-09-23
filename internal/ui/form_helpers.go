@@ -33,10 +33,24 @@ func parsePort(s string) (int, error) {
 		return 0, nil
 	}
 	p, err := strconv.Atoi(s)
-	if err != nil || p <= 0 {
-		return 0, fmt.Errorf("invalid port")
+	if err != nil || p <= 0 || p > 65535 {
+		return 0, fmt.Errorf("port must be a number 1-65535")
 	}
 	return p, nil
+}
+
+// parseNonNegative parses an optional non-negative integer field; an empty
+// field gives def.
+func parseNonNegative(s string, def int) (int, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return def, nil
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 0 {
+		return 0, fmt.Errorf("must be a number >= 0")
+	}
+	return n, nil
 }
 
 // formatPort is the form value for port; 0 (unset) gives "".
@@ -129,28 +143,14 @@ func renderFormBox(totalW int, title string, visibleLines []string, visibleH int
 	return strings.Join(out, "\n")
 }
 
-// validatePort checks that a port string is empty or a valid port number.
+// validatePort is the field validator for parsePort.
 func validatePort(s string) error {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return nil
-	}
-	p, err := strconv.Atoi(s)
-	if err != nil || p <= 0 || p > 65535 {
-		return fmt.Errorf("must be a number 1-65535")
-	}
-	return nil
+	_, err := parsePort(s)
+	return err
 }
 
-// validateNonNegativeInt checks that a string is empty or a non-negative integer.
+// validateNonNegativeInt is the field validator for parseNonNegative.
 func validateNonNegativeInt(s string) error {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return nil
-	}
-	n, err := strconv.Atoi(s)
-	if err != nil || n < 0 {
-		return fmt.Errorf("must be a number >= 0")
-	}
-	return nil
+	_, err := parseNonNegative(s, 0)
+	return err
 }

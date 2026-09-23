@@ -13,9 +13,7 @@ func (m *hostsModel) View() string {
 	hasWarn := m.opts.SkippedLines > 0 || len(m.opts.LoadErrors) > 0
 	right := ""
 	if !m.toast.empty() {
-		right = renderToastWithSpinner(m.toast, spinnerActive)
-	} else if spinnerActive {
-		right = statusWarn.Render(spinnerFrame())
+		right = renderToast(m.toast)
 	} else {
 		right = statusDot(hasWarn)
 		if hasWarn {

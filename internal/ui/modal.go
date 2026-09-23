@@ -6,18 +6,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Modal size constants.
-const (
-	modalMaxWGroup  = 110
-	modalMaxHGroup  = 26
-	modalMaxWHost   = 96
-	modalMaxHHost   = 20
-	modalMaxWPicker = 90
-	modalMaxHPicker = 22
-	modalMaxWCustom = 76
-	modalMaxHCustom = 9
-)
-
 func placeCentered(fullW, fullH int, box string) string {
 	box = strings.TrimRight(box, "\n")
 	if fullW <= 0 || fullH <= 0 {
@@ -26,8 +14,24 @@ func placeCentered(fullW, fullH int, box string) string {
 	return lipgloss.Place(fullW, fullH, lipgloss.Center, lipgloss.Center, box)
 }
 
-func modalSize(fullW, fullH int, maxW, maxH int, marginW, marginH int) (w, h int) {
-	return modalDim(fullW, maxW, marginW), modalDim(fullH, maxH, marginH)
+// modalSpec sizes a modal: capped at maxW x maxH with margins kept free, and
+// as tall as the terminal allows (up to maxH) once it would drop below minH.
+type modalSpec struct{ maxW, maxH, marginW, marginH, minH int }
+
+var (
+	groupFormModal  = modalSpec{110, 26, 4, 1, 16}
+	hostFormModal   = modalSpec{96, 20, 6, 4, 12}
+	pickerModal     = modalSpec{90, 22, 6, 6, 10}
+	customHostModal = modalSpec{76, 9, 6, 10, 8}
+	cmdPromptModal  = modalSpec{88, 9, 6, 10, 0}
+)
+
+func (s modalSpec) size(fullW, fullH int) (w, h int) {
+	w, h = modalDim(fullW, s.maxW, s.marginW), modalDim(fullH, s.maxH, s.marginH)
+	if fullH > 0 && h < s.minH {
+		h = min(s.maxH, fullH)
+	}
+	return w, h
 }
 
 // modalDim is full minus margin, capped at maxV. Unknown size (full <= 0)
@@ -40,38 +44,4 @@ func modalDim(full, maxV, margin int) int {
 		return v
 	}
 	return full
-}
-
-func groupFormModalSize(fullW, fullH int) (w, h int) {
-	// Big form: keep almost full height if needed.
-	w, h = modalSize(fullW, fullH, modalMaxWGroup, modalMaxHGroup, 4, 1)
-	if fullH > 0 && h < 16 {
-		// Fallback to full height in very small terminals.
-		h = fullH
-	}
-	return w, h
-}
-
-func hostFormModalSize(fullW, fullH int) (w, h int) {
-	w, h = modalSize(fullW, fullH, modalMaxWHost, modalMaxHHost, 6, 4)
-	if fullH > 0 && h < 12 {
-		h = fullH
-	}
-	return w, h
-}
-
-func pickerModalSize(fullW, fullH int) (w, h int) {
-	w, h = modalSize(fullW, fullH, modalMaxWPicker, modalMaxHPicker, 6, 6)
-	if fullH > 0 && h < 10 {
-		h = fullH
-	}
-	return w, h
-}
-
-func customHostModalSize(fullW, fullH int) (w, h int) {
-	w, h = modalSize(fullW, fullH, modalMaxWCustom, modalMaxHCustom, 6, 10)
-	if fullH > 0 && h < 8 {
-		h = min(9, fullH)
-	}
-	return w, h
 }

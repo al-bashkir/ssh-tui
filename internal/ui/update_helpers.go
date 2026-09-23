@@ -95,9 +95,7 @@ func clearSearch(focus *focusState, search *textinput.Model, prevSearch *string,
 // matched nothing, then return to the list.
 func acceptSearch(focus *focusState, search *textinput.Model, prevSearch *string, itemCount int, applyFilter func(string)) {
 	if itemCount == 0 && search.Value() != "" {
-		search.SetValue("")
-		applyFilter("")
-		*prevSearch = ""
+		clearSearch(focus, search, prevSearch, applyFilter, false)
 	}
 	setFocus(focus, search, focusList)
 }
@@ -117,7 +115,7 @@ func newCmdPromptInput(totalW, totalH int) textinput.Model {
 	in.Prompt = "cmd: "
 	in.Placeholder = "run on remote, keep session open"
 
-	mw, mh := modalSize(totalW, totalH, cmdPromptMaxW, cmdPromptMaxH, cmdPromptMarginW, cmdPromptMarginH)
+	mw, mh := cmdPromptModal.size(totalW, totalH)
 	innerW, _ := frameInnerSize(mw, mh)
 	in.Width = min(70, max(1, innerW-len(in.Prompt)))
 

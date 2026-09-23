@@ -124,7 +124,6 @@ ssh-tui [flags] [subcommand]
   -known-hosts <path>   Extra known_hosts file (repeatable)
   -no-tmux              Disable tmux integration
   -popup                Quit after connecting (for tmux popup use)
-  -debug                Enable debug logging
 ```
 
 #### tmux popup

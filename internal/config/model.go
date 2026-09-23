@@ -50,7 +50,7 @@ type Host struct {
 	Port         int      `toml:"port"`
 	IdentityFile string   `toml:"identity_file"`
 	ExtraArgs    []string `toml:"extra_args"`
-	Hidden       bool     `toml:"hidden,omitempty"`
+	Hidden       bool     `toml:"hidden,omitempty"` // legacy; new hides go to Inventory.HiddenHosts
 }
 
 type Defaults struct {

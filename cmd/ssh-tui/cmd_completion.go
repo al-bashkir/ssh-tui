@@ -53,7 +53,7 @@ _ssh_tui() {
 
   # Complete flags when the current word starts with -
   if [[ "$cur" == -* ]]; then
-    local flags="-config -hosts -known-hosts -no-tmux -popup -debug"
+    local flags="-config -hosts -known-hosts -no-tmux -popup"
     if [[ "$cmd" == list || "$cmd" == l ]]; then
       flags="$flags -json"
     fi
@@ -120,7 +120,6 @@ _ssh_tui() {
     '*-known-hosts[known_hosts path]:file:_files' \
     '-no-tmux[disable tmux integration]' \
     '-popup[quit after connecting (for tmux popup)]' \
-    '-debug[enable debug logging]' \
     '1: :->cmd' \
     '*:: :->args' && return
 

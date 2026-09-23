@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"github.com/al-bashkir/ssh-tui/internal/config"
-	"github.com/al-bashkir/ssh-tui/internal/hosts"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -25,15 +24,11 @@ type Options struct {
 	KnownHosts    []string
 	Hosts         []string
 	SkippedLines  int
-	LoadErrors    []hosts.PathError
+	LoadErrors    []error
 	Popup         bool // quit after any tmux connect (for tmux popup use)
 }
 
 func Run(opts Options) error {
-	if len(opts.KnownHosts) == 0 && opts.Config.Defaults.LoadKnownHosts {
-		opts.KnownHosts = hosts.DefaultKnownHostsPaths()
-	}
-
 	ApplyColorScheme(opts.Config.Defaults.Colorscheme, opts.Config.Defaults.AccentColor)
 
 	m := newAppModel(opts)

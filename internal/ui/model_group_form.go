@@ -144,7 +144,7 @@ func newGroupFormModel(index int, g config.Group, defs config.Defaults) *groupFo
 	}
 
 	values := groupToValues(g)
-	fm := newFormModel(groupSchema(defs), values, modalFormLabelWidth, defs.ShowFieldHelp)
+	fm := newFormModel(groupSchema(defs), values, 14, defs.ShowFieldHelp)
 
 	return &groupFormModel{
 		form:   fm,
@@ -177,7 +177,7 @@ func (m *groupFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.form.handleResize(msg.Width, msg.Height)
 		if m.borderPicker != nil {
-			mw, mh := pickerModalSize(msg.Width, msg.Height)
+			mw, mh := pickerModal.size(msg.Width, msg.Height)
 			_, _ = m.borderPicker.Update(tea.WindowSizeMsg{Width: mw, Height: mh})
 		}
 		return m, nil
@@ -216,7 +216,7 @@ func (m *groupFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		fk := m.form.focusedFieldKey()
 		s := msg.String()
 		if fk == "border_fmt" && (s == "enter" || s == " " || s == "l") {
-			mw, mh := pickerModalSize(m.width, m.height)
+			mw, mh := pickerModal.size(m.width, m.height)
 			m.borderPicker = newPaneBorderFormatsModel(m.defs, m.group.PaneBorderFmt, true, false)
 			m.borderPicker.parentCrumb = m.parentCrumb
 			if mw > 0 && mh > 0 {

@@ -3,7 +3,6 @@ package ui
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/al-bashkir/ssh-tui/internal/config"
 	"github.com/al-bashkir/ssh-tui/internal/hosts"
@@ -30,14 +29,13 @@ var hostDelegate = rowDelegate(func(width int, active bool, item list.Item) stri
 
 type knownHostsReloadMsg struct {
 	res  hosts.LoadResult
-	errs []hosts.PathError
+	errs []error
 }
 
 type hostsModel struct {
 	hostSelectList
 	listScreen
 
-	reloading  bool
 	showHidden bool
 }
 
@@ -65,8 +63,6 @@ func (m *hostsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case knownHostsReloadMsg:
-		spinnerStop()
-		m.reloading = false
 		m.opts.Hosts = msg.res.Hosts
 		m.opts.SkippedLines = msg.res.SkippedLines
 		m.opts.LoadErrors = msg.errs
@@ -141,12 +137,7 @@ func (m *hostsModel) handleListKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 			return true, nil
 		}
 		m.toast = toast{text: "reloading", level: toastInfo}
-		m.reloading = true
-		spinnerStart()
-		return true, tea.Batch(
-			reloadKnownHostsCmd(m.opts.KnownHosts),
-			tea.Tick(spinnerTickInterval, func(time.Time) tea.Msg { return spinnerTickMsg{} }),
-		)
+		return true, reloadKnownHostsCmd(m.opts.KnownHosts)
 	case key.Matches(msg, m.keymap.ToggleSel):
 		m.toggleCurrentSelection()
 	case key.Matches(msg, m.keymap.SelectAll):

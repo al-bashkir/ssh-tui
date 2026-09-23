@@ -4,37 +4,17 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Active color roles. Set by applyScheme (via ApplyColorScheme at init and on
-// every settings change); never assigned directly.
 var (
-	cAccent      lipgloss.AdaptiveColor
-	cMuted       lipgloss.AdaptiveColor
-	cOK          lipgloss.AdaptiveColor
-	cWarn        lipgloss.AdaptiveColor
-	cErr         lipgloss.AdaptiveColor
-	cSearchDim   lipgloss.AdaptiveColor
-	cFrameBorder lipgloss.AdaptiveColor
+	// theme is the active color scheme. Set by applyScheme (via
+	// ApplyColorScheme at init and on every settings change).
+	theme colorScheme
 
-	// Active list row: solid background bar with contrasting text.
-	cRowActiveBG lipgloss.AdaptiveColor
-	cRowActiveFG lipgloss.AdaptiveColor
-
-	cFocusedBorder lipgloss.AdaptiveColor
-	cDisabled      lipgloss.AdaptiveColor
-	cHint          lipgloss.AdaptiveColor
-	cSecondary     lipgloss.AdaptiveColor
-
-	// cBackground is the hex background color for the active colorscheme.
-	// Empty string means no override — terminal default is used.
-	cBackground string
-
-	// bgANSICode is the precomputed ANSI escape sequence for cBackground,
+	// bgANSICode is the precomputed ANSI escape sequence for theme.Background,
 	// e.g. "\x1b[48;2;40;42;54m". Empty when no theme background is active.
 	bgANSICode string
 )
@@ -247,81 +227,67 @@ func ApplyColorScheme(scheme, accentColor string) {
 	applyScheme(cs)
 }
 
-// applyScheme sets all global color vars from cs and rebuilds every style.
+// applyScheme makes cs the active theme and rebuilds every style.
 func applyScheme(cs colorScheme) {
-	cAccent = cs.Accent
-	cMuted = cs.Muted
-	cOK = cs.OK
-	cWarn = cs.Warn
-	cErr = cs.Err
-	cFrameBorder = cs.FrameBorder
-	cSearchDim = cs.SearchDim
-	cRowActiveBG = cs.RowActiveBG
-	cRowActiveFG = cs.RowActiveFG
-	cBackground = cs.Background
+	theme = cs
 	bgANSICode = hexToANSIBG(cs.Background)
-	cFocusedBorder = cs.FocusedBorder
-	cDisabled = cs.Disabled
-	cHint = cs.Hint
-	cSecondary = cs.Secondary
-
 	rebuildAllStyles()
 }
 
-// rebuildAllStyles reconstructs every style variable from the current color
-// variables. This is the single source of truth for all style construction.
+// rebuildAllStyles reconstructs every style variable from theme. This is the
+// single source of truth for all style construction.
 func rebuildAllStyles() {
 	// withBG adds the theme background, if any.
 	withBG := func(s lipgloss.Style) lipgloss.Style {
-		if cBackground != "" {
-			return s.Background(lipgloss.Color(cBackground))
+		if theme.Background != "" {
+			return s.Background(lipgloss.Color(theme.Background))
 		}
 		return s
 	}
 
-	statusOK = lipgloss.NewStyle().Foreground(cOK)
-	statusWarn = lipgloss.NewStyle().Foreground(cWarn)
-	statusErr = lipgloss.NewStyle().Foreground(cErr)
-	dim = lipgloss.NewStyle().Foreground(cMuted)
-	accentStyle = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
+	statusOK = lipgloss.NewStyle().Foreground(theme.OK)
+	statusWarn = lipgloss.NewStyle().Foreground(theme.Warn)
+	statusErr = lipgloss.NewStyle().Foreground(theme.Err)
+	dim = lipgloss.NewStyle().Foreground(theme.Muted)
+	accentStyle = lipgloss.NewStyle().Foreground(theme.Accent).Bold(true)
 
-	hintStyle = lipgloss.NewStyle().Foreground(cHint).Italic(true)
-	secondaryStyle = lipgloss.NewStyle().Foreground(cSecondary)
-	disabledStyle = lipgloss.NewStyle().Foreground(cDisabled).Italic(true)
-	underlineFill = lipgloss.NewStyle().Foreground(cFrameBorder)
+	hintStyle = lipgloss.NewStyle().Foreground(theme.Hint).Italic(true)
+	secondaryStyle = lipgloss.NewStyle().Foreground(theme.Secondary)
+	disabledStyle = lipgloss.NewStyle().Foreground(theme.Disabled).Italic(true)
+	underlineFill = lipgloss.NewStyle().Foreground(theme.FrameBorder)
 
 	focusedFrameStyle = withBG(lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
-		BorderForeground(cFocusedBorder).
+		BorderForeground(theme.FocusedBorder).
 		Padding(0, 1))
 	helpBoxStyle = withBG(lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
-		BorderForeground(cFocusedBorder).
+		BorderForeground(theme.FocusedBorder).
 		Padding(1, 2))
 
-	rowActiveStyle = lipgloss.NewStyle().Background(cRowActiveBG).Foreground(cRowActiveFG).Bold(true)
+	rowActiveStyle = lipgloss.NewStyle().Background(theme.RowActiveBG).Foreground(theme.RowActiveFG).Bold(true)
 
 	badgeCfgStyle = lipgloss.NewStyle().
-		Foreground(cAccent).
+		Foreground(theme.Accent).
 		Background(lipgloss.AdaptiveColor{Light: "254", Dark: "235"}).
 		Padding(0, 1).Bold(true)
 	badgeCountStyle = lipgloss.NewStyle().
-		Foreground(cMuted).
+		Foreground(theme.Muted).
 		Background(lipgloss.AdaptiveColor{Light: "254", Dark: "236"}).
 		Padding(0, 1)
 	badgeSelStyle = lipgloss.NewStyle().
 		Foreground(lipgloss.AdaptiveColor{Light: "255", Dark: "16"}).
-		Background(cAccent).
+		Background(theme.Accent).
 		Padding(0, 1).
 		Bold(true)
 
-	searchUnfocused = lipgloss.NewStyle().Foreground(cSearchDim)
+	searchUnfocused = lipgloss.NewStyle().Foreground(theme.SearchDim)
 
-	tabBoxBorderStyle = withBG(lipgloss.NewStyle().Foreground(cFrameBorder))
-	focusedBoxBorderStyle = withBG(lipgloss.NewStyle().Foreground(cFocusedBorder))
+	tabBoxBorderStyle = withBG(lipgloss.NewStyle().Foreground(theme.FrameBorder))
+	focusedBoxBorderStyle = withBG(lipgloss.NewStyle().Foreground(theme.FocusedBorder))
 	tabBoxPadStyle = withBG(lipgloss.NewStyle())
 
-	confirmTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(cErr)
+	confirmTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(theme.Err)
 }
 
 // hexToANSIBG converts a "#RRGGBB" hex string to an ANSI truecolor background
@@ -382,7 +348,7 @@ func joinHeader(width int, left, right string) string {
 }
 
 // renderFocusedFrame renders a bordered modal frame using focusedFrameStyle
-// (cFocusedBorder) so overlays stand out from the background tab box.
+// (theme.FocusedBorder) so overlays stand out from the background tab box.
 func renderFocusedFrame(w, h int, title string, headerRight string, body string, footer string) string {
 	if strings.TrimSpace(footer) == "" {
 		footer = ""
@@ -410,7 +376,7 @@ func renderFocusedFrame(w, h int, title string, headerRight string, body string,
 func configureSearch(m *textinput.Model) {
 	m.PromptStyle = accentStyle
 	m.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "0", Dark: "255"})
-	m.Cursor.Style = lipgloss.NewStyle().Foreground(cAccent)
+	m.Cursor.Style = lipgloss.NewStyle().Foreground(theme.Accent)
 	m.PlaceholderStyle = hintStyle
 }
 
@@ -458,41 +424,6 @@ func styledFooter(raw string) string {
 		lines[i] = strings.Join(styled, "  ")
 	}
 	return strings.Join(lines, "\n")
-}
-
-// Spinner for loading states.
-var (
-	spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
-	spinnerIndex  int
-	spinnerActive bool
-	// spinnerMinEnd ensures the spinner shows for at least spinnerMinDuration.
-	spinnerMinEnd time.Time
-)
-
-const (
-	spinnerTickInterval = 80 * time.Millisecond
-	spinnerMinDuration  = 600 * time.Millisecond
-)
-
-type spinnerTickMsg struct{}
-
-// spinnerStart activates the spinner with a minimum visible duration.
-func spinnerStart() {
-	spinnerActive = true
-	spinnerIndex = 0
-	spinnerMinEnd = time.Now().Add(spinnerMinDuration)
-}
-
-// spinnerStop deactivates the spinner once the minimum duration has passed;
-// otherwise the tick handler stops it when spinnerMinEnd is reached.
-func spinnerStop() {
-	if time.Now().After(spinnerMinEnd) {
-		spinnerActive = false
-	}
-}
-
-func spinnerFrame() string {
-	return spinnerFrames[spinnerIndex%len(spinnerFrames)]
 }
 
 // formScrollWindow returns the (start, end) line indexes to display, scrolled

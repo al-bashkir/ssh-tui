@@ -169,10 +169,6 @@ func (m *paneBorderFormatsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.addToast = toast{text: "format required", level: toastWarn}
 					return m, nil
 				}
-				if !m.allowEdit {
-					m.addToast = toast{text: "read-only", level: toastWarn}
-					return m, nil
-				}
 				defs := config.Defaults{PaneBorderFmt: config.DefaultPaneBorderFormat, PaneBorderFmts: m.custom}
 				if !addPaneBorderFormat(&defs, v) {
 					m.addToast = toast{text: "already exists", level: toastWarn}
@@ -245,16 +241,10 @@ func (m *paneBorderFormatsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// deleteValue removes a custom format. Only deletable rows reach it, and
+// removePaneBorderFormat keeps the built-in default anyway.
 func (m *paneBorderFormatsModel) deleteValue(v string) {
 	v = strings.TrimSpace(v)
-	if v == "" {
-		return
-	}
-	if strings.TrimSpace(config.DefaultPaneBorderFormat) == v {
-		m.addToast = toast{text: "can't delete default", level: toastWarn}
-		return
-	}
-
 	defs := config.Defaults{PaneBorderFmt: config.DefaultPaneBorderFormat, PaneBorderFmts: m.custom}
 	removePaneBorderFormat(&defs, v)
 	m.custom = defs.PaneBorderFmts

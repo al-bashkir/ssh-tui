@@ -33,7 +33,7 @@ func pickerStatusLine(left string, l *list.Model, query string, t toast) string 
 // parentCrumb is the breadcrumb prefix (e.g. "Hosts", "Groups > web").
 // description is the instructional text shown above the input.
 func renderCmdPromptModal(totalW, totalH int, parentCrumb, description string, cmdInput textinput.Model) string {
-	mw, mh := modalSize(totalW, totalH, cmdPromptMaxW, cmdPromptMaxH, cmdPromptMarginW, cmdPromptMarginH)
+	mw, mh := cmdPromptModal.size(totalW, totalH)
 	var b strings.Builder
 	b.WriteString(description)
 	b.WriteString("\n\n")

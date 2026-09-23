@@ -2,6 +2,7 @@ package hosts
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -14,34 +15,17 @@ type LoadResult struct {
 	SkippedLines int
 }
 
-type PathError struct {
-	Path string
-	Err  error
-}
-
-func (e PathError) Error() string {
-	if e.Path == "" {
-		return e.Err.Error()
-	}
-	return e.Path + ": " + e.Err.Error()
-}
-
-func DefaultKnownHostsPaths() []string {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
-		return nil
-	}
-	return []string{filepath.Join(home, ".ssh", "known_hosts")}
-}
-
-func LoadKnownHosts(paths []string) (LoadResult, []PathError) {
+// LoadKnownHosts reads hosts from paths, or ~/.ssh/known_hosts when paths is
+// empty. Unreadable files are reported in errs and skipped.
+func LoadKnownHosts(paths []string) (res LoadResult, errs []error) {
 	if len(paths) == 0 {
-		paths = DefaultKnownHostsPaths()
+		if home, err := os.UserHomeDir(); err == nil && home != "" {
+			paths = []string{filepath.Join(home, ".ssh", "known_hosts")}
+		}
 	}
 
 	var out []string
 	var skipped int
-	var errs []PathError
 
 	for _, p := range paths {
 		if strings.TrimSpace(p) == "" {
@@ -51,7 +35,7 @@ func LoadKnownHosts(paths []string) (LoadResult, []PathError) {
 		// #nosec G304 -- path is user-provided by design (CLI flag / config).
 		f, err := os.Open(p)
 		if err != nil {
-			errs = append(errs, PathError{Path: p, Err: err})
+			errs = append(errs, err)
 			continue
 		}
 
@@ -59,7 +43,7 @@ func LoadKnownHosts(paths []string) (LoadResult, []PathError) {
 		_ = f.Close()
 		skipped += sk
 		if perr != nil {
-			errs = append(errs, PathError{Path: p, Err: perr})
+			errs = append(errs, fmt.Errorf("%s: %w", p, perr))
 			continue
 		}
 		out = append(out, hosts...)

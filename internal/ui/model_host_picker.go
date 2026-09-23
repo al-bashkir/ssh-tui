@@ -2,11 +2,8 @@ package ui
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -18,34 +15,13 @@ type hostPickerDoneMsg struct {
 
 type hostPickerModel struct {
 	hostSelectList
-	opts        Options
-	parentCrumb string
-
-	width  int
-	height int
-
-	list   list.Model
-	search textinput.Model
-	focus  focusState
-
-	keymap   keyMap
-	showHelp bool
-	toast    toast
-
-	prevSearch string
+	pickerScreen
 }
 
 func newHostPickerModel(opts Options) *hostPickerModel {
-	l := list.New(nil, hostDelegate, 0, 0)
-	configureList(&l)
-
 	m := &hostPickerModel{
 		hostSelectList: newHostSelectList(opts.Hosts),
-		opts:           opts,
-		list:           l,
-		search:         newSearchInput(),
-		focus:          focusList,
-		keymap:         defaultKeyMap(),
+		pickerScreen:   newPickerScreen(opts, hostDelegate),
 	}
 	m.bindList(&m.list)
 	m.applyFilter("")
@@ -57,52 +33,27 @@ func (m *hostPickerModel) Init() tea.Cmd { return nil }
 func (m *hostPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		innerW, innerH := frameInnerSize(msg.Width, msg.Height)
-		m.list.SetSize(innerW, max(1, innerH-5))
-		m.search.Width = max(10, innerW-len(m.search.Prompt))
+		m.resize(msg, 0)
 		return m, nil
 	case tea.KeyMsg:
-		if m.showHelp {
-			if key.Matches(msg, m.keymap.Help) || msg.String() == "esc" {
-				m.showHelp = false
-			}
-			return m, nil
+		if handled, cmd := m.handleKey(msg, m.applyFilter, hostPickerCancelMsg{}); handled {
+			return m, cmd
 		}
-
-		if key.Matches(msg, m.keymap.Help) {
-			m.showHelp = true
-			return m, nil
-		}
-		if key.Matches(msg, m.keymap.Esc) {
-			if handlePickerEsc(&m.focus, &m.search, &m.prevSearch, m.applyFilter) {
+		if m.focus == focusList {
+			switch {
+			case key.Matches(msg, m.keymap.ToggleSel):
+				m.toggleCurrentSelection()
 				return m, nil
-			}
-			return m, func() tea.Msg { return hostPickerCancelMsg{} }
-		}
-		if handleFocusKeys(msg, m.keymap, &m.focus, &m.search) {
-			return m, nil
-		}
-		if key.Matches(msg, m.keymap.ToggleSel) && m.focus == focusList {
-			m.toggleCurrentSelection()
-			return m, nil
-		}
-		if key.Matches(msg, m.keymap.SelectAll) && m.focus == focusList {
-			m.selectAllFiltered()
-			return m, nil
-		}
-		if key.Matches(msg, m.keymap.ClearSel) && m.focus == focusList {
-			m.clearSelection()
-			return m, nil
-		}
-		if key.Matches(msg, m.keymap.Connect) {
-			if m.focus == focusSearch {
-				setFocus(&m.focus, &m.search, focusList)
+			case key.Matches(msg, m.keymap.SelectAll):
+				m.selectAllFiltered()
 				return m, nil
+			case key.Matches(msg, m.keymap.ClearSel):
+				m.clearSelection()
+				return m, nil
+			case key.Matches(msg, m.keymap.Connect):
+				picked := m.hostsToOpen()
+				return m, func() tea.Msg { return hostPickerDoneMsg{hosts: picked} }
 			}
-			picked := m.hostsToOpen()
-			return m, func() tea.Msg { return hostPickerDoneMsg{hosts: picked} }
 		}
 	}
 
@@ -110,52 +61,13 @@ func (m *hostPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *hostPickerModel) View() string {
-	if m.showHelp {
-		return renderHelpModal(m.width, m.height, "Add Hosts", m.helpKeys(), nil)
-	}
-	innerW, _ := frameInnerSize(m.width, m.height)
-	sep := dim.Render(strings.Repeat("─", innerW))
-	searchLine := m.search.View()
-	listView := strings.TrimRight(m.list.View(), "\n")
-	body := strings.TrimRight(searchLine+"\n"+sep+"\n"+listView+"\n"+sep, "\n")
-	return renderFocusedFrame(m.width, m.height, breadcrumbTitle(m.parentCrumb, "Add hosts"), "", body, m.statusLine())
+	counts := fmt.Sprintf("hosts: %d/%d  sel:%d", len(m.list.Items()), len(m.allHosts), len(m.selected))
+	return m.view("Add hosts", m.helpKeys, "", counts)
 }
 
 func (m *hostPickerModel) helpKeys() []helpSection {
-	esc := key.NewBinding(
-		key.WithKeys("esc"),
-		key.WithHelp("esc", "back/clear"),
-	)
-	add := key.NewBinding(
-		key.WithKeys("enter"),
-		key.WithHelp("enter", "add"),
-	)
-
-	return []helpSection{
-		{title: "Navigation", keys: []key.Binding{
-			m.list.KeyMap.CursorUp,
-			m.list.KeyMap.CursorDown,
-			m.list.KeyMap.PrevPage,
-			m.list.KeyMap.NextPage,
-			m.keymap.FocusSearch,
-			m.keymap.ToggleFocus,
-		}},
-		{title: "Selection", keys: []key.Binding{
-			m.keymap.ToggleSel,
-			m.keymap.SelectAll,
-			m.keymap.ClearSel,
-			add,
-		}},
-		{title: "General", keys: []key.Binding{
-			esc,
-			m.keymap.Help,
-		}},
-	}
-}
-
-func (m *hostPickerModel) statusLine() string {
-	left := fmt.Sprintf("hosts: %d/%d  sel:%d", len(m.list.Items()), len(m.allHosts), len(m.selected))
-	return pickerStatusLine(left, &m.list, m.search.Value(), m.toast)
+	add := key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "add"))
+	return m.helpSections(m.keymap.ToggleSel, m.keymap.SelectAll, m.keymap.ClearSel, add)
 }
 
 func (m *hostPickerModel) applyFilter(query string) {

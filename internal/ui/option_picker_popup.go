@@ -34,20 +34,11 @@ func newOptionPickerPopup(fieldKey, label, currentValue string, options []fieldO
 	}
 }
 
-// moveUp moves the cursor up, wrapping at the top.
-func (p *optionPickerPopup) moveUp() {
-	p.cursor--
-	if p.cursor < 0 {
-		p.cursor = len(p.options) - 1
-	}
-}
-
-// moveDown moves the cursor down, wrapping at the bottom.
-func (p *optionPickerPopup) moveDown() {
-	p.cursor++
-	if p.cursor >= len(p.options) {
-		p.cursor = 0
-	}
+// move moves the cursor by delta, wrapping at both ends. The form only
+// opens pickers that have options.
+func (p *optionPickerPopup) move(delta int) {
+	n := len(p.options)
+	p.cursor = ((p.cursor+delta)%n + n) % n
 }
 
 // selected returns the value of the currently highlighted option.
@@ -89,18 +80,10 @@ func (p *optionPickerPopup) View(maxW int) string {
 	lines = append(lines, focusedBoxTitleTop(totalW, p.label))
 
 	for i, opt := range p.options {
-		prefix := "  "
+		text := rowCursor(i == p.cursor) + opt.Display
 		if i == p.cursor {
-			prefix = "▸ "
-		}
-		text := prefix + opt.Display
-		if i == p.cursor {
-			// Fill to width for highlight bar.
-			pad := innerW - lipgloss.Width(text)
-			if pad > 0 {
-				text += strings.Repeat(" ", pad)
-			}
-			text = rowActiveStyle.Render(text)
+			// Fill to width with plain spaces so the highlight bar is solid.
+			text = rowActiveStyle.Render(text + strings.Repeat(" ", max(0, innerW-lipgloss.Width(text))))
 		} else {
 			text = padVisible(text, innerW)
 		}

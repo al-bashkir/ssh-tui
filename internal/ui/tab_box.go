@@ -44,7 +44,7 @@ func boxSep(w int) string                  { return boxRule(tabBoxBorderStyle, w
 func boxBottom(w int) string               { return boxRule(tabBoxBorderStyle, w, "└", "┘") }
 func boxLine(w int, content string) string { return boxLineStyled(tabBoxBorderStyle, w, content) }
 
-// Focused variants — for modals/popups using cFocusedBorder.
+// Focused variants — for modals/popups using theme.FocusedBorder.
 func focusedBoxTop(w int) string    { return boxRule(focusedBoxBorderStyle, w, "┌", "┐") }
 func focusedBoxSep(w int) string    { return boxRule(focusedBoxBorderStyle, w, "├", "┤") }
 func focusedBoxBottom(w int) string { return boxRule(focusedBoxBorderStyle, w, "└", "┘") }

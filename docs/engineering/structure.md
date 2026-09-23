@@ -48,18 +48,18 @@ UI files map (non-exhaustive — covers main models, shared helpers, and key uti
 - `internal/ui/help_modal.go`: help overlay and `helpSection`
 - `internal/ui/confirm_modal.go`: quit/connect/delete confirm dialogs
 - `internal/ui/connect_actions.go`: `connectActions` (connect, confirm threshold, remote-command wrapping)
-- `internal/ui/list_screen.go`: `listScreen` base embedded by the Hosts/Groups/Group Hosts screens, `rowDelegate`
+- `internal/ui/list_screen.go`: `listScreen` base embedded by the Hosts/Groups/Group Hosts screens, `pickerScreen` base embedded by the Add hosts/Select group pickers, `rowDelegate`
 - `internal/ui/host_config.go`: `hostConfigFor`, `findHostConfig`, `isHostHidden`
 - `internal/ui/host_select.go`: shared `hostSelectList` struct (filter, selection, badges)
 - `internal/ui/update_helpers.go`: shared Update() helpers (`handleConfirmQuit`, `handleConfirmConnect`, `updateSearchOrList`)
 - `internal/ui/copy_helpers.go`: `suggestCopyHostKey`, `suggestCopyGroupName`
-- `internal/ui/connect_group.go`: `connectHosts` (unified group/defaults connect)
 - `internal/ui/pane_border_formats.go`: `paneBorderFormatChoices`, add/remove helpers
 - `internal/ui/listutil.go`: shared list configuration (`configureList`, `newSearchInput`)
 - `internal/ui/input_underline.go`: `configureSearch`, `setSearchBarFocused`, `setSearchFocused`
 - `internal/ui/view_hosts.go`: `renderMainTabBox` and related view helpers
 - `internal/ui/view_shared.go`: `renderCmdPromptModal` and other shared overlays
-- `internal/ui/layout.go`: layout constants (header lines, width thresholds, modal margins)
+- `internal/ui/layout.go`: layout constants shared by several screens (header lines, width thresholds)
+- `internal/ui/modal.go`: `modalSpec` sizes per modal, `placeCentered`
 - `internal/ui/toast.go`: `toast` type, levels, `renderToast`, `toastMsg`
 - `internal/ui/form_schema.go`: `fieldKind`, `fieldDef`, form field descriptors
 - `internal/ui/form_model.go`: generic form model shared by defaults/host/group editors

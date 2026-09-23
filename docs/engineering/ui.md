@@ -130,7 +130,7 @@ Return-to is explicit:
 
 Modal sizing helpers:
 
-- `groupFormModalSize()`, `hostFormModalSize()`, `pickerModalSize()`, `customHostModalSize()` in `internal/ui/modal.go`
+- `groupFormModal.size`, `hostFormModal.size`, `pickerModal.size`, `customHostModal.size`, `cmdPromptModal.size` (`modalSpec` in `internal/ui/modal.go`)
 
 Centered placement:
 

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -55,15 +56,10 @@ type formModel struct {
 
 // newFormModel creates a formModel from a schema and initial values.
 func newFormModel(schema formSchema, values map[string]string, labelWidth int, showFieldHelp bool) formModel {
-	originals := make(map[string]string, len(values))
-	for k, v := range values {
-		originals[k] = v
-	}
-
 	m := formModel{
 		schema:         schema,
 		values:         values,
-		originals:      originals,
+		originals:      maps.Clone(values),
 		validationErrs: make(map[string]string),
 		inputs:         make(map[string]*textinput.Model),
 		labelWidth:     labelWidth,
@@ -71,9 +67,10 @@ func newFormModel(schema formSchema, values map[string]string, labelWidth int, s
 		showFieldHelp:  showFieldHelp,
 	}
 
-	// Create text inputs for text/number fields.
+	// Build the navigation list and a text input per text/number field.
 	for si := range schema {
 		for fi := range schema[si].Fields {
+			m.items = append(m.items, formNavItem{sectionIdx: si, fieldIdx: fi})
 			fd := &schema[si].Fields[fi]
 			if !fd.isTextField() {
 				continue
@@ -92,22 +89,14 @@ func newFormModel(schema formSchema, values map[string]string, labelWidth int, s
 		}
 	}
 
-	m.rebuildItems()
-
 	// Focus the first enabled field.
-	if len(m.items) > 0 {
-		m.focusIdx = 0
-		// Skip disabled fields.
-		for i := 0; i < len(m.items); i++ {
-			item := m.items[i]
-			fd := &m.schema[item.sectionIdx].Fields[item.fieldIdx]
-			if m.isFieldDisabled(fd) == "" {
-				m.focusIdx = i
-				break
-			}
+	for i := range m.items {
+		if m.isFieldDisabled(m.field(i)) == "" {
+			m.focusIdx = i
+			break
 		}
-		m.applyFocusStyles()
 	}
+	m.applyFocusStyles()
 
 	return m
 }
@@ -129,47 +118,25 @@ func (m *formModel) isDirty() bool {
 // resetOriginals snapshots the current values as the new baseline,
 // clearing the dirty state.
 func (m *formModel) resetOriginals() {
-	for k, v := range m.values {
-		m.originals[k] = v
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Navigation items
-// ---------------------------------------------------------------------------
-
-// rebuildItems constructs the flat navigation list of fields.
-func (m *formModel) rebuildItems() {
-	m.items = m.items[:0]
-	for si, sec := range m.schema {
-		for fi := range sec.Fields {
-			m.items = append(m.items, formNavItem{sectionIdx: si, fieldIdx: fi})
-		}
-	}
+	maps.Copy(m.originals, m.values)
 }
 
 // ---------------------------------------------------------------------------
 // Focus queries
 // ---------------------------------------------------------------------------
 
-// focusedItem returns the currently focused navigation item.
-func (m *formModel) focusedItem() formNavItem {
-	if m.focusIdx >= 0 && m.focusIdx < len(m.items) {
-		return m.items[m.focusIdx]
-	}
-	return formNavItem{}
+// field returns the definition of navigation item i.
+func (m *formModel) field(i int) *fieldDef {
+	item := m.items[i]
+	return &m.schema[item.sectionIdx].Fields[item.fieldIdx]
 }
 
 // focusedField returns the definition of the focused field, or nil.
 func (m *formModel) focusedField() *fieldDef {
-	item := m.focusedItem()
-	if item.sectionIdx < len(m.schema) {
-		sec := &m.schema[item.sectionIdx]
-		if item.fieldIdx < len(sec.Fields) {
-			return &sec.Fields[item.fieldIdx]
-		}
+	if m.focusIdx < 0 || m.focusIdx >= len(m.items) {
+		return nil
 	}
-	return nil
+	return m.field(m.focusIdx)
 }
 
 // focusedFieldKey returns the key of the focused field, or "".
@@ -236,11 +203,7 @@ func (m *formModel) moveFocus(delta int) {
 		if pos >= n {
 			pos = 0
 		}
-		// Check if the candidate is enabled.
-		item := m.items[pos]
-		sec := &m.schema[item.sectionIdx]
-		fd := &sec.Fields[item.fieldIdx]
-		if m.isFieldDisabled(fd) == "" {
+		if m.isFieldDisabled(m.field(pos)) == "" {
 			m.setFocusIdx(pos)
 			return
 		}
@@ -386,9 +349,9 @@ func (m *formModel) openPicker() {
 func (m *formModel) handlePickerKey(msg tea.KeyMsg) bool {
 	switch msg.String() {
 	case "j", "down":
-		m.picker.moveDown()
+		m.picker.move(1)
 	case "k", "up":
-		m.picker.moveUp()
+		m.picker.move(-1)
 	case "enter":
 		m.values[m.picker.fieldKey] = m.picker.selected()
 		if fd := m.schema.fieldByKey(m.picker.fieldKey); fd != nil {
@@ -491,26 +454,21 @@ func (m *formModel) positionInfo() string {
 	return fmt.Sprintf("%d/%d %s", item.fieldIdx+1, len(sec.Fields), sec.Label)
 }
 
-// footerHints returns context-sensitive key hints for the footer.
-// Format: "key action  key action" (double-space separated, for styledFooter).
+// footerHints returns context-sensitive key hints for the footer outside
+// insert mode. Format: "key action  key action" (for styledFooter).
 func (m *formModel) footerHints() string {
 	if m.picker != nil {
 		return "⏎ select  Esc cancel"
 	}
-	if m.editing {
-		return "Ctrl+S save  Esc done"
-	}
-	fd := m.focusedField()
-	if fd == nil {
-		return "Ctrl+S save  j/k nav  Esc back"
-	}
-	switch fd.Kind {
-	case fieldText, fieldNumber:
-		return "Ctrl+S save  j/k nav  i edit  Esc back"
-	case fieldPicker:
-		return "Ctrl+S save  j/k nav  ⏎ choose  Esc back"
-	case fieldSubModal:
-		return "Ctrl+S save  j/k nav  ⏎ select  Esc back"
+	if fd := m.focusedField(); fd != nil {
+		switch fd.Kind {
+		case fieldText, fieldNumber:
+			return "Ctrl+S save  j/k nav  i edit  Esc back"
+		case fieldPicker:
+			return "Ctrl+S save  j/k nav  ⏎ choose  Esc back"
+		case fieldSubModal:
+			return "Ctrl+S save  j/k nav  ⏎ select  Esc back"
+		}
 	}
 	return "Ctrl+S save  j/k nav  Esc back"
 }
@@ -528,17 +486,13 @@ func (m *formModel) renderFooter() string {
 // Validation
 // ---------------------------------------------------------------------------
 
-// validateField runs the validator for a single field and updates
-// validationErrs. Returns the error message, or "".
-func (m *formModel) validateField(fd *fieldDef) string {
-	if fd == nil || fd.Validate == nil {
-		delete(m.validationErrs, fd.Key)
-		return ""
-	}
-	if err := fd.Validate(m.values[fd.Key]); err != nil {
-		m.validationErrs[fd.Key] = err.Error()
-		return err.Error()
+// validateField runs fd's validator and records or clears its error.
+func (m *formModel) validateField(fd *fieldDef) {
+	if fd.Validate != nil {
+		if err := fd.Validate(m.values[fd.Key]); err != nil {
+			m.validationErrs[fd.Key] = err.Error()
+			return
+		}
 	}
 	delete(m.validationErrs, fd.Key)
-	return ""
 }

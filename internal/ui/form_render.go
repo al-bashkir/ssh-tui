@@ -30,7 +30,7 @@ func (m *formModel) renderFormContent(innerW int) ([]string, int) {
 		if focused {
 			focusLine = len(lines)
 		}
-		lines = append(lines, m.renderFieldLines(fd, focused, innerW, fieldW)...)
+		lines = append(lines, m.renderFieldLines(fd, focused, fieldW)...)
 	}
 
 	return lines, focusLine
@@ -42,7 +42,7 @@ func (m *formModel) renderFormContent(innerW int) ([]string, int) {
 
 // renderFieldLines renders a single field as one or more lines.
 // The focused field gets a helper text line appended.
-func (m *formModel) renderFieldLines(fd *fieldDef, focused bool, innerW, fieldW int) []string {
+func (m *formModel) renderFieldLines(fd *fieldDef, focused bool, fieldW int) []string {
 	var lines []string
 
 	// Check disabled state.

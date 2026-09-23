@@ -46,7 +46,7 @@ func renderHelpSections(sections []helpSection) string {
 }
 
 func helpBoxWidth(termW int) int {
-	boxW := min(helpMaxBoxWidth, termW-confirmDialogMargin)
+	boxW := min(88, termW-4)
 	if boxW < 30 {
 		boxW = min(termW, 30)
 	}
@@ -56,7 +56,7 @@ func helpBoxWidth(termW int) int {
 // initHelpViewport creates a viewport sized for the help modal and sets its content.
 func initHelpViewport(width, height int, title string, sections []helpSection) viewport.Model {
 	// Subtract border (2) + horizontal padding (2*2).
-	innerW := helpBoxWidth(width) - confirmDialogPadding
+	innerW := helpBoxWidth(width) - 6
 	if innerW < 20 {
 		innerW = 0
 	}
@@ -64,7 +64,7 @@ func initHelpViewport(width, height int, title string, sections []helpSection) v
 
 	// Size viewport to fit content, but cap at available terminal height.
 	contentLines := strings.Count(content, "\n") + 1
-	vp := viewport.New(innerW, min(contentLines, max(3, height-helpBoxOverhead)))
+	vp := viewport.New(innerW, min(contentLines, max(3, height-4)))
 	vp.SetContent(content)
 	return vp
 }

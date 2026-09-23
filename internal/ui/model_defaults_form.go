@@ -117,17 +117,11 @@ func settingsSchema() formSchema {
 // defaultsToValues maps a config.Defaults to the flat string map used by
 // the form model.
 func defaultsToValues(d config.Defaults) map[string]string {
-	loadKH := "no"
-	if d.LoadKnownHosts {
-		loadKH = "yes"
-	}
-	confirmQuit := "no"
-	if d.ConfirmQuit {
-		confirmQuit = "yes"
-	}
-	showFieldHelp := "no"
-	if d.ShowFieldHelp {
-		showFieldHelp = "yes"
+	yesNo := func(b bool) string {
+		if b {
+			return "yes"
+		}
+		return "no"
 	}
 	threshStr := ""
 	if d.ConnectConfirmThreshold >= 0 {
@@ -140,12 +134,12 @@ func defaultsToValues(d config.Defaults) map[string]string {
 		"extra_args":       strings.Join(d.ExtraArgs, " "),
 		"colorscheme":      d.Colorscheme,
 		"accent":           d.AccentColor,
-		"load_known_hosts": loadKH,
+		"load_known_hosts": yesNo(d.LoadKnownHosts),
 		"tmux":             d.Tmux,
 		"open_mode":        d.OpenMode,
 		"session":          strings.TrimSpace(d.TmuxSession),
-		"confirm_quit":     confirmQuit,
-		"show_field_help":  showFieldHelp,
+		"confirm_quit":     yesNo(d.ConfirmQuit),
+		"show_field_help":  yesNo(d.ShowFieldHelp),
 		"threshold":        threshStr,
 		"pane_split":       d.PaneSplit,
 		"pane_layout":      d.PaneLayout,
@@ -193,16 +187,8 @@ func applySettingsValues(values map[string]string, base config.Defaults) (config
 		d.TmuxSession = "ssh-tui"
 	}
 
-	// Threshold.
-	threshStr := strings.TrimSpace(values["threshold"])
-	if threshStr == "" {
-		d.ConnectConfirmThreshold = 5
-	} else {
-		t, err := strconv.Atoi(threshStr)
-		if err != nil || t < 0 {
-			return d, fmt.Errorf("confirm threshold must be a number >= 0")
-		}
-		d.ConnectConfirmThreshold = t
+	if d.ConnectConfirmThreshold, err = parseNonNegative(values["threshold"], 5); err != nil {
+		return d, fmt.Errorf("confirm threshold %w", err)
 	}
 
 	// Pane fields.
@@ -217,18 +203,8 @@ func applySettingsValues(values map[string]string, base config.Defaults) (config
 		d.PaneBorderFmt = config.DefaultPaneBorderFormat
 	}
 
-	// Sanitize custom formats list.
-	clean := make([]string, 0, len(d.PaneBorderFmts))
-	seen := map[string]bool{strings.TrimSpace(config.DefaultPaneBorderFormat): true}
-	for _, s := range d.PaneBorderFmts {
-		v := strings.TrimSpace(s)
-		if v == "" || seen[v] {
-			continue
-		}
-		clean = append(clean, v)
-		seen[v] = true
-	}
-	d.PaneBorderFmts = clean
+	// Sanitize custom formats: the choices minus the built-in default.
+	d.PaneBorderFmts = paneBorderFormatChoices(config.Defaults{PaneBorderFmts: d.PaneBorderFmts})[1:]
 
 	return d, nil
 }
@@ -263,7 +239,7 @@ func (m *defaultsFormModel) refreshAccentStyles() {
 
 func newDefaultsFormModel(d config.Defaults) *defaultsFormModel {
 	return &defaultsFormModel{
-		form:     newFormModel(settingsSchema(), defaultsToValues(d), defaultsFormLabelWidth, d.ShowFieldHelp),
+		form:     newFormModel(settingsSchema(), defaultsToValues(d), 16, d.ShowFieldHelp),
 		defaults: d,
 		keymap:   defaultKeyMap(),
 	}
@@ -294,7 +270,7 @@ func (m *defaultsFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.form.handleResize(msg.Width, msg.Height)
 		if m.borderPicker != nil {
-			mw, mh := pickerModalSize(msg.Width, msg.Height)
+			mw, mh := pickerModal.size(msg.Width, msg.Height)
 			_, _ = m.borderPicker.Update(tea.WindowSizeMsg{Width: mw, Height: mh})
 		}
 		return m, nil
@@ -389,7 +365,7 @@ func (m *defaultsFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		fk := m.form.focusedFieldKey()
 		s := msg.String()
 		if fk == "border_fmt" && (s == "enter" || s == " " || s == "l") {
-			mw, mh := pickerModalSize(m.width, m.height)
+			mw, mh := pickerModal.size(m.width, m.height)
 			m.borderPicker = newPaneBorderFormatsModel(m.defaults, m.defaults.PaneBorderFmt, false, true)
 			m.borderPicker.parentCrumb = "Settings"
 			if mw > 0 && mh > 0 {

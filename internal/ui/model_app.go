@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/al-bashkir/ssh-tui/internal/config"
-	"github.com/al-bashkir/ssh-tui/internal/connect"
 	"github.com/al-bashkir/ssh-tui/internal/hosts"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -174,25 +173,25 @@ func (m *appModel) applyWindowSize(ws tea.WindowSizeMsg) {
 	m.sizeTo(m.hosts, nil)
 	m.sizeTo(m.groups, nil)
 	if m.form != nil {
-		m.sizeTo(m.form, groupFormModalSize)
+		m.sizeTo(m.form, groupFormModal.size)
 	}
 	if m.gh != nil {
 		m.sizeTo(m.gh, nil)
 	}
 	if m.picker != nil {
-		m.sizeTo(m.picker, pickerModalSize)
+		m.sizeTo(m.picker, pickerModal.size)
 	}
 	if m.gp != nil {
-		m.sizeTo(m.gp, pickerModalSize)
+		m.sizeTo(m.gp, pickerModal.size)
 	}
 	if m.defaultsForm != nil {
 		m.sizeTo(m.defaultsForm, nil)
 	}
 	if m.customHost != nil {
-		m.sizeTo(m.customHost, customHostModalSize)
+		m.sizeTo(m.customHost, customHostModal.size)
 	}
 	if m.hostForm != nil {
-		m.sizeTo(m.hostForm, hostFormModalSize)
+		m.sizeTo(m.hostForm, hostFormModal.size)
 	}
 }
 
@@ -229,18 +228,16 @@ func (m *appModel) maxToastLevel() toastLevel {
 	return lvl
 }
 
-// toastOn shows t on the list screen s (Hosts for any other screen).
-func (m *appModel) toastOn(s screen, t toast) {
-	switch s {
-	case screenGroups:
-		m.groups.toast = t
-	case screenGroupHosts:
-		if m.gh != nil {
-			m.gh.toast = t
-		}
-	default:
-		m.hosts.toast = t
+// actionsOn returns the connect state of list screen s (Hosts for any other
+// screen), which also holds its toast.
+func (m *appModel) actionsOn(s screen) *connectActions {
+	switch {
+	case s == screenGroups:
+		return &m.groups.connectActions
+	case s == screenGroupHosts && m.gh != nil:
+		return &m.gh.connectActions
 	}
+	return &m.hosts.connectActions
 }
 
 func (m *appModel) breadcrumb() string {
@@ -262,20 +259,6 @@ func (m *appModel) breadcrumb() string {
 }
 
 func (m *appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Spinner tick.
-	if _, ok := msg.(spinnerTickMsg); ok {
-		if spinnerActive {
-			spinnerIndex++
-			// Check if minimum duration has elapsed and work is done.
-			if !spinnerMinEnd.IsZero() && time.Now().After(spinnerMinEnd) && !m.hosts.reloading {
-				spinnerActive = false
-				return m, nil
-			}
-			return m, tea.Tick(spinnerTickInterval, func(time.Time) tea.Msg { return spinnerTickMsg{} })
-		}
-		return m, nil
-	}
-
 	// Auto-dismiss toasts.
 	if tdm, ok := msg.(toastDismissMsg); ok {
 		if tdm.token == m.toastToken {
@@ -316,7 +299,7 @@ func (m *appModel) doUpdate(msg tea.Msg) tea.Cmd {
 		}
 		m.form = newGroupFormModel(msg.index, g, m.opts.Config.Defaults)
 		m.form.parentCrumb = "Groups"
-		m.sizeTo(m.form, groupFormModalSize)
+		m.sizeTo(m.form, groupFormModal.size)
 		m.screen = screenGroupForm
 		return nil
 	case groupFormCancelMsg:
@@ -351,7 +334,7 @@ func (m *appModel) doUpdate(msg tea.Msg) tea.Cmd {
 	case openHostPickerMsg:
 		m.picker = newHostPickerModel(m.opts)
 		m.picker.parentCrumb = m.breadcrumb()
-		m.sizeTo(m.picker, pickerModalSize)
+		m.sizeTo(m.picker, pickerModal.size)
 		m.returnTo = msg.returnTo
 		m.returnGroupIndex = msg.groupIndex
 		m.screen = screenHostPicker
@@ -361,7 +344,7 @@ func (m *appModel) doUpdate(msg tea.Msg) tea.Cmd {
 		m.gp.hosts = append([]string(nil), msg.hosts...)
 		m.gp.parentCrumb = m.breadcrumb()
 		m.gpReturnTo = msg.returnTo
-		m.sizeTo(m.gp, pickerModalSize)
+		m.sizeTo(m.gp, pickerModal.size)
 		m.customHost = nil
 		m.screen = screenGroupPicker
 		return nil
@@ -396,7 +379,7 @@ func (m *appModel) doUpdate(msg tea.Msg) tea.Cmd {
 			crumb = "Groups > " + m.opts.Inventory.Groups[msg.groupIndex].Name
 		}
 		m.customHost.parentCrumb = crumb
-		m.sizeTo(m.customHost, customHostModalSize)
+		m.sizeTo(m.customHost, customHostModal.size)
 		m.screen = screenCustomHost
 		return nil
 	case openHostFormMsg:
@@ -410,7 +393,7 @@ func (m *appModel) doUpdate(msg tea.Msg) tea.Cmd {
 		m.hostForm = newHostFormModel(idx, hc, m.opts.Config.Defaults)
 		m.hostForm.parentCrumb = m.breadcrumb()
 		m.hostFormReturnTo = msg.returnTo
-		m.sizeTo(m.hostForm, hostFormModalSize)
+		m.sizeTo(m.hostForm, hostFormModal.size)
 		m.screen = screenHostForm
 		return nil
 	case customHostCancelMsg:
@@ -423,35 +406,16 @@ func (m *appModel) doUpdate(msg tea.Msg) tea.Cmd {
 		return nil
 	case customHostConnectMsg:
 		var group *config.Group
-		var execCmd []string
-		var toastResult toast
-		var err error
-		if msg.groupIndex >= len(m.opts.Inventory.Groups) {
-			err = fmt.Errorf("invalid group")
-		} else {
-			if msg.groupIndex >= 0 {
-				g := m.opts.Inventory.Groups[msg.groupIndex]
-				group = &g
-			}
-			execCmd, toastResult, err = m.connectHosts(msg.hosts, group)
-		}
-		if err != nil {
-			toastResult = toast{text: err.Error(), level: toastErr}
-		}
-		if !toastResult.empty() {
-			m.toastOn(msg.returnTo, toastResult)
+		if msg.groupIndex >= 0 && msg.groupIndex < len(m.opts.Inventory.Groups) {
+			g := m.opts.Inventory.Groups[msg.groupIndex]
+			group = &g
 		}
 		m.customHost = nil
 		m.screen = msg.returnTo
-		if len(execCmd) != 0 {
-			m.execCmd = execCmd
-			return tea.Quit
-		}
-		if m.opts.Popup && !toastResult.empty() && toastResult.level != toastErr {
-			m.quitting = true
-			return tea.Quit
-		}
-		return nil
+		// Connect as the screen we return to, so its confirm dialog,
+		// toasts and popup quit apply.
+		c := m.actionsOn(msg.returnTo)
+		return m.exitFrom(c, c.connect(msg.hosts, m.opts, group, false, ""))
 	case customHostDoneMsg:
 		if err := m.addHostsToGroup(msg.groupIndex, msg.hosts); err != nil {
 			if m.customHost != nil {
@@ -462,7 +426,7 @@ func (m *appModel) doUpdate(msg tea.Msg) tea.Cmd {
 		if msg.returnTo == screenGroupHosts {
 			m.reloadGroupHosts(msg.groupIndex)
 		}
-		m.toastOn(msg.returnTo, toast{text: fmt.Sprintf("added %d", len(msg.hosts)), level: toastOK})
+		m.actionsOn(msg.returnTo).toast = toast{text: fmt.Sprintf("added %d", len(msg.hosts)), level: toastOK}
 		m.customHost = nil
 		m.screen = msg.returnTo
 		return nil
@@ -475,7 +439,7 @@ func (m *appModel) doUpdate(msg tea.Msg) tea.Cmd {
 			m.gp.toast = toast{text: err.Error(), level: toastErr}
 			return nil
 		}
-		m.toastOn(m.gpReturnTo, toast{text: fmt.Sprintf("added %d", len(m.gp.hosts)), level: toastOK})
+		m.actionsOn(m.gpReturnTo).toast = toast{text: fmt.Sprintf("added %d", len(m.gp.hosts)), level: toastOK}
 		m.gp = nil
 		m.screen = m.gpReturnTo
 		return nil
@@ -533,7 +497,7 @@ func (m *appModel) doUpdate(msg tea.Msg) tea.Cmd {
 			m.hosts.toast = savedToast
 			return nil
 		}
-		m.toastOn(m.hostFormReturnTo, savedToast)
+		m.actionsOn(m.hostFormReturnTo).toast = savedToast
 		m.hostForm = nil
 		m.screen = m.hostFormReturnTo
 		return nil
@@ -614,27 +578,6 @@ func (m *appModel) reloadGroupHosts(groupIndex int) {
 	m.sizeTo(m.gh, nil)
 }
 
-// connectHosts builds and dispatches SSH commands synchronously, for flows
-// driven by appModel rather than by a screen model.
-func (m *appModel) connectHosts(hostsToOpen []string, group *config.Group) (execCmd []string, toastResult toast, err error) {
-	if len(hostsToOpen) == 0 {
-		return nil, toast{}, fmt.Errorf("no host selected")
-	}
-
-	defaults := m.opts.Config.Defaults
-	sshCmds := connect.BuildCommands(hostsToOpen, defaults, m.opts.Inventory, group, nil)
-	mode, inTmux := connect.Mode(defaults, group)
-
-	execCmd, msg, err := connect.Open(hostsToOpen, sshCmds, defaults, group, mode, inTmux)
-	if err != nil {
-		return nil, toast{}, err
-	}
-	if msg != "" {
-		return nil, toast{text: msg, level: toastInfo}, nil
-	}
-	return execCmd, toast{}, nil
-}
-
 // commitInventory saves inv and hands it to every open screen.
 func (m *appModel) commitInventory(inv config.Inventory) error {
 	if _, err := config.SaveInventory(m.opts.InventoryPath, inv); err != nil {
@@ -668,13 +611,8 @@ func (m *appModel) inventoryCopy() config.Inventory {
 	return inv
 }
 
+// saveGroup stores g, already trimmed and validated by applyGroupValues.
 func (m *appModel) saveGroup(index int, g config.Group) error {
-	g.Name = strings.TrimSpace(g.Name)
-	if g.Name == "" {
-		return fmt.Errorf("group name required")
-	}
-
-	// Unique name check.
 	for i := range m.opts.Inventory.Groups {
 		if i != index && strings.TrimSpace(m.opts.Inventory.Groups[i].Name) == g.Name {
 			return fmt.Errorf("group name already exists")
@@ -695,7 +633,6 @@ func (m *appModel) saveGroup(index int, g config.Group) error {
 
 func (m *appModel) saveDefaults(d config.Defaults) error {
 	oldLoadKnownHosts := m.opts.Config.Defaults.LoadKnownHosts
-	oldKnownPaths := append([]string(nil), m.opts.KnownHosts...)
 
 	newCfg := m.opts.Config
 	newCfg.Defaults = d
@@ -710,30 +647,22 @@ func (m *appModel) saveDefaults(d config.Defaults) error {
 	// Update hosts source if load_known_hosts toggled.
 	if oldLoadKnownHosts != newCfg.Defaults.LoadKnownHosts {
 		if newCfg.Defaults.LoadKnownHosts {
-			if len(oldKnownPaths) != 0 {
-				m.opts.KnownHosts = oldKnownPaths
-			}
-			if len(m.opts.KnownHosts) == 0 {
-				m.opts.KnownHosts = hosts.DefaultKnownHostsPaths()
-			}
 			res, errs := hosts.LoadKnownHosts(m.opts.KnownHosts)
 			m.opts.Hosts = res.Hosts
 			m.opts.SkippedLines = res.SkippedLines
 			m.opts.LoadErrors = errs
 		} else {
-			m.opts.KnownHosts = nil
 			m.opts.Hosts = config.ConfigHosts(m.opts.Inventory)
 			m.opts.SkippedLines = 0
 			m.opts.LoadErrors = nil
 		}
 
 		m.hosts.keymap.Reload.SetEnabled(newCfg.Defaults.LoadKnownHosts)
-		m.hosts.opts = m.opts
 		_, _ = m.hosts.Update(knownHostsReloadMsg{res: hosts.LoadResult{Hosts: m.opts.Hosts, SkippedLines: m.opts.SkippedLines}, errs: m.opts.LoadErrors})
 		if m.picker != nil {
 			// Recreate to refresh list source.
 			m.picker = newHostPickerModel(m.opts)
-			m.sizeTo(m.picker, pickerModalSize)
+			m.sizeTo(m.picker, pickerModal.size)
 		}
 	}
 	m.hosts.opts = m.opts
@@ -780,13 +709,8 @@ func (m *appModel) refreshAccentStyles() {
 	}
 }
 
+// saveHostConfig stores h, already trimmed and validated by applyHostValues.
 func (m *appModel) saveHostConfig(index int, h config.Host) error {
-	h.Host = strings.TrimSpace(h.Host)
-	if h.Host == "" {
-		return fmt.Errorf("host required")
-	}
-
-	// Unique host check.
 	for i := range m.opts.Inventory.Hosts {
 		if i != index && strings.TrimSpace(m.opts.Inventory.Hosts[i].Host) == h.Host {
 			return fmt.Errorf("host config already exists")
@@ -852,26 +776,16 @@ func (m *appModel) removeHostsFromGroup(groupIndex int, hostsToRemove []string) 
 func (m *appModel) saveToggleHidden(host string, hide bool) error {
 	inv := m.inventoryCopy()
 	h := strings.TrimSpace(host)
-	idx, hc := findHostConfig(inv, host)
 	isHost := func(hh string) bool { return strings.TrimSpace(hh) == h }
 
-	switch {
-	case hide && idx >= 0:
-		// Host has an existing [[hosts]] entry — set Hidden there.
-		hc.Hidden = true
+	inv.HiddenHosts = slices.DeleteFunc(inv.HiddenHosts, isHost)
+	if hide {
+		inv.HiddenHosts = append(inv.HiddenHosts, h)
+	}
+	// Unhide also clears the legacy per-host Hidden flag.
+	if idx, hc := findHostConfig(inv, host); !hide && idx >= 0 && hc.Hidden {
+		hc.Hidden = false
 		inv.Hosts[idx] = hc
-	case hide:
-		// No per-host config — use the compact list.
-		if !slices.ContainsFunc(inv.HiddenHosts, isHost) {
-			inv.HiddenHosts = append(inv.HiddenHosts, h)
-		}
-	default:
-		inv.HiddenHosts = slices.DeleteFunc(inv.HiddenHosts, isHost)
-		// Also clear Hidden flag in [[hosts]] entry if set (handles old-format configs).
-		if idx >= 0 && hc.Hidden {
-			hc.Hidden = false
-			inv.Hosts[idx] = hc
-		}
 	}
 	return m.commitInventory(inv)
 }
